@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import db
 from app.config import get_settings
 from app.errors import install_error_handlers
-from app.routers import auth
+from app.routers import auth, donations
 from app.routers.dm import router as dm_router
 from app.schemas.citizen import (
     CreateReportRequest,
@@ -159,6 +159,7 @@ app = FastAPI(
 install_error_handlers(app)
 app.include_router(auth.router)
 app.include_router(dm_router)
+app.include_router(donations.router)
 
 
 # CORS — allow frontend dev server and production origins
