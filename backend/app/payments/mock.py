@@ -3,7 +3,6 @@
 import hashlib
 import hmac
 import json
-import os
 import uuid
 from decimal import Decimal
 
@@ -12,15 +11,10 @@ from app.payments.base import Order, PaymentGateway, Verification, WebhookEvent
 
 
 def _get_mock_secret() -> str:
-    """Read mock secret from settings or environment. Never hardcoded."""
+    """Read mock signing secret from app settings. Never hardcoded."""
     settings = get_settings()
-    val = getattr(settings, "payment_mock_secret", None)
-    if val:
-        return str(val)
-    env_val = os.getenv("PAYMENT_MOCK_SECRET") or os.getenv("JWT_SECRET")
-    if env_val:
-        return env_val
-    return "mock_sandbox_fallback_key"
+    secret = getattr(settings, "payment_signing_secret", None) or settings.jwt_secret
+    return secret or "mock_sandbox_fallback_key"
 
 
 class MockGateway(PaymentGateway):

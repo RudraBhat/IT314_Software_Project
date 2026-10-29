@@ -3,7 +3,6 @@
 import hashlib
 import hmac
 import json
-import os
 from decimal import Decimal
 
 from app.config import get_settings
@@ -11,13 +10,9 @@ from app.payments.base import Order, PaymentGateway, Verification, WebhookEvent
 
 
 def _get_razorpay_credentials() -> tuple[str | None, str | None]:
-    """Read credentials from app settings or environment variables."""
+    """Read credentials from app settings."""
     settings = get_settings()
-    key_id = getattr(settings, "razorpay_key_id", None)
-    key_secret = getattr(settings, "razorpay_key_secret", None)
-    if key_id and key_secret:
-        return str(key_id), str(key_secret)
-    return os.getenv("RAZORPAY_KEY_ID"), os.getenv("RAZORPAY_KEY_SECRET")
+    return getattr(settings, "razorpay_key_id", None), getattr(settings, "razorpay_key_secret", None)
 
 
 class RazorpayGateway(PaymentGateway):
@@ -71,7 +66,8 @@ class RazorpayGateway(PaymentGateway):
 
     def parse_webhook(self, raw_body: bytes | str, signature: str) -> WebhookEvent:
         """Verify and parse Razorpay webhook payload."""
-        webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+        settings = get_settings()
+        webhook_secret = getattr(settings, "razorpay_webhook_secret", None)
         if not webhook_secret:
             _, webhook_secret = _get_razorpay_credentials()
         if not webhook_secret:
