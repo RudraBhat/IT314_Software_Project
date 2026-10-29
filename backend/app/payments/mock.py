@@ -13,8 +13,7 @@ from app.payments.base import Order, PaymentGateway, Verification, WebhookEvent
 def _get_mock_secret() -> str:
     """Read mock signing secret from app settings. Never hardcoded."""
     settings = get_settings()
-    secret = getattr(settings, "payment_signing_secret", None) or settings.jwt_secret
-    return secret or "mock_sandbox_fallback_key"
+    return settings.require("payment_signing_secret")
 
 
 class MockGateway(PaymentGateway):
@@ -59,7 +58,7 @@ class MockGateway(PaymentGateway):
     ) -> Verification:
         """Verify payment using constant-time HMAC-SHA256 comparison."""
         expected = self.compute_signature(order_id, payment_id)
-        is_valid = hmac.compare_digest(expected, signature)
+        is_valid = hmac.compare_digest(expected, signature or "")
         return Verification(
             verified=is_valid,
             order_id=order_id,
@@ -78,7 +77,7 @@ class MockGateway(PaymentGateway):
         """Verify raw body HMAC-SHA256 signature and normalize webhook event."""
         body_bytes = raw_body.encode() if isinstance(raw_body, str) else raw_body
         expected = self.compute_webhook_signature(body_bytes)
-        if not hmac.compare_digest(expected, signature):
+        if not hmac.compare_digest(expected, signature or ""):
             raise ValueError("Invalid webhook signature")
 
         try:

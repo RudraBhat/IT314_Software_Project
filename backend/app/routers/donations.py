@@ -34,10 +34,11 @@ def _optional_principal(
         return None
     try:
         user_id = uuid.UUID(claims["sub"])
+        token_version = int(claims["tv"])
     except (ValueError, KeyError):
         return None
     ip = request.client.host if request.client else None
-    return load_principal(user_id, int(claims.get("tv", 1)), claims.get("mfa") is True, ip)
+    return load_principal(user_id, token_version, claims.get("mfa") is True, ip)
 
 
 OptionalUser = Annotated[Principal | None, Depends(_optional_principal)]
@@ -106,7 +107,7 @@ def create_donation_order(
     ip = request.client.host if request.client else None
 
     with db.transaction() as conn:
-        # 1. Idempotency replay check
+        # 1. Idempotency replay check (fast path)
         existing = conn.execute(
             """
             SELECT donation_id, gateway_name, gateway_order_id, amount,
@@ -184,6 +185,7 @@ def create_donation_order(
         )
 
         # 5. Insert donation (status PENDING; receipt_no and receipt_issued_at remain NULL)
+        # Uses ON CONFLICT DO NOTHING to guard against concurrent idempotency races
         row = conn.execute(
             """
             INSERT INTO donations (
@@ -192,6 +194,7 @@ def create_donation_order(
                 gateway_name, gateway_order_id, idempotency_key
             )
             VALUES (%s, %s, %s, %s, 'PENDING', %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (idempotency_key) DO NOTHING
             RETURNING donation_id, gateway_name, gateway_order_id, amount,
                       rtrim(currency) AS currency, status
             """,
@@ -208,6 +211,29 @@ def create_donation_order(
                 clean_idempotency,
             ),
         ).fetchone()
+
+        if row is None:
+            # Race condition conflict: another concurrent transaction committed with this key
+            existing = conn.execute(
+                """
+                SELECT donation_id, gateway_name, gateway_order_id, amount,
+                       rtrim(currency) AS currency, status
+                FROM donations
+                WHERE idempotency_key = %s
+                """,
+                (clean_idempotency,),
+            ).fetchone()
+            if existing:
+                return {
+                    "donation_id": existing["donation_id"],
+                    "gateway_name": existing["gateway_name"] or gateway.name,
+                    "gateway_order_id": existing["gateway_order_id"],
+                    "amount": existing["amount"],
+                    "currency": existing["currency"],
+                    "status": existing["status"],
+                    "is_sandbox": gateway.is_sandbox,
+                }
+            raise conflict("CONCURRENT_DONATION_CONFLICT", "Conflict creating donation order with this idempotency key")
 
         # 6. Audit trail record within the same transaction
         audit.record(
