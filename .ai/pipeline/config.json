@@ -1,0 +1,27 @@
+{
+  "claude_command": [
+    "claude",
+    "-p"
+  ],
+  "model_aliases": {
+    "opus": "opus",
+    "sonnet": "sonnet"
+  },
+  "role_models": {
+    "planner": null,
+    "implementer": null,
+    "reviewer": null
+  },
+  "model_fallbacks": {
+    "planner": [],
+    "implementer": []
+  },
+  "permission_mode": "default",
+  "validation_commands": [
+    "python -m ruff check backend/",
+    "python -m pytest backend/tests/test_units.py -v"
+  ],
+  "max_diff_chars": 50000,
+  "auto_approve_plan": false,
+  "auto_approve_checks": false
+}

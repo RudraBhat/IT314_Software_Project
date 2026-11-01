@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git commit*)",
+      "Bash(git commit *)",
+      "Bash(git commit)",
+      "Bash(git push*)",
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(git merge*)",
+      "Bash(git merge *)",
+      "Bash(git merge)",
+      "Bash(git reset*)",
+      "Bash(git reset *)",
+      "Bash(git reset)",
+      "Bash(git clean*)",
+      "Bash(git clean *)",
+      "Bash(git clean)",
+      "Bash(gh pr merge*)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr merge)"
+    ]
+  }
+}

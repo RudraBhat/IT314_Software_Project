@@ -1,0 +1,8 @@
+{
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/.ai",
+    "${workspaceFolder}/backend"
+  ],
+  "python.analysis.autoSearchPaths": true
+}
+
