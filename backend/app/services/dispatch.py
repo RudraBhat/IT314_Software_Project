@@ -213,19 +213,6 @@ def apply_progress(
             ip=principal.ip if principal else None,
         )
 
-    # If dispatch_progress table exists (Migration 03), append record
-    try:
-        conn.execute(
-            """
-            INSERT INTO dispatch_progress (dispatch_id, status, notes, reported_by)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (dispatch["dispatch_id"], event, note, reported_by or (principal.user_id if principal else "SYSTEM")),
-        )
-    except Exception as exc:  # noqa: BLE001
-        # Gracefully tolerate if table not present in current connection scope
-        logger.debug("dispatch_progress insert omitted: %s", exc)
-
 
 def apply_completion(
     conn,
