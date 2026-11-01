@@ -211,8 +211,8 @@ def apply_acknowledgement(
     conn.execute(
         """
         UPDATE agency_messages
-        SET status = 'READ', read_at = now()
-        WHERE related_entity_type = 'dispatch_order' AND related_entity_id = %s AND status = 'SENT'
+        SET status = 'ACKNOWLEDGED', acknowledged_at = now()
+        WHERE dispatch_id = %s AND status IN ('QUEUED', 'SENT', 'DELIVERED')
         """,
         (dispatch_id,),
     )
