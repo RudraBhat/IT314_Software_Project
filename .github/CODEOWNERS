@@ -1,29 +1,8 @@
 # ==============================================================================
-# GitHub CODEOWNERS Configuration (Sprint 2 Review Ownership Split)
+# GitHub CODEOWNERS Configuration
 # ==============================================================================
-# Review ownership rules:
-# - Tanishq: database, migrations, PostGIS SQL, dispatch state machine, and audit chain
-# - Zalak: AI, LLM adapters, triage schemas, and frontend API types
-# - Siddh: security, secrets, CI/CD workflows, Docker, and infrastructure
+# Every change in this repository requires review and approval from the code owner.
 # ==============================================================================
 
 # Global Default Owner:
 * @Siddhcreator-1706
-
-# Database, migrations, PostGIS SQL, dispatch transitions, and audit chain
-backend/db/migrations/               @Tanishq @Siddhcreator-1706
-backend/app/services/dispatch.py     @Tanishq @Siddhcreator-1706
-backend/app/services/recommendations.py @Tanishq @Siddhcreator-1706
-backend/app/audit.py                 @Tanishq @Siddhcreator-1706
-
-# AI workers, LLM adapters, triage schemas, and frontend types
-ai-workers/                          @Zalak1208 @Siddhcreator-1706
-backend/app/services/ai_provider.py  @Zalak1208 @Siddhcreator-1706
-frontend/src/types/                  @Zalak1208 @Siddhcreator-1706
-
-# Security, authentication, secrets, CI/CD, Docker, and infrastructure
-.github/workflows/                   @Siddhcreator-1706
-backend/app/security.py              @Siddhcreator-1706
-backend/app/auth.py                  @Siddhcreator-1706
-render.yaml                          @Siddhcreator-1706
-docker-compose*.yml                  @Siddhcreator-1706
