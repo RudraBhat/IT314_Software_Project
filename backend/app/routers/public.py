@@ -129,7 +129,7 @@ _DEMO_INCIDENTS: list[dict] = [
 #
 # Filters applied via psycopg Composed SQL to prevent injection:
 #   district  → exact match (case-insensitive via LOWER)
-#   scenario  → exact match (cast to incident_scenario enum)
+#   scenario  → exact match (cast to scenario_type enum)
 #   bbox      → PostGIS &&  operator (fast GiST index hit)
 #
 # Security invariants encoded in WHERE:
@@ -173,7 +173,7 @@ def _build_query(
         params["district"] = district.strip()
 
     if scenario:
-        clauses.append(sql.SQL("  AND i.scenario = %(scenario)s::incident_scenario"))
+        clauses.append(sql.SQL("\n  AND i.scenario = %(scenario)s::scenario_type"))
         params["scenario"] = scenario.strip().upper()
 
     # Bounding-box filter using PostGIS geography &&  (index-accelerated)
@@ -185,12 +185,12 @@ def _build_query(
         lo_lon = min_lon if min_lon is not None else GUJARAT_BBOX["min_lon"]
         hi_lon = max_lon if max_lon is not None else GUJARAT_BBOX["max_lon"]
         clauses.append(sql.SQL(
-            "  AND i.geom && ST_MakeEnvelope(%(lo_lon)s, %(lo_lat)s,"
+            "\n  AND i.geom && ST_MakeEnvelope(%(lo_lon)s, %(lo_lat)s,"
             " %(hi_lon)s, %(hi_lat)s, 4326)::geography"
         ))
         params.update(lo_lat=lo_lat, hi_lat=hi_lat, lo_lon=lo_lon, hi_lon=hi_lon)
 
-    clauses.append(sql.SQL("ORDER BY i.verified_at DESC"))
+    clauses.append(sql.SQL("\nORDER BY i.verified_at DESC"))
     return sql.Composed(clauses), params
 
 
