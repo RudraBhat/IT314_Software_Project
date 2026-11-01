@@ -6,6 +6,7 @@ advances on a recorded event - nothing is inferred (s.7.5).
 """
 
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -16,33 +17,52 @@ from psycopg import sql
 from pydantic import BaseModel, Field
 
 from app import audit, db
-from app.auth import Dispatcher, DMUser, Supervisor
+from app.auth import Dispatcher, DMUser, Principal, Supervisor
 from app.common import Filters, Page, Priority, Rationale, page_body
+from app.config import get_settings
 from app.errors import ApiError, conflict, not_found
-from app.services.dispatch import (
-    DISPATCH_SELECT,
-    apply_acknowledgement,
-    apply_completion,
-    apply_failure,
-    apply_progress,
-    apply_rejection,
-    escalate,
-    fetch_dispatch,
-    get_dispatch_timeout,
-    lock_dispatch,
-    run_dispatch_transition,
-    set_dispatch_status,
-    state_conflict,
-)
-from app.services.incidents import ensure_open, lock_incident
-from app.services.resources import reserve
+from app.services.dispatch import escalate
+from app.services.incidents import ensure_open, lock_incident, update_incident
+from app.services.resources import TERMINAL_DISPATCH, release_all_for_dispatch, reserve
 
 router = APIRouter()
 
-_DISPATCH_SELECT = DISPATCH_SELECT
-_timeout = get_dispatch_timeout
-_fetch = fetch_dispatch
-_lock = lock_dispatch
+_DISPATCH_SELECT = """
+SELECT d.dispatch_id, d.dispatch_ref, d.incident_id, i.incident_ref,
+       lower(i.scenario::text) AS scenario, d.status, d.priority, d.instructions,
+       d.receiving_agency_id, a.name AS agency_name, d.acknowledged_by, d.acknowledged_at,
+       d.created_at, d.updated_at, u.full_name AS created_by_name,
+       (d.status = 'REQUESTED' AND d.created_at < now() - make_interval(mins => %(timeout)s)) AS overdue,
+       EXISTS (SELECT 1 FROM audit_logs l WHERE l.entity_type = 'dispatch_order'
+               AND l.entity_id = d.dispatch_id AND l.action = 'DISPATCH_ESCALATED') AS escalated
+FROM dispatch_orders d
+JOIN incidents i ON i.incident_id = d.incident_id
+JOIN users u ON u.user_id = d.created_by
+LEFT JOIN agencies a ON a.agency_id = d.receiving_agency_id
+"""
+
+
+def _timeout() -> int:
+    return get_settings().dispatch_ack_timeout_minutes
+
+
+def _fetch(conn, dispatch_id) -> dict:
+    row = conn.execute(
+        sql.SQL("{} WHERE d.dispatch_id = %(id)s").format(sql.SQL(_DISPATCH_SELECT)),
+        {"id": dispatch_id, "timeout": _timeout()},
+    ).fetchone()
+    if row is None:
+        raise not_found("Dispatch")
+    return row
+
+
+def _lock(conn, dispatch_id) -> dict:
+    row = conn.execute(
+        "SELECT * FROM dispatch_orders WHERE dispatch_id = %s FOR UPDATE", (dispatch_id,)
+    ).fetchone()
+    if row is None:
+        raise not_found("Dispatch")
+    return row
 
 
 # -------------------------------------------------------------------- creation
@@ -290,69 +310,157 @@ class Escalation(BaseModel):
     reason: str = Rationale
 
 
-_state_conflict = state_conflict
-_set_status = set_dispatch_status
-_run = run_dispatch_transition
+def _state_conflict(conn, principal: Principal, dispatch: dict, attempted: str) -> ApiError:
+    """EH-17: a late or contradictory report is kept in history and flagged, never applied."""
+    audit.record(
+        conn,
+        actor=principal,
+        action=f"DISPATCH_{attempted}_CONFLICT",
+        entity_type="dispatch_order",
+        entity_id=dispatch["dispatch_id"],
+        result="FAILURE",
+        rationale=f"{attempted} reported while dispatch is {dispatch['status']}",
+        ip=principal.ip,
+    )
+    code = "DISPATCH_NOT_ACKNOWLEDGED" if dispatch["status"] == "REQUESTED" else "DISPATCH_STATE_CONFLICT"
+    return conflict(code, f"Cannot record {attempted.lower()} while the dispatch is {dispatch['status']}")
+
+
+def _set_status(conn, principal: Principal, dispatch: dict, status: str, action: str, rationale: str, after: dict):
+    conn.execute(
+        "UPDATE dispatch_orders SET status = %s WHERE dispatch_id = %s", (status, dispatch["dispatch_id"])
+    )
+    audit.record(
+        conn,
+        actor=principal,
+        action=action,
+        entity_type="dispatch_order",
+        entity_id=dispatch["dispatch_id"],
+        rationale=rationale,
+        before={"status": dispatch["status"]},
+        after={"status": status, **after},
+        ip=principal.ip,
+    )
+
+
+def _run(dispatch_id: uuid.UUID, handler) -> dict:
+    """Run a state event; a recorded conflict is committed even though the request fails."""
+    error: ApiError | None = None
+    with db.transaction() as conn:
+        dispatch = _lock(conn, dispatch_id)
+        try:
+            handler(conn, dispatch)
+        except ApiError as exc:
+            if exc.code not in ("DISPATCH_NOT_ACKNOWLEDGED", "DISPATCH_STATE_CONFLICT"):
+                raise
+            error = exc
+    if error:
+        raise error
+    with db.transaction() as conn:
+        return _fetch(conn, dispatch_id)
 
 
 @router.post("/dispatches/{dispatch_id}/acknowledgement")
 def record_acknowledgement(
     dispatch_id: uuid.UUID, body: Acknowledgement, principal: Dispatcher
 ):
-    return _run(
-        dispatch_id,
-        lambda conn, dispatch: apply_acknowledgement(
-            conn, principal, dispatch, body.acknowledged_by, body.channel, body.note
-        ),
-    )
+    def handler(conn, dispatch):
+        if dispatch["status"] != "REQUESTED":
+            raise _state_conflict(conn, principal, dispatch, "ACKNOWLEDGEMENT")
+        who = f"{body.acknowledged_by.strip()} (via {body.channel.lower().replace('_', ' ')})"
+        conn.execute(
+            "UPDATE dispatch_orders SET acknowledged_by = %s, acknowledged_at = %s WHERE dispatch_id = %s",
+            (who, datetime.now(UTC), dispatch_id),
+        )
+        _set_status(conn, principal, dispatch, "ACKNOWLEDGED", "DISPATCH_ACKNOWLEDGED", body.note or who,
+                    {"acknowledged_by": who, "channel": body.channel})
+        conn.execute(
+            """
+            UPDATE agency_messages SET status = 'ACKNOWLEDGED', acknowledged_at = now()
+            WHERE dispatch_id = %s AND status IN ('QUEUED','SENT','DELIVERED')
+            """,
+            (dispatch_id,),
+        )
+
+    return _run(dispatch_id, handler)
 
 
 @router.post("/dispatches/{dispatch_id}/rejection")
 def record_rejection(
     dispatch_id: uuid.UUID, body: Rejection, principal: Dispatcher
 ):
-    return _run(
-        dispatch_id,
-        lambda conn, dispatch: apply_rejection(
-            conn, principal, dispatch, body.reason, body.reported_by, body.channel
-        ),
-    )
+    def handler(conn, dispatch):
+        if dispatch["status"] not in ("REQUESTED", "ACKNOWLEDGED"):
+            raise _state_conflict(conn, principal, dispatch, "REJECTION")
+        _set_status(conn, principal, dispatch, "REJECTED", "DISPATCH_REJECTED", body.reason,
+                    {"reported_by": body.reported_by, "channel": body.channel})
+        release_all_for_dispatch(conn, principal, dispatch_id, f"Dispatch rejected: {body.reason}")
+
+    return _run(dispatch_id, handler)
 
 
 @router.post("/dispatches/{dispatch_id}/progress")
 def record_progress(
     dispatch_id: uuid.UUID, body: Progress, principal: Dispatcher
 ):
-    return _run(
-        dispatch_id,
-        lambda conn, dispatch: apply_progress(
-            conn, principal, dispatch, body.event, body.note, body.reported_by, body.channel
-        ),
-    )
+    def handler(conn, dispatch):
+        if dispatch["status"] not in ("ACKNOWLEDGED", "DISPATCHED"):
+            raise _state_conflict(conn, principal, dispatch, body.event)
+        rationale = body.note or body.event.replace("_", " ").lower()
+        after = {"event": body.event, "reported_by": body.reported_by, "channel": body.channel}
+        if body.event == "EN_ROUTE" and dispatch["status"] == "ACKNOWLEDGED":
+            _set_status(conn, principal, dispatch, "DISPATCHED", "DISPATCH_EN_ROUTE", rationale, after)
+            incident = lock_incident(conn, dispatch["incident_id"])
+            if incident["status"] == "VERIFIED":
+                update_incident(
+                    conn,
+                    principal,
+                    incident,
+                    action="INCIDENT_DISPATCHED",
+                    rationale=f"{dispatch['dispatch_ref']} en route",
+                    to_status="DISPATCHED",
+                )
+        else:
+            audit.record(
+                conn,
+                actor=principal,
+                action=f"DISPATCH_PROGRESS_{body.event}",
+                entity_type="dispatch_order",
+                entity_id=dispatch_id,
+                rationale=rationale,
+                after=after,
+                ip=principal.ip,
+            )
+
+    return _run(dispatch_id, handler)
 
 
 @router.post("/dispatches/{dispatch_id}/completion")
 def record_completion(
     dispatch_id: uuid.UUID, body: Completion, principal: Dispatcher
 ):
-    return _run(
-        dispatch_id,
-        lambda conn, dispatch: apply_completion(
-            conn, principal, dispatch, body.confirmed_by, body.channel, body.note
-        ),
-    )
+    def handler(conn, dispatch):
+        if dispatch["status"] != "DISPATCHED":
+            raise _state_conflict(conn, principal, dispatch, "COMPLETION")
+        _set_status(conn, principal, dispatch, "COMPLETED", "DISPATCH_COMPLETED",
+                    body.note or f"Confirmed by {body.confirmed_by}",
+                    {"confirmed_by": body.confirmed_by, "channel": body.channel})
+        release_all_for_dispatch(conn, principal, dispatch_id, "Dispatch completed")
+
+    return _run(dispatch_id, handler)
 
 
 @router.post("/dispatches/{dispatch_id}/failure")
 def record_failure(
     dispatch_id: uuid.UUID, body: Failure, principal: Dispatcher
 ):
-    return _run(
-        dispatch_id,
-        lambda conn, dispatch: apply_failure(
-            conn, principal, dispatch, body.reason
-        ),
-    )
+    def handler(conn, dispatch):
+        if dispatch["status"] in TERMINAL_DISPATCH:
+            raise _state_conflict(conn, principal, dispatch, "FAILURE")
+        _set_status(conn, principal, dispatch, "FAILED", "DISPATCH_FAILED", body.reason, {})
+        release_all_for_dispatch(conn, principal, dispatch_id, f"Dispatch failed: {body.reason}")
+
+    return _run(dispatch_id, handler)
 
 
 @router.post("/dispatches/{dispatch_id}/escalation")

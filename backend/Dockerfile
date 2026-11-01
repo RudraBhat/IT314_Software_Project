@@ -49,10 +49,6 @@ COPY --from=builder /opt/venv /opt/venv
 # Copy application code
 COPY . .
 
-# Version identification for CD smoke validation (S2-16)
-ARG GIT_SHA=dev
-ENV GIT_SHA=${GIT_SHA}
-
 # Create a non-root user
 RUN addgroup --system --gid 1001 fastapi && \
     adduser --system --uid 1001 fastapi && \
