@@ -207,3 +207,74 @@ def test_ci_db_guard_decision_logic():
     # Guard off and some DB tests => ok
     assert evaluate_ci_guard(require_db=False, db_tests_ran=True) is True
 
+
+def test_api_v1_health_returns_version(client, monkeypatch):
+    """Verify /api/v1/health includes deployed commit version for CD smoke gating (S2-16)."""
+    monkeypatch.setenv("GIT_SHA", "test_commit_sha_1234567890")
+    resp = client.get("/api/v1/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "healthy"
+    assert data["service"] == "drch-backend"
+    assert data["version"] == "test_commit_sha_1234567890"
+
+
+def test_internal_ingest_run_requires_token(client):
+    """Verify /api/v1/internal/ingest/run rejects unauthenticated calls with 401."""
+    # No header
+    resp = client.post("/api/v1/internal/ingest/run")
+    assert resp.status_code == 401
+
+    # Bad header
+    resp = client.post(
+        "/api/v1/internal/ingest/run",
+        headers={"Authorization": "Bearer totally_invalid_token"},
+    )
+    assert resp.status_code == 401
+
+
+def test_internal_ingest_run_accepts_valid_token(client, monkeypatch):
+    """Verify /api/v1/internal/ingest/run accepts valid token via Bearer and X-Ingest-Token (S2-16)."""
+    test_token = "secret_test_ingest_token_48_characters_long_for_testing"
+    from unittest.mock import MagicMock
+
+    from app import config
+    orig_settings = config.get_settings()
+    mock_settings = MagicMock(wraps=orig_settings)
+    mock_settings.ingest_token = test_token
+    mock_settings.database_url = None  # DB-free unit test mode
+    monkeypatch.setattr("app.routers.internal.get_settings", lambda: mock_settings)
+
+    # Via Bearer auth
+    resp = client.post(
+        "/api/v1/internal/ingest/run?source=USGS",
+        headers={"Authorization": f"Bearer {test_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "SUCCESS"
+    assert data["source"] == "USGS"
+    assert "run_id" in data
+
+    # Via X-Ingest-Token
+    resp2 = client.post(
+        "/api/v1/internal/ingest/run",
+        headers={"X-Ingest-Token": test_token},
+    )
+    assert resp2.status_code == 200
+    assert resp2.json()["status"] == "SUCCESS"
+
+
+def test_dispatch_shared_transitions_invariants():
+    """Verify shared dispatch transition state machine contract (S2-01)."""
+    from app.services.dispatch import DISPATCH_TRANSITIONS, TERMINAL_DISPATCH
+
+    assert "ACKNOWLEDGED" in DISPATCH_TRANSITIONS["REQUESTED"]
+    assert "REJECTED" in DISPATCH_TRANSITIONS["REQUESTED"]
+    assert "DISPATCHED" in DISPATCH_TRANSITIONS["ACKNOWLEDGED"]
+    assert "COMPLETED" in DISPATCH_TRANSITIONS["DISPATCHED"]
+    assert len(DISPATCH_TRANSITIONS["COMPLETED"]) == 0
+    assert "COMPLETED" in TERMINAL_DISPATCH
+    assert "REJECTED" in TERMINAL_DISPATCH
+    assert "FAILED" in TERMINAL_DISPATCH
+
