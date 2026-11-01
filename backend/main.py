@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -9,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import db
 from app.config import get_settings
 from app.errors import install_error_handlers
-from app.routers import auth
+from app.routers import auth, internal
 from app.routers import field as field_router
 from app.routers.dm import router as dm_router
 from app.routers.public import router as public_router
@@ -176,7 +177,8 @@ install_error_handlers(app)
 app.include_router(auth.router)
 app.include_router(dm_router)
 app.include_router(public_router)
-app.include_router(field_router.router)
+app.include_router(internal.router)  # S2-09, S2-16: internal maintenance & ingestion cron
+app.include_router(field_router.router)  # S2-01: frontline responder operations
 
 
 # CORS — allow frontend dev server and production origins
@@ -361,7 +363,7 @@ async def list_shelters():
 
 @app.get('/api/v1/health')
 def api_health():
-    """Liveness plus database reachability (SRS s.15.6)."""
+    """Liveness plus database reachability and deployed version (SRS s.15.6)."""
     database = "not_configured"
     if get_settings().database_url:
         try:
@@ -371,4 +373,9 @@ def api_health():
         except Exception:
             logger.exception("Database health check failed")
             database = "unavailable"
-    return {'status': 'healthy', 'service': 'drch-backend', 'database': database}
+    return {
+        'status': 'healthy',
+        'service': 'drch-backend',
+        'database': database,
+        'version': os.getenv("GIT_SHA", "dev"),
+    }

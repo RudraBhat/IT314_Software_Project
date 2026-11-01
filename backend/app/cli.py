@@ -206,6 +206,14 @@ def create_field(args) -> None:
     print(f"Created Field Team account {args.email} for '{team['name']}'{callsign_text}{leader_text}")
 
 
+def verify_audit(args) -> None:
+    with db.transaction() as conn:
+        valid, _count, msg = audit.verify_audit_chain(conn)
+        if not valid:
+            sys.exit(f"❌ [AUDIT TAMPERING DETECTED] {msg}")
+        print(f"✅ [AUDIT INTEGRITY VERIFIED] {msg}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -236,6 +244,9 @@ def main(argv: list[str] | None = None) -> None:
     mfa = sub.add_parser("reset-mfa", help="Issue a new TOTP secret and revoke sessions")
     mfa.add_argument("--email", required=True)
     mfa.set_defaults(func=reset_mfa)
+
+    v_audit = sub.add_parser("verify-audit", help="Verify cryptographic SHA-256 hash chaining of audit_logs")
+    v_audit.set_defaults(func=verify_audit)
 
     args = parser.parse_args(argv)
     args.func(args)

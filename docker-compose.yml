@@ -86,6 +86,7 @@ services:
       - DEMO_MODE=${DEMO_MODE:-false}
       - JWT_SECRET=${JWT_SECRET:-insecure_default_jwt_secret_at_least_32_chars_long}
       - AI_TRIAGE_URL=${AI_TRIAGE_URL:-http://ai-workers:8001/triage}
+      - GIT_SHA=${GIT_SHA:-dev}
     volumes:
       - ./backend:/app
     depends_on:

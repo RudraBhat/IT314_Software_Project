@@ -137,6 +137,8 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=backend
@@ -247,7 +249,8 @@ jobs:
           PROD_BACKEND_URL: ${{ secrets.PROD_BACKEND_URL }}
         run: |
           if [ -n "$PROD_BACKEND_URL" ]; then
-            echo "Waiting for production backend to complete deployment rollout..."
+            PROD_BACKEND_URL="${PROD_BACKEND_URL%/}"
+            echo "Waiting for production backend to complete deployment rollout at $PROD_BACKEND_URL..."
             sleep 10
             for i in $(seq 1 30); do
               HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_BACKEND_URL/health" || echo "000")
@@ -262,3 +265,61 @@ jobs:
           else
             echo "ℹ️ PROD_BACKEND_URL secret not set. Skipping live health verification."
           fi
+
+  # ============================================================================
+  # 5. Live Staging Smoke Gate (Live-SHA Verified)
+  # ============================================================================
+  smoke:
+    name: Staging Smoke / Live SHA Verification
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    env:
+      API_URL: ${{ secrets.STAGING_BACKEND_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Smoke Test Dependencies
+        run: |
+          pip install httpx pyotp
+
+      - name: Wait until this commit is live
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "::notice::STAGING_BACKEND_URL secret not set in GitHub Secrets. Skipping staging live version verification."
+            exit 0
+          fi
+          API_URL="${API_URL%/}"
+          echo "Waiting for live commit ${{ github.sha }} on $API_URL..."
+          for i in $(seq 1 30); do
+            HTTP_CODE=$(curl -s -o out.json -w "%{http_code}" --max-time 20 "$API_URL/api/v1/health" || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              v=$(jq -r .version out.json 2>/dev/null || echo "unknown")
+              echo "Polling attempt $i/30: HTTP 200, version '$v'"
+              if [ "$v" = "${{ github.sha }}" ]; then
+                echo "Deployed build is live."
+                exit 0
+              fi
+            else
+              echo "Polling attempt $i/30: got HTTP $HTTP_CODE"
+            fi
+            sleep 10
+          done
+          echo "::warning::New build ${{ github.sha }} not live on $API_URL after 5 minutes."
+          exit 0
+
+      - name: Run Staging Smoke Test
+        if: ${{ env.API_URL != '' }}
+        env:
+          SMOKE_STAFF_EMAIL: ${{ secrets.SMOKE_STAFF_EMAIL }}
+          SMOKE_STAFF_PASSWORD: ${{ secrets.SMOKE_STAFF_PASSWORD }}
+          SMOKE_STAFF_TOTP_SECRET: ${{ secrets.SMOKE_STAFF_TOTP_SECRET }}
+        run: |
+          python scripts/smoke.py --base-url "$API_URL" --scenario field-loop

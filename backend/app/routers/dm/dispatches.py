@@ -16,56 +16,33 @@ from psycopg import sql
 from pydantic import BaseModel, Field
 
 from app import audit, db
-from app.auth import Dispatcher, DMUser, Principal, Supervisor
+from app.auth import Dispatcher, DMUser, Supervisor
 from app.common import Filters, Page, Priority, Rationale, page_body
-from app.config import get_settings
 from app.errors import ApiError, conflict, not_found
 from app.services.dispatch import (
+    DISPATCH_SELECT,
     apply_acknowledgement,
     apply_completion,
     apply_failure,
     apply_progress,
     apply_rejection,
     escalate,
+    fetch_dispatch,
+    get_dispatch_timeout,
     lock_dispatch,
-    record_dispatch_conflict,
+    run_dispatch_transition,
+    set_dispatch_status,
+    state_conflict,
 )
 from app.services.incidents import ensure_open, lock_incident
 from app.services.resources import reserve
 
 router = APIRouter()
 
-_DISPATCH_SELECT = """
-SELECT d.dispatch_id, d.dispatch_ref, d.incident_id, i.incident_ref,
-       lower(i.scenario::text) AS scenario, d.status, d.priority, d.instructions,
-       d.receiving_agency_id, a.name AS agency_name, d.acknowledged_by, d.acknowledged_at,
-       d.created_at, d.updated_at, u.full_name AS created_by_name,
-       (d.status = 'REQUESTED' AND d.created_at < now() - make_interval(mins => %(timeout)s)) AS overdue,
-       EXISTS (SELECT 1 FROM audit_logs l WHERE l.entity_type = 'dispatch_order'
-               AND l.entity_id = d.dispatch_id AND l.action = 'DISPATCH_ESCALATED') AS escalated
-FROM dispatch_orders d
-JOIN incidents i ON i.incident_id = d.incident_id
-JOIN users u ON u.user_id = d.created_by
-LEFT JOIN agencies a ON a.agency_id = d.receiving_agency_id
-"""
-
-
-def _timeout() -> int:
-    return get_settings().dispatch_ack_timeout_minutes
-
-
-def _fetch(conn, dispatch_id) -> dict:
-    row = conn.execute(
-        sql.SQL("{} WHERE d.dispatch_id = %(id)s").format(sql.SQL(_DISPATCH_SELECT)),
-        {"id": dispatch_id, "timeout": _timeout()},
-    ).fetchone()
-    if row is None:
-        raise not_found("Dispatch")
-    return row
-
-
-def _lock(conn, dispatch_id) -> dict:
-    return lock_dispatch(conn, dispatch_id)
+_DISPATCH_SELECT = DISPATCH_SELECT
+_timeout = get_dispatch_timeout
+_fetch = fetch_dispatch
+_lock = lock_dispatch
 
 
 # -------------------------------------------------------------------- creation
@@ -313,42 +290,9 @@ class Escalation(BaseModel):
     reason: str = Rationale
 
 
-def _state_conflict(conn, principal: Principal, dispatch: dict, attempted: str) -> ApiError:
-    return record_dispatch_conflict(conn, principal, dispatch, attempted)
-
-
-def _set_status(conn, principal: Principal, dispatch: dict, status: str, action: str, rationale: str, after: dict):
-    conn.execute(
-        "UPDATE dispatch_orders SET status = %s WHERE dispatch_id = %s", (status, dispatch["dispatch_id"])
-    )
-    audit.record(
-        conn,
-        actor=principal,
-        action=action,
-        entity_type="dispatch_order",
-        entity_id=dispatch["dispatch_id"],
-        rationale=rationale,
-        before={"status": dispatch["status"]},
-        after={"status": status, **after},
-        ip=principal.ip,
-    )
-
-
-def _run(dispatch_id: uuid.UUID, handler) -> dict:
-    """Run a state event; a recorded conflict is committed even though the request fails."""
-    error: ApiError | None = None
-    with db.transaction() as conn:
-        dispatch = _lock(conn, dispatch_id)
-        try:
-            handler(conn, dispatch)
-        except ApiError as exc:
-            if exc.code not in ("DISPATCH_NOT_ACKNOWLEDGED", "DISPATCH_STATE_CONFLICT"):
-                raise
-            error = exc
-    if error:
-        raise error
-    with db.transaction() as conn:
-        return _fetch(conn, dispatch_id)
+_state_conflict = state_conflict
+_set_status = set_dispatch_status
+_run = run_dispatch_transition
 
 
 @router.post("/dispatches/{dispatch_id}/acknowledgement")
@@ -358,13 +302,7 @@ def record_acknowledgement(
     return _run(
         dispatch_id,
         lambda conn, dispatch: apply_acknowledgement(
-            conn,
-            principal,
-            dispatch_id,
-            channel=body.channel,
-            note=body.note,
-            acknowledged_by=body.acknowledged_by,
-            dispatch=dispatch,
+            conn, principal, dispatch, body.acknowledged_by, body.channel, body.note
         ),
     )
 
@@ -376,13 +314,7 @@ def record_rejection(
     return _run(
         dispatch_id,
         lambda conn, dispatch: apply_rejection(
-            conn,
-            principal,
-            dispatch_id,
-            reason=body.reason,
-            reported_by=body.reported_by,
-            channel=body.channel,
-            dispatch=dispatch,
+            conn, principal, dispatch, body.reason, body.reported_by, body.channel
         ),
     )
 
@@ -394,14 +326,7 @@ def record_progress(
     return _run(
         dispatch_id,
         lambda conn, dispatch: apply_progress(
-            conn,
-            principal,
-            dispatch_id,
-            event=body.event,
-            note=body.note,
-            reported_by=body.reported_by,
-            channel=body.channel,
-            dispatch=dispatch,
+            conn, principal, dispatch, body.event, body.note, body.reported_by, body.channel
         ),
     )
 
@@ -413,13 +338,7 @@ def record_completion(
     return _run(
         dispatch_id,
         lambda conn, dispatch: apply_completion(
-            conn,
-            principal,
-            dispatch_id,
-            summary=body.note or f"Confirmed by {body.confirmed_by}",
-            confirmed_by=body.confirmed_by,
-            channel=body.channel,
-            dispatch=dispatch,
+            conn, principal, dispatch, body.confirmed_by, body.channel, body.note
         ),
     )
 
@@ -431,11 +350,7 @@ def record_failure(
     return _run(
         dispatch_id,
         lambda conn, dispatch: apply_failure(
-            conn,
-            principal,
-            dispatch_id,
-            reason=body.reason,
-            dispatch=dispatch,
+            conn, principal, dispatch, body.reason
         ),
     )
 

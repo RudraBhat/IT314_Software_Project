@@ -34,6 +34,12 @@ Read by `backend/app/config.py` via `os.getenv` at startup.
 | `BOUNDARY_SYNC_INTERVAL_HOURS` | No (default 720) | — | `config.py` L82 | How often the boundary sync worker checks for upstream updates |
 | `BOUNDARY_SYNC_CHECK_INTERVAL_SECONDS` | No (default 86400) | — | `config.py` L83 | How often the in-process worker loop wakes to check if a sync is due |
 | `GEOJSON_GUJARAT_DISTRICTS_URL` | No | — | `config.py` L84 | URL of the Gujarat district GeoJSON used by the boundary sync worker |
+| `INGEST_TOKEN` | Yes (for cron trigger) | S | `config.py`, `routers/internal.py` | Bearer token authenticating scheduled ingestion triggers (`/api/v1/internal/ingest/run`) |
+| `MOCK_GATEWAY_SECRET` | No (staging only) | S | `config.py` | Secret key used for signing and verifying sandbox payment transactions |
+| `APP_ENV` | No (default `development`) | — | `config.py` | Environment identifier (`development`, `staging`, `production`) |
+| `GIT_SHA` | No (default `dev`) | — | `config.py`, `main.py` | Git commit SHA returned by `/api/v1/health` for CD smoke test verification |
+| `PAYMENT_GATEWAY` | No (default `mock`) | — | `config.py` | Payment processor provider (`mock`, `razorpay`, `stripe`) |
+| `STAGING_BACKEND_URL` | Yes (in CI CD secrets) | — | `.github/workflows/cd.yml`, `ingest-cron.yml` | Base URL of deployed staging backend service |
 
 ---
 
