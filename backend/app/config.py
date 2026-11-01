@@ -50,6 +50,11 @@ class Settings:
     boundary_sync_interval_hours: int
     boundary_sync_check_interval_seconds: int
     geojson_gujarat_districts_url: str
+    ingest_token: str | None
+    mock_gateway_secret: str | None
+    app_env: str
+    git_sha: str
+    payment_gateway: str
 
     def require(self, name: str) -> str:
         value = getattr(self, name)
@@ -85,4 +90,9 @@ def get_settings() -> Settings:
             "GEOJSON_GUJARAT_DISTRICTS_URL",
             "https://raw.githubusercontent.com/datameet/maps/master/Districts/Gujarat.geojson",
         ),
+        ingest_token=os.getenv("INGEST_TOKEN"),
+        mock_gateway_secret=os.getenv("MOCK_GATEWAY_SECRET"),
+        app_env=os.getenv("APP_ENV", "development").lower(),
+        git_sha=os.getenv("GIT_SHA", "dev"),
+        payment_gateway=os.getenv("PAYMENT_GATEWAY", "mock").lower(),
     )

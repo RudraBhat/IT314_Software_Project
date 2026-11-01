@@ -69,3 +69,48 @@ def record_standalone(**kwargs: Any) -> None:
             record(conn, **kwargs)
     except Exception:  # auditing a denial must never turn a 403 into a 500
         logger.exception("Failed to write standalone audit entry")
+
+
+def verify_audit_chain(conn: Connection) -> tuple[bool, int, str]:
+    """Verify cryptographic SHA-256 hash chaining over the immutable audit_logs table (AM-FR-05).
+
+    Returns:
+        (is_valid, verified_count, message)
+    """
+    count_row = conn.execute("SELECT COUNT(*) AS total FROM audit_logs").fetchone()
+    total = count_row["total"] if count_row else 0
+    if total == 0:
+        return True, 0, "Audit log is empty; hash chain intact."
+
+    query = """
+    WITH verified AS (
+        SELECT audit_id,
+               prev_hash,
+               LAG(row_hash, 1, repeat('0', 64)) OVER (ORDER BY audit_id) AS expected_prev,
+               row_hash,
+               encode(digest(
+                   prev_hash ||
+                   occurred_at::text ||
+                   COALESCE(actor_id::text, 'SYSTEM') ||
+                   action ||
+                   entity_type ||
+                   COALESCE(entity_id::text, '') ||
+                   result::text ||
+                   COALESCE(rationale, ''),
+                   'sha256'), 'hex') AS computed_hash
+        FROM audit_logs
+    )
+    SELECT audit_id, prev_hash, expected_prev, row_hash, computed_hash
+    FROM verified
+    WHERE prev_hash != expected_prev OR row_hash != computed_hash;
+    """
+    mismatches = conn.execute(query).fetchall()
+    if mismatches:
+        first = mismatches[0]
+        return (
+            False,
+            len(mismatches),
+            f"Tampering detected at audit_id {first['audit_id']}: hash mismatch or broken chain link.",
+        )
+
+    return True, total, f"Audit chain intact: {total} record(s) cryptographically verified."
