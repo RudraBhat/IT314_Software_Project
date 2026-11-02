@@ -17,6 +17,9 @@ from app.errors import ApiError
 from app.security import ACCESS, decode_token
 
 DM_ROLE = "DISASTER_MGMT"
+APP_MGMT_ROLE = "APP_MGMT"
+FIELD_TEAM_ROLE = "FIELD_TEAM"
+CITIZEN_ROLE = "NORMAL_USER"
 PERMISSIONS = ("PUBLISHER", "MODERATOR", "CLOSURE", "DISPATCH", "SUPERVISOR")
 
 _bearer = HTTPBearer(auto_error=False)
@@ -84,6 +87,8 @@ def load_principal(
                 (user_id,),
             ).fetchall()
             permissions = frozenset(p["p"] for p in perms)
+        elif row["role"] == APP_MGMT_ROLE:
+            permissions = frozenset(PERMISSIONS)
     return Principal(
         user_id=row["user_id"],
         email=row["email"],
@@ -166,3 +171,34 @@ Moderator = Annotated[Principal, Depends(require_permission("MODERATOR"))]
 Closer = Annotated[Principal, Depends(require_permission("CLOSURE"))]
 Dispatcher = Annotated[Principal, Depends(require_permission("DISPATCH"))]
 Supervisor = Annotated[Principal, Depends(require_permission("SUPERVISOR"))]
+
+
+def require_admin(request: Request, principal: CurrentUser) -> Principal:
+    """Enforces APP_MGMT administrator role with verified MFA."""
+    if principal.role != APP_MGMT_ROLE:
+        raise _deny(principal, request, "ADMIN_REQUIRED", "Application Management administrator role required")
+    if not principal.mfa_verified:
+        raise ApiError(401, "MFA_REQUIRED", "Multi-factor authentication is required")
+    return principal
+
+
+AdminUser = Annotated[Principal, Depends(require_admin)]
+
+
+def require_inviter(request: Request, principal: CurrentUser) -> Principal:
+    """Allows either APP_MGMT or DM SUPERVISOR (with verified MFA) to invite users."""
+    is_admin = principal.role == APP_MGMT_ROLE
+    is_supervisor = principal.role == DM_ROLE and principal.has("SUPERVISOR")
+    if not (is_admin or is_supervisor):
+        raise _deny(
+            principal,
+            request,
+            "INVITER_REQUIRED",
+            "Sufficient administrator or supervisor privilege required to invite accounts",
+        )
+    if not principal.mfa_verified:
+        raise ApiError(401, "MFA_REQUIRED", "Multi-factor authentication is required")
+    return principal
+
+
+InviterUser = Annotated[Principal, Depends(require_inviter)]

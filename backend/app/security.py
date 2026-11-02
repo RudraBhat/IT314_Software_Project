@@ -1,5 +1,6 @@
 """Password hashing (Argon2id), signed tokens (JWT HS256) and TOTP MFA secrets."""
 
+import hashlib
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -19,7 +20,18 @@ _DUMMY_HASH = _hasher.hash(secrets.token_urlsafe(16))
 
 ACCESS = "access"
 MFA = "mfa"
+MFA_SETUP = "mfa_setup"
 _ALGORITHM = "HS256"
+
+
+def generate_secure_token(nbytes: int = 32) -> str:
+    """Generate a high-entropy URL-safe token for email links."""
+    return secrets.token_urlsafe(nbytes)
+
+
+def hash_token(token: str) -> str:
+    """Hash a token with SHA-256 for persistent database storage (64 hex characters)."""
+    return hashlib.sha256(token.strip().encode("utf-8")).hexdigest()
 
 
 def hash_password(password: str) -> str:
