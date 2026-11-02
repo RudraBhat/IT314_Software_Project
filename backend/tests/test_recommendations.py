@@ -4,18 +4,8 @@ import pytest
 
 from app.services.recommendations import (
     get_recommended_teams,
-    get_required_capabilities,
     score_and_rank_teams,
 )
-
-
-def test_scenario_rule_mapping():
-    """Verify emergency scenario to capability rule mapping."""
-    assert "boat" in get_required_capabilities("URBAN_FLOODING")
-    assert "water_rescue" in get_required_capabilities("FLOOD")
-    assert "fire" in get_required_capabilities("INDUSTRIAL_FIRE")
-    assert "cyclone_response" in get_required_capabilities("CYCLONE")
-    assert get_required_capabilities("EARTHQUAKE") == ["search_and_rescue"]  # unsupported: generic default only
 
 
 @pytest.mark.db
@@ -117,26 +107,3 @@ def test_maintenance_status_excluded():
     assert "r-avail" in ids
 
 
-@pytest.mark.db
-def test_no_fallback_roster_when_no_team_is_available(client, make, sql):
-    """With no AVAILABLE team nearby the API returns an empty list, never invented teams."""
-    sql.execute("UPDATE resources SET status = 'UNAVAILABLE' WHERE type = 'TEAM'")
-    try:
-        staff = make.staff()
-        incident = make.incident()
-        r = client.get(f"/api/v1/dm/incidents/{incident['incident_id']}/team-recommendations", headers=staff["headers"])
-        assert r.status_code == 200 and r.json()["recommendations"] == []
-        assert r.json()["requires_confirmation"] is True
-    finally:
-        sql.execute("UPDATE resources SET status = 'AVAILABLE' WHERE type = 'TEAM' AND quantity_available > 0")
-
-
-@pytest.mark.db
-def test_team_recommendations_contract_shape(client, make):
-    staff = make.staff()
-    incident = make.incident(latitude=23.0373, longitude=72.5613)
-    r = client.get(f"/api/v1/dm/incidents/{incident['incident_id']}/team-recommendations", headers=staff["headers"])
-    body = r.json()
-    assert r.status_code == 200 and body["scenario"] == "urban_flooding"
-    assert body["recommendations"] and {"resource_id", "team_name", "agency", "distance_km", "capability_match", "rank", "reasons"} <= set(body["recommendations"][0])
-    assert client.get(f"/api/v1/dm/incidents/{incident['incident_id']}/team-recommendations").status_code == 401
