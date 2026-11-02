@@ -310,3 +310,223 @@ export async function backendGoogleLogin(
     };
   }
 }
+
+/**
+ * Request a password reset link (Anti-enumeration protected).
+ */
+export async function requestPasswordReset(
+  email: string
+): Promise<{ success: boolean; message: string; error?: string }> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/api/v1/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        success: false,
+        message: data.error?.message || "Failed to process password reset request.",
+        error: data.error?.message,
+      };
+    }
+    return {
+      success: true,
+      message: data.message || "If this email is registered and active, a password reset link has been sent.",
+    };
+  } catch {
+    return {
+      success: false,
+      message: "Unable to connect to authentication server. Please try again.",
+      error: "Network error",
+    };
+  }
+}
+
+/**
+ * Verify whether a password reset token is valid before presenting the form.
+ */
+export async function verifyResetToken(
+  token: string
+): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(
+      `${baseUrl}/api/v1/auth/reset-password/verify?token=${encodeURIComponent(token.trim())}`
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        valid: false,
+        error: data.error?.message || "Invalid or expired password reset link.",
+      };
+    }
+    return { valid: true };
+  } catch {
+    return { valid: false, error: "Authentication server unreachable." };
+  }
+}
+
+/**
+ * Submit the new password using a valid reset token.
+ */
+export async function submitResetPassword(
+  token: string,
+  newPassword: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/api/v1/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token.trim(), new_password: newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        success: false,
+        error: data.error?.message || "Failed to reset password.",
+      };
+    }
+    return {
+      success: true,
+      message: data.message || "Password has been reset successfully.",
+    };
+  } catch {
+    return {
+      success: false,
+      error: "Authentication server unreachable.",
+    };
+  }
+}
+
+/**
+ * Verify an invitation token before presenting the setup form.
+ */
+export async function verifyInvitationToken(token: string): Promise<{
+  valid: boolean;
+  email?: string;
+  full_name?: string;
+  role?: string;
+  requires_mfa?: boolean;
+  error?: string;
+}> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(
+      `${baseUrl}/api/v1/auth/invitation/verify?token=${encodeURIComponent(token.trim())}`
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        valid: false,
+        error: data.error?.message || "Invalid or expired invitation token.",
+      };
+    }
+    return {
+      valid: true,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role,
+      requires_mfa: data.requires_mfa,
+    };
+  } catch {
+    return { valid: false, error: "Authentication server unreachable." };
+  }
+}
+
+/**
+ * Accept invitation and configure chosen password.
+ */
+export async function acceptInvitation(
+  token: string,
+  password: string
+): Promise<{
+  success: boolean;
+  mfa_required: boolean;
+  mfa_setup_token?: string;
+  mfa_secret?: string;
+  mfa_uri?: string;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/api/v1/auth/invitation/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token.trim(), password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        success: false,
+        mfa_required: false,
+        error: data.error?.message || "Failed to set up account.",
+      };
+    }
+    return {
+      success: true,
+      mfa_required: Boolean(data.mfa_required),
+      mfa_setup_token: data.mfa_setup_token,
+      mfa_secret: data.mfa_secret,
+      mfa_uri: data.mfa_uri,
+      message: data.message,
+    };
+  } catch {
+    return {
+      success: false,
+      mfa_required: false,
+      error: "Authentication server unreachable.",
+    };
+  }
+}
+
+/**
+ * Complete TOTP enrollment during initial invitation setup.
+ */
+export async function verifyTotpSetup(
+  mfaSetupToken: string,
+  code: string
+): Promise<AuthApiResponse> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/api/v1/auth/invitation/verify-totp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mfa_setup_token: mfaSetupToken, code: code.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        success: false,
+        error: data.error?.message || "Invalid authenticator code.",
+      };
+    }
+    const token = data.access_token || data.token;
+    if (token && typeof window !== "undefined") {
+      localStorage.setItem("resq_jwt_token", token);
+    }
+    return {
+      success: true,
+      token,
+      user: {
+        id: data.user?.id || `user_${Date.now()}`,
+        name: data.user?.name || "Staff Member",
+        email: data.user?.email || "",
+        phone: data.user?.phone || "",
+        role: data.user?.role || "DISASTER_MGMT",
+        agency: "Disaster Management Authority",
+      },
+      message: "Account verified and activated successfully.",
+    };
+  } catch {
+    return {
+      success: false,
+      isOffline: true,
+      error: "Authentication server unreachable.",
+    };
+  }
+}

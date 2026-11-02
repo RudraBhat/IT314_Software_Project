@@ -410,13 +410,22 @@ function LoginPageContent() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-semibold text-slate-300">Password</label>
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-[11px] text-sky-400 hover:text-sky-300 cursor-pointer"
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/forgot-password"
+                    className="text-[11px] text-sky-400 hover:text-sky-300"
+                  >
+                    Forgot?
+                  </Link>
+                  <span className="text-slate-600 text-[10px]">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-[11px] text-slate-400 hover:text-slate-300 cursor-pointer"
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
               <input
                 type={showPassword ? "text" : "password"}
