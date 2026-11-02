@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useResQ } from "../../context/ResQContext";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { DisasterCategory } from "../../types/resq";
 import * as CitizenApi from "../../services/citizenApi";
 
 interface CitizenDashboardViewProps {
+  currentUser?: { id: string; name: string; phone?: string; email?: string } | null;
   onOpenCitizenReport?: () => void;
   onViewPublicMap?: () => void;
   onSignOut?: () => void;
@@ -89,12 +89,14 @@ function formatRelativeTime(dateStr: string) {
 }
 
 export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
+  currentUser: propUser,
   onOpenCitizenReport,
   onViewPublicMap,
   onSignOut,
   onClose,
 }) => {
-  const { currentUser, logout } = useResQ();
+  const currentUser = useMemo(() => propUser ?? { id: "GUEST", name: "Citizen" }, [propUser]);
+  const logout = onSignOut || (() => {});
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<CitizenTabId>("overview");

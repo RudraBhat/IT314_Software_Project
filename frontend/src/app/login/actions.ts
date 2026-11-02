@@ -103,6 +103,20 @@ export async function authenticate(prev: LoginState, form: FormData): Promise<Lo
   return form.get("intent") === "mfa" ? verifyCode(prev, form) : signIn(form);
 }
 
+export async function register(_prev: { error?: string }, form: FormData): Promise<{ error?: string }> {
+  const res = await post("/api/v1/auth/register", {
+    email: String(form.get("email") ?? "").trim(),
+    password: String(form.get("password") ?? ""),
+    full_name: String(form.get("full_name") ?? "").trim(),
+    phone: String(form.get("phone") ?? "").trim() || null,
+  });
+  if (!res.ok) return { error: (res.data as ApiError).error?.message ?? "Registration failed." };
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(Number(res.data.expires_in) || 3600));
+  jar.set("drch_session", "1", cookieOptions(Number(res.data.expires_in) || 3600));
+  redirect("/citizen/dashboard");
+}
+
 export async function signOut() {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;

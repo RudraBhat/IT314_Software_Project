@@ -3,7 +3,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { isInGujarat, GUJARAT_CENTER } from "@/lib/geo";
-import { createReport, type Scenario } from "@/services/citizenApi";
+import { createReport, fetchPublicIncidents, type PublicIncident, type Scenario } from "@/services/citizenApi";
+import { findNearbyIncidents } from "@/services/duplicateDetection";
+import { URGENT_NEEDS, preTriage } from "@/services/preTriage";
 
 const SCENARIOS = [
   { id: "urban_flooding", label: "Urban Flooding", icon: "🌊", desc: "Waterlogging, rising flood water, stranded residents" },
@@ -30,6 +32,9 @@ export default function ReportIncidentPage() {
   const [landmark, setLandmark] = useState("");
   const [locationSource, setLocationSource] = useState<"GPS" | "MAP_PIN" | "MANUAL">("MAP_PIN");
 
+  const [needs, setNeeds] = useState<string[]>([]);
+  const [publicIncidents, setPublicIncidents] = useState<PublicIncident[]>([]);
+
   // Idempotency key per form session (initialized lazily)
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => {
     if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -51,6 +56,13 @@ export default function ReportIncidentPage() {
 
   // Validation
   const validLocation = isInGujarat(latitude, longitude);
+
+  // Advisory hints: verified incidents already reported nearby, and an instant rule-based urgency hint.
+  useEffect(() => {
+    fetchPublicIncidents().then((res) => res.data && setPublicIncidents(res.data));
+  }, []);
+  const nearby = validLocation ? findNearbyIncidents(latitude, longitude, scenario as Scenario, publicIncidents) : [];
+  const hint = preTriage(scenario as Scenario, description, peopleAffected, needs);
 
   // GPS Geolocation Handler
   const handleUseGPS = () => {
@@ -157,7 +169,9 @@ export default function ReportIncidentPage() {
     try {
       const payload = {
         scenario: scenario as Scenario,
-        description: description.trim(),
+        description: needs.length ? `${description.trim()}
+
+Urgent needs: ${needs.join(", ")}` : description.trim(),
         reported_urgency: urgency as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
         people_affected: Number(peopleAffected),
         location_source: locationSource,
@@ -297,7 +311,7 @@ export default function ReportIncidentPage() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setScenario(item.id)}
+                        onClick={() => { setScenario(item.id); setNeeds([]); }}
                         className={`p-3.5 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer ${
                           isSelected
                             ? "bg-sky-950/40 border-sky-500 shadow-md shadow-sky-500/10"
@@ -384,6 +398,54 @@ export default function ReportIncidentPage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-sky-500 transition resize-none"
                 />
               </div>
+
+              {/* Urgent needs checklist */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                  Urgent needs (optional)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {URGENT_NEEDS[scenario as Scenario].map((need) => (
+                    <label key={need} className={`px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition ${needs.includes(need) ? "border-sky-500 bg-sky-950/40 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"}`}>
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={needs.includes(need)}
+                        onChange={() => setNeeds(needs.includes(need) ? needs.filter((n) => n !== need) : [...needs, need])}
+                      />
+                      {need}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {hint.level && (
+                <div className="p-4 bg-amber-950/40 border border-amber-700/50 rounded-xl text-xs text-amber-100" role="status">
+                  <div className="font-semibold">
+                    Automated hint: this may be {hint.level === "CRITICAL" ? "a life-threatening situation" : "a serious situation"}
+                  </div>
+                  <ul className="mt-1 list-disc pl-4 text-amber-200/90">
+                    {hint.reasons.map((r) => <li key={r}>{r}</li>)}
+                  </ul>
+                  <div className="mt-1 text-amber-300/80">
+                    This is advisory only. Choose the urgency yourself; a dispatcher reviews every report. If someone is in immediate danger, call 112.
+                  </div>
+                </div>
+              )}
+
+              {nearby.length > 0 && (
+                <div className="p-4 bg-sky-950/40 border border-sky-700/50 rounded-xl text-xs text-sky-100" role="status">
+                  <div className="font-semibold">Similar incidents are already on the public map nearby</div>
+                  <ul className="mt-1 text-sky-200/90">
+                    {nearby.map((n) => (
+                      <li key={n.incident.id}>
+                        {n.incident.id} · {n.incident.title} · about {n.distanceMeters < 1000 ? `${n.distanceMeters} m` : `${(n.distanceMeters / 1000).toFixed(1)} km`} away
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-1 text-sky-300/80">You can still submit. Extra reports help dispatchers confirm what is happening.</div>
+                </div>
+              )}
 
               {/* Location Picker Section */}
               <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-5 space-y-4">

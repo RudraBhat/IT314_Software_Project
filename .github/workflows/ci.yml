@@ -97,6 +97,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Ban demo and mock data markers
+        run: bash ../scripts/check_no_demo_data.sh
+
       - name: Run ESLint
         run: npm run lint -- --cache --cache-location .eslintcache
 
