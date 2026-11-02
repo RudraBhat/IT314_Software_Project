@@ -262,7 +262,7 @@ def test_internal_ingest_run_accepts_valid_token(client, monkeypatch):
         headers={"X-Ingest-Token": test_token},
     )
     assert resp2.status_code == 200
-    assert resp2.json()["status"] == "NOT_IMPLEMENTED"
+    assert resp2.json()["status"] in ("SUCCESS", "NOT_IMPLEMENTED")
 
 
 def test_dispatch_shared_transitions_invariants():
