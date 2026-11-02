@@ -61,3 +61,11 @@ def test_role_enforced(client, make):
     assert client.get("/api/v1/field/assignments").status_code == 401
     assert client.get("/api/v1/field/assignments", headers=staff["headers"]).status_code == 403
     assert client.get("/api/v1/field/me", headers=citizen["headers"]).status_code == 403
+
+
+def test_field_user_mfa_required(client, make):
+    user = make.field_team_user()
+    unmfa_headers = make.token(user, mfa=False)
+    r = client.get("/api/v1/field/assignments", headers=unmfa_headers)
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "MFA_REQUIRED"

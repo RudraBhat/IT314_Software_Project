@@ -20,7 +20,7 @@ import os
 import sys
 
 from app import audit, db, security
-from app.auth import DM_ROLE, PERMISSIONS
+from app.auth import DM_ROLE, FIELD_ROLE, PERMISSIONS
 
 MIN_PASSWORD_LENGTH = 12
 
@@ -108,6 +108,46 @@ def create_staff(args) -> None:
     print(f"Created Disaster Management account {args.email} with permissions: {', '.join(perms) or 'none'}")
 
 
+def create_field(args) -> None:
+    password_hash = security.hash_password(_read_password())
+    with db.transaction() as conn:
+        if conn.execute("SELECT 1 FROM users WHERE email = %s", (args.email,)).fetchone():
+            sys.exit(f"An account with email {args.email} already exists")
+        res = conn.execute("SELECT resource_id FROM resources WHERE resource_id = %s", (args.resource_id,)).fetchone()
+        if not res:
+            sys.exit(f"Resource {args.resource_id} does not exist")
+        user_id = conn.execute(
+            """
+            INSERT INTO users (role_id, email, full_name, phone, designation, status)
+            SELECT role_id, %s, %s, %s, %s, 'ACTIVE' FROM roles WHERE code = %s
+            RETURNING user_id
+            """,
+            (args.email, args.name, args.phone, "Field Team", FIELD_ROLE),
+        ).fetchone()["user_id"]
+        conn.execute(
+            "INSERT INTO user_auth (user_id, password_hash) VALUES (%s, %s)",
+            (user_id, password_hash),
+        )
+        conn.execute(
+            """
+            INSERT INTO field_team_members (user_id, resource_id, callsign, is_leader)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (user_id, args.resource_id, args.callsign, bool(args.leader)),
+        )
+        _enrol_mfa(conn, user_id, args.email)
+        audit.record(
+            conn,
+            actor=None,
+            action="FIELD_TEAM_PROVISIONED",
+            entity_type="user",
+            entity_id=user_id,
+            rationale="Provisioned with app.cli",
+            after={"role": FIELD_ROLE, "resource_id": str(args.resource_id), "callsign": args.callsign, "is_leader": bool(args.leader)},
+        )
+    print(f"Created Field Team account {args.email} (callsign: {args.callsign}, resource: {args.resource_id})")
+
+
 def set_permissions(args) -> None:
     perms = _parse_permissions(args.permissions)
     with db.transaction() as conn:
@@ -178,6 +218,15 @@ def main(argv: list[str] | None = None) -> None:
     create.add_argument("--designation")
     create.add_argument("--permissions", help=f"Comma-separated: {','.join(PERMISSIONS)}")
     create.set_defaults(func=create_staff)
+
+    create_f = sub.add_parser("create-field", help="Create a Field Team responder account")
+    create_f.add_argument("--email", required=True)
+    create_f.add_argument("--name", required=True)
+    create_f.add_argument("--phone")
+    create_f.add_argument("--resource-id", required=True)
+    create_f.add_argument("--callsign", required=True)
+    create_f.add_argument("--leader", action="store_true", default=False, help="Set as team leader")
+    create_f.set_defaults(func=create_field)
 
     perms = sub.add_parser("set-permissions", help="Replace a staff member's permissions")
     perms.add_argument("--email", required=True)

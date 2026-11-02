@@ -150,6 +150,8 @@ def require_citizen(request: Request, principal: CurrentUser) -> Principal:
 def require_field(request: Request, principal: CurrentUser) -> Principal:
     if principal.role != FIELD_ROLE:
         raise _deny(principal, request, "ROLE_REQUIRED", "Field team role required")
+    if not principal.mfa_verified:
+        raise ApiError(401, "MFA_REQUIRED", "Multi-factor authentication is required")
     return principal
 
 

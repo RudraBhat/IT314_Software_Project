@@ -15,7 +15,7 @@ from app.ratelimit import rate_limit
 
 router = APIRouter(prefix="/api/v1", tags=["auth"])
 
-STAFF_ROLES = ("DISASTER_MGMT", "APP_MGMT")
+STAFF_ROLES = ("DISASTER_MGMT", "APP_MGMT", "FIELD_TEAM")
 _GENERIC = "Invalid credentials, or the account is temporarily unavailable"
 
 

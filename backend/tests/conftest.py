@@ -265,7 +265,7 @@ class Factory:
         return {**user, "headers": self.token(user, mfa=False)}
 
     def field_team_user(self, resource_id=None, callsign: str = "Bravo-1", is_leader: bool = True, password: str = "field-team-pass") -> dict:
-        user = self.user("FIELD_TEAM", password=password, mfa=False)
+        user = self.user("FIELD_TEAM", password=password, mfa=True)
         if not resource_id:
             res = self.resource(type_="TEAM")
             resource_id = res["resource_id"]
@@ -277,7 +277,7 @@ class Factory:
             """,
             (user["user_id"], resource_id, callsign, is_leader),
         )
-        return {**user, "headers": self.token(user, mfa=False), "resource_id": resource_id}
+        return {**user, "headers": self.token(user, mfa=True), "resource_id": resource_id}
 
 
 @pytest.fixture

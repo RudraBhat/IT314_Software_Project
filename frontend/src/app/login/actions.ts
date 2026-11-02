@@ -83,19 +83,19 @@ async function verifyCode(prev: LoginState, form: FormData): Promise<LoginState>
     return { step: expired ? "password" : "mfa", error: err?.message ?? "Verification failed.", email: prev.email };
   }
   jar.delete(MFA_COOKIE);
-  if (res.data.role !== "DISASTER_MGMT") {
-    if (res.data.role === "NORMAL_USER") {
-      const expiresIn = Number(res.data.expires_in) || 86400;
-      jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(expiresIn));
-      jar.set("drch_session", "1", cookieOptions(expiresIn));
-      redirect(safeNext(form.get("next"), "NORMAL_USER"));
-    }
-    await post("/api/v1/auth/logout", {}, res.data.access_token);
-    return { step: "password", error: "This workspace is for Disaster Management staff." };
+  if (res.data.role === "DISASTER_MGMT" || res.data.role === "FIELD_TEAM") {
+    jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(res.data.expires_in));
+    jar.set("drch_session", "1", cookieOptions(res.data.expires_in));
+    redirect(safeNext(form.get("next"), res.data.role));
   }
-  jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(res.data.expires_in));
-  jar.set("drch_session", "1", cookieOptions(res.data.expires_in));
-  redirect(safeNext(form.get("next"), res.data.role));
+  if (res.data.role === "NORMAL_USER") {
+    const expiresIn = Number(res.data.expires_in) || 86400;
+    jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(expiresIn));
+    jar.set("drch_session", "1", cookieOptions(expiresIn));
+    redirect(safeNext(form.get("next"), "NORMAL_USER"));
+  }
+  await post("/api/v1/auth/logout", {}, res.data.access_token);
+  return { step: "password", error: "This workspace is for operational staff." };
 }
 
 /** One action drives both steps, so the form always shows the step the server decided. */

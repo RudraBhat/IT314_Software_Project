@@ -14,7 +14,6 @@ from psycopg import sql
 
 from app import audit, db
 from app.auth import Principal
-from app.common import notify
 from app.config import get_settings
 from app.errors import ApiError, conflict, not_found
 from app.services.incidents import lock_incident, update_incident
@@ -279,24 +278,22 @@ def escalate(conn, principal: Principal | None, dispatch: dict, reason: str) -> 
         after={"status": dispatch["status"]},
         ip=principal.ip if principal else None,
     )
-    supervisors = conn.execute(
+    result = conn.execute(
         """
-        SELECT p.user_id FROM staff_permissions p
-        JOIN users u ON u.user_id = p.user_id
-        JOIN roles r ON r.role_id = u.role_id
-        WHERE p.permission = 'SUPERVISOR' AND u.status = 'ACTIVE' AND r.code = 'DISASTER_MGMT'
-        """
-    ).fetchall()
-    for s in supervisors:
-        notify(
-            conn,
-            user_id=s["user_id"],
-            event_code="DISPATCH_ESCALATED",
-            title=f"Dispatch {dispatch['dispatch_ref']} escalated",
-            body=reason,
-            related_id=dispatch["dispatch_id"],
+        WITH inserted AS (
+            INSERT INTO notifications (user_id, event_code, channel, title, body, related_id, status)
+            SELECT p.user_id, 'DISPATCH_ESCALATED', 'IN_APP', %s, %s, %s, 'QUEUED'
+            FROM staff_permissions p
+            JOIN users u ON u.user_id = p.user_id
+            JOIN roles r ON r.role_id = u.role_id
+            WHERE p.permission = 'SUPERVISOR' AND u.status = 'ACTIVE' AND r.code = 'DISASTER_MGMT'
+            RETURNING notification_id
         )
-    return len(supervisors)
+        SELECT count(*) AS count FROM inserted
+        """,
+        (f"Dispatch {dispatch['dispatch_ref']} escalated", reason, dispatch["dispatch_id"]),
+    ).fetchone()
+    return result["count"] if result else 0
 
 
 def escalate_overdue() -> int:
