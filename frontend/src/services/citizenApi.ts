@@ -264,3 +264,39 @@ export interface ShelterData {
 export async function fetchShelters(): Promise<ApiResult<ShelterData[]>> {
   return { data: [], error: null, isBackend: true };
 }
+
+// ── Campaigns and Donations ─────────────────────────────────────
+
+export interface PublicCampaign {
+  campaign_id: string;
+  title: string;
+  purpose: string;
+  scenario: string | null;
+  target_amount: number | null;
+  currency: string;
+  status: string;
+}
+
+export async function fetchPublicCampaigns(): Promise<ApiResult<PublicCampaign[]>> {
+  return apiFetch<PublicCampaign[]>("/api/v1/public/campaigns");
+}
+
+// ── Citizen Notifications ───────────────────────────────────────
+
+export interface InAppNotification {
+  notification_id: string;
+  event_code: string;
+  title: string;
+  body: string;
+  related_id: string | null;
+  created_at: string;
+  read_at: string | null;
+}
+
+export async function fetchMyNotifications(): Promise<ApiResult<{ items: InAppNotification[]; total: number }>> {
+  return apiFetch<{ items: InAppNotification[]; total: number }>("/api/citizen/me/notifications");
+}
+
+export async function markNotificationRead(id: string): Promise<ApiResult<{ notification_id: string; read_at: string }>> {
+  return apiFetch<{ notification_id: string; read_at: string }>(`/api/citizen/me/notifications/${encodeURIComponent(id)}/read`, undefined, { method: "POST" });
+}
