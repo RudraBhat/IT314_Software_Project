@@ -40,13 +40,15 @@ export default function DispatchPage() {
   const teamRequests = useQuery<
     Array<{
       request_id: string;
+      dispatch_id: string;
       required_capability: string;
       note: string | null;
       status: string;
       requested_by_name: string;
       created_at: string;
     }>
-  >("team-requests", { dispatch_id: id, status: "OPEN" });
+  >("team-requests", { status: "OPEN" });
+  const openRequests = (teamRequests.data ?? []).filter((r) => r.dispatch_id === id);
   const { run, busy } = useAction(reload);
   const [kind, setKind] = useState<EventKind | null>(null);
   const [who, setWho] = useState("");
@@ -98,7 +100,7 @@ export default function DispatchPage() {
       () =>
         api(`team-requests/${decisionReq.id}/decision`, {
           method: "POST",
-          body: { decision: decisionReq.decision, rationale: decisionRationale.trim() },
+          body: { action: decisionReq.decision === "APPROVED" ? "APPROVE" : "DECLINE", rationale: decisionRationale.trim() },
         }),
       `Team request ${decisionReq.decision.toLowerCase()}`,
     );
@@ -159,14 +161,14 @@ export default function DispatchPage() {
           </Card>
 
           {/* Open Team Requests from Field Responders */}
-          {teamRequests.data && teamRequests.data.length > 0 && (
+          {openRequests.length > 0 && (
             <Card
               title="Backup Team Requests"
               subtitle="Requested by responders on-scene. Advisory: approving does not automatically dispatch."
               bodyClassName="p-0"
             >
               <ul className="divide-y divide-border text-sm">
-                {teamRequests.data.map((req) => (
+                {openRequests.map((req) => (
                   <li key={req.request_id} className="p-4 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
