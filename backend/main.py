@@ -22,12 +22,29 @@ logging.basicConfig(level=logging.INFO)
 # ═══════════════════════════════════════════════════════════════════
 
 WORKER_INTERVAL_SECONDS = 60
+_SPATIAL_SYNC_LOCK = 314_0030
+
+
+def _sync_spatial_boundaries_with_lock() -> list[dict]:
+    with db.transaction() as conn:
+        locked = conn.execute(
+            "SELECT pg_try_advisory_xact_lock(%s) AS ok",
+            (_SPATIAL_SYNC_LOCK,),
+        ).fetchone()
+        if not locked or not locked.get("ok"):
+            return []
+        from app.services.spatial_sync import check_and_sync_all_sources
+        return check_and_sync_all_sources()
+
+
 async def ai_workers_background_consumer():
     """
     In-process worker consumer loop:
     Runs concurrently with the FastAPI gateway to handle background tasks
     without requiring a separate paid cloud worker instance.
     Currently: escalates dispatches left unacknowledged past the timeout (DM-NFR-13).
+    Guarded by Postgres advisory transaction lock (_ESCALATION_LOCK) so multiple
+    workers (or WEB_CONCURRENCY > 1) do not duplicate escalations.
     """
     logger.info("Initializing in-process GenAI Triage & Emergency Worker...")
     try:
@@ -48,6 +65,7 @@ async def spatial_boundary_monthly_worker():
     Monthly Background Spatial Boundary Worker:
     Periodically checks if official boundary datasets or upstream GIS providers
     have updated (ETag/Last-Modified check) and syncs changes into PostGIS without manual intervention.
+    Guarded by Postgres advisory transaction lock (_SPATIAL_SYNC_LOCK).
     """
     settings = get_settings()
     if not settings.boundary_sync_enabled:
@@ -60,10 +78,9 @@ async def spatial_boundary_monthly_worker():
         while True:
             if settings.database_url:
                 try:
-                    from app.geo import load_boundaries_from_db
-                    from app.services.spatial_sync import check_and_sync_all_sources
-                    results = await asyncio.to_thread(check_and_sync_all_sources)
+                    results = await asyncio.to_thread(_sync_spatial_boundaries_with_lock)
                     if any(r.get("status") == "synced" for r in results):
+                        from app.geo import load_boundaries_from_db
                         await asyncio.to_thread(load_boundaries_from_db)
                 except Exception:
                     logger.exception("Spatial boundary sync check encountered error; will retry next interval")
