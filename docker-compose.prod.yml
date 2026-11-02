@@ -12,8 +12,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-drch_db}
-    ports:
-      - "5432:5432"
+    # No host port: only the backend (same compose network) talks to the database.
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -21,39 +20,6 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-drch_db}"]
       interval: 10s
       timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: drch_prod_redis
-    restart: always
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: drch_prod_rabbitmq
-    restart: always
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-drch_admin}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmqdata:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 15s
-      timeout: 10s
       retries: 5
 
   # ------------------------------------------------------------------------------
@@ -82,17 +48,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres-postgis:5432/${POSTGRES_DB:-drch_db}
-      - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET=${JWT_SECRET}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY:-}
+      - APP_ENV=${APP_ENV:-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?}@postgres-postgis:5432/${POSTGRES_DB:-drch_db}
+      - JWT_SECRET=${JWT_SECRET:?}
+      - MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY:?}
+      - INGEST_TOKEN=${INGEST_TOKEN:?}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?}
+      - AI_TRIAGE_URL=${AI_TRIAGE_URL:-http://ai-workers:8001/triage}
+      - AI_TRIAGE_TOKEN=${AI_TRIAGE_TOKEN:-}
+      - PAYMENT_GATEWAY=mock
+      - MOCK_GATEWAY_SECRET=${MOCK_GATEWAY_SECRET:?}
+      - GIT_SHA=${GIT_SHA:-unknown}
     depends_on:
       postgres-postgis:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
         condition: service_healthy
 
   ai-workers:
@@ -100,18 +68,7 @@ services:
     container_name: drch_prod_ai_workers
     restart: always
     environment:
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-drch_admin}:${RABBITMQ_PASS}@rabbitmq:5672/
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres-postgis:5432/${POSTGRES_DB:-drch_db}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY:-}
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - AI_TRIAGE_TOKEN=${AI_TRIAGE_TOKEN:-}
 
 volumes:
   pgdata:
-  redisdata:
-  rabbitmqdata:

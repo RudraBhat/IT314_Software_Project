@@ -14,6 +14,7 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -34,24 +35,23 @@ GUJARAT_BBOX: dict[str, float] = {
 }
 
 # ---------------------------------------------------------------------------
-# Simplified Gujarat state polygon (37 vertices, counter-clockwise).
-# Derived from the official GADM Level-1 boundary, simplified to ~15 km
-# tolerance so the in-memory PiP test runs in well under 1 ms.
-#
-# Each element is (longitude, latitude) — standard GeoJSON order.
+# Gujarat state polygon (fallback used until PostGIS boundaries are loaded).
+# Generated from the Census-2011 district shapefile (datameet/maps), buffered
+# ~6 km so ports and coastal towns are inside, then simplified to ~2 km.
+# Stored as JSON so it can be regenerated without editing code.
+# Each vertex is (longitude, latitude) - GeoJSON order.
 # ---------------------------------------------------------------------------
-_GUJARAT_POLYGON: list[tuple[float, float]] = [
-    (68.18, 23.69), (68.40, 24.32), (68.75, 24.37), (69.02, 24.29),
-    (69.35, 24.16), (69.75, 24.17), (70.08, 24.29), (70.48, 24.44),
-    (70.78, 24.43), (71.00, 24.61), (71.35, 24.72), (71.58, 24.68),
-    (71.93, 24.59), (72.28, 24.50), (72.62, 24.34), (72.95, 24.27),
-    (73.25, 24.05), (73.53, 23.85), (73.65, 23.56), (73.71, 23.15),
-    (73.52, 22.88), (73.22, 22.74), (72.99, 22.55), (72.81, 21.95),
-    (72.63, 21.48), (72.42, 21.09), (72.15, 20.74), (71.76, 20.66),
-    (71.40, 20.75), (71.02, 20.72), (70.58, 20.74), (70.14, 20.84),
-    (69.68, 20.92), (69.22, 21.05), (68.83, 21.28), (68.42, 21.60),
-    (68.18, 22.04), (68.11, 22.57), (68.15, 23.10), (68.18, 23.69),
-]
+_POLYGON_FILE = Path(__file__).resolve().parent / "data" / "gujarat_state_polygon.json"
+
+
+def _load_static_polygon() -> list[tuple[float, float]]:
+    with open(_POLYGON_FILE, encoding="utf-8") as fh:
+        rings = json.load(fh)["rings"]
+    largest = max(rings, key=len)
+    return [(float(x), float(y)) for x, y in largest]
+
+
+_GUJARAT_POLYGON: list[tuple[float, float]] = _load_static_polygon()
 
 # ---------------------------------------------------------------------------
 # All 33 Gujarat district centroids (lat, lon) for in-memory district lookup.

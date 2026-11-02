@@ -14,7 +14,7 @@ from app import audit, db
 from app.auth import DMUser
 from app.common import Priority, Rationale, Scenario, scenario_db
 from app.errors import ApiError, conflict, not_found
-from app.services.ai_provider import TriageProvider, get_provider
+from app.services.ai_provider import TriageProvider, get_provider, scrub_pii
 from app.services.incidents import (
     check_version,
     ensure_open,
@@ -51,10 +51,10 @@ def request_ai_triage(
     payload = {
         "incident_ref": row["incident_ref"],
         "reported_scenario": row["scenario"].lower(),
-        "description": row["description"],
+        "description": scrub_pii(row["description"]),
         "reported_urgency": row["reported_urgency"],
         "people_affected": row["people_affected"],
-        "details": row["details"],
+        "details": scrub_pii(row["details"]),
         "has_coordinates": row["latitude"] is not None,
     }
     outcome = provider.triage(payload)  # outside the transaction: may take seconds

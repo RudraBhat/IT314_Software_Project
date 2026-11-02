@@ -43,21 +43,6 @@ def _unauthenticated() -> ApiError:
 def load_principal(
     user_id: uuid.UUID, token_version: int, mfa: bool, ip: str | None = None
 ) -> Principal | None:
-    from app.config import get_settings
-    settings = get_settings()
-    if not settings.database_url:
-        demo_user_id = uuid.UUID("a0000000-0000-0000-0000-000000000001")
-        if not settings.demo_mode or user_id != demo_user_id or token_version != 1:
-            return None
-        return Principal(
-            user_id=demo_user_id,
-            email="commander@resq.gov.in",
-            full_name="Incident Commander (Demo)",
-            role=DM_ROLE,
-            mfa_verified=mfa,
-            permissions=frozenset(PERMISSIONS),
-            ip=ip,
-        )
     with db.transaction() as conn:
         row = conn.execute(
             """
@@ -115,6 +100,16 @@ def current_principal(
     return principal
 
 
+def optional_principal(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> Principal | None:
+    """None for anonymous callers; a token that is present but invalid is still a 401."""
+    if creds is None:
+        return None
+    return current_principal(request, creds)
+
+
 def _deny(principal: Principal, request: Request, code: str, message: str, needed: str | None = None):
     audit.record_standalone(
         actor=principal,
@@ -128,6 +123,7 @@ def _deny(principal: Principal, request: Request, code: str, message: str, neede
 
 
 CurrentUser = Annotated[Principal, Depends(current_principal)]
+MaybeUser = Annotated[Principal | None, Depends(optional_principal)]
 
 
 def require_dm(request: Request, principal: CurrentUser) -> Principal:
@@ -140,6 +136,25 @@ def require_dm(request: Request, principal: CurrentUser) -> Principal:
 
 
 DMUser = Annotated[Principal, Depends(require_dm)]
+
+CITIZEN_ROLE = "NORMAL_USER"
+FIELD_ROLE = "FIELD_TEAM"
+
+
+def require_citizen(request: Request, principal: CurrentUser) -> Principal:
+    if principal.role != CITIZEN_ROLE:
+        raise _deny(principal, request, "ROLE_REQUIRED", "Citizen role required")
+    return principal
+
+
+def require_field(request: Request, principal: CurrentUser) -> Principal:
+    if principal.role != FIELD_ROLE:
+        raise _deny(principal, request, "ROLE_REQUIRED", "Field team role required")
+    return principal
+
+
+Citizen = Annotated[Principal, Depends(require_citizen)]
+FieldUser = Annotated[Principal, Depends(require_field)]
 
 
 def require_permission(permission: str):

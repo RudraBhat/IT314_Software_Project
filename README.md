@@ -56,32 +56,31 @@ cached in the `administrative_boundaries` table.
 (`backend/app/geo.py`)
 
 **Advisory AI triage.**
-Submitting an incident to the AI triage endpoint returns a suggested
-scenario and priority level from an in-process rule-based classifier with
-guardrails. The result is advisory only: it is stored separately and never
-applied to the incident automatically. A human dispatcher makes the final
-verification decision. (`backend/app/services/ai_provider.py`,
-`backend/app/routers/dm/ai.py`)
+`POST /api/v1/dm/incidents/{id}/ai-triage` sends a PII-scrubbed copy of the report to the
+rules-based triage service in `ai-workers/` (`AI_TRIAGE_URL`, optional `AI_TRIAGE_TOKEN`) and stores
+the validated suggestion separately. Output is advisory only and is never applied to an incident
+automatically; a dispatcher makes the final decision. Without `AI_TRIAGE_URL` the result is
+`UNAVAILABLE` and staff triage manually. (`backend/app/services/ai_provider.py`,
+`backend/app/routers/dm/ai.py`, `ai-workers/rules.py`)
 
 ---
 
 ## What is simulated
 
-**Demo seed incidents.**
-The database seed file inserts four demo incidents across Gujarat with
-`is_simulated = TRUE`. These exist only to give reviewers and testers
-something to look at on first boot. They are not live reports.
-(`backend/db/seeds/seed_data.sql`, section 8)
+**Demo seed data (development only).**
+`backend/db/seeds/demo/` (sample field teams, sample campaigns and four incidents flagged
+`is_simulated = TRUE`) is applied only when `APP_ENV=development`. Staging and production receive
+only `backend/db/seeds/reference/` (roles, agencies, system accounts, safety content). The public API
+hides simulated incidents outside development.
 
 **Mock payment gateway (SANDBOX).**
-The donation campaign data model and API are present, but there is no
-live payment gateway integration in the current codebase. Any payment flow
-shown in a demo uses simulated sandbox / placeholder responses.
+Donations use `MockGateway` (HMAC-signed sandbox, `PAYMENT_GATEWAY=mock`). There is no live
+gateway integration; receipts are issued only after a valid signature is verified.
 
 **Fallback fixtures for external alerts.**
-No live alert ingestion worker is active (`ai-workers` is an inactive stub).
-Alerts shown in demonstrations use fallback database fixtures flagged with
-`is_fallback = TRUE`. (`backend/db/migrations/03_core_extensions.sql`)
+No ingestion adapters are installed yet: `POST /api/v1/internal/ingest/run` answers
+`NOT_IMPLEMENTED` and stores nothing. `GET /api/v1/public/alerts` returns whatever is in
+`external_alerts` (rows flagged `is_fallback` must be labelled in the UI).
 
 **Synthetic or replayed social data.**
 Social distress signals and external disaster feeds are not ingested live;
@@ -355,10 +354,10 @@ cd backend && python -m app.migrate
 for f in $(find backend/db/migrations -name '*.sql' | sort -V); do psql "$DATABASE_URL" -f "$f"; done
 for s in $(find backend/db/seeds -name '*.sql' | sort -V); do psql "$DATABASE_URL" -f "$s"; done
 ```
-*Note: In local Docker Compose, `01_schema.sql` is automatically mounted into `/docker-entrypoint-initdb.d/`.*
+*Note: the backend applies pending migrations (and reference seeds) itself on startup; it refuses to start outside `APP_ENV=development` if required settings are missing.*
 
 ### 4. Launch the Entire Platform (Local Docker)
-Since the project is containerized, you can launch the Next.js frontend, FastAPI backend, Python AI workers, and all local infrastructure (PostgreSQL, Redis, RabbitMQ) with a single command:
+Since the project is containerized, you can launch the Next.js frontend, FastAPI backend, Python AI workers, and the local PostgreSQL/PostGIS database with a single command:
 
 ```bash
 docker compose up --build
@@ -370,8 +369,7 @@ Once the services are running, access:
 - **Backend API Docs (Swagger UI):** `http://localhost:8000/docs`
 - **System Health Diagnostics:**
   - Liveness: `http://localhost:8000/health`
-  - Readiness & Service Probe (DB, Redis, RabbitMQ): `http://localhost:8000/health/ready`
-- **RabbitMQ Management Dashboard:** `http://localhost:15672` (guest/guest)
+  - Readiness (database): `http://localhost:8000/api/v1/health`
 
 ---
 
@@ -383,7 +381,6 @@ The platform supports both multi-cloud serverless deployment and fully container
 - **Frontend:** Hosted on **Vercel** (`frontend/`) with change-detection filtering via `vercel.json` and `vercel-ignored-build.sh`.
 - **Backend API:** Hosted on **Render** using `render.yaml` with auto-deployments, containerized runtime, and health check probes at `/health`.
 - **Database:** Hosted on **Neon Serverless PostgreSQL** with PostGIS enabled.
-- **Cache & Message Broker:** **Upstash Redis** and **CloudAMQP** (RabbitMQ).
 
 ### Option B: Self-Hosted Production Docker Compose
 To deploy the full stack against external cloud databases/queues using production containers:

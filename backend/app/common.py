@@ -82,3 +82,15 @@ def notify(conn, *, user_id, event_code: str, title: str, body: str, related_id=
         """,
         (user_id, event_code, title[:200], body, related_id),
     )
+
+
+def next_incident_ref(conn) -> str:
+    """INC-YYYY-NNNNNN from incident_ref_seq, skipping any reference that already exists
+    (e.g. rows inserted by hand or by seed files)."""
+    for _ in range(20):
+        ref = conn.execute(
+            "SELECT 'INC-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('incident_ref_seq')::text, 6, '0') AS ref"
+        ).fetchone()["ref"]
+        if conn.execute("SELECT 1 FROM incidents WHERE incident_ref = %s", (ref,)).fetchone() is None:
+            return ref
+    raise RuntimeError("could not allocate an incident reference")

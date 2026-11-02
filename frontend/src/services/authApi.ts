@@ -1,6 +1,6 @@
 import { UserProfile } from "../types/resq";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface AuthApiResponse {
   success: boolean;
@@ -61,23 +61,6 @@ export async function backendLogin(
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
-      // Fallback if backend is running with alternative prefix
-      if (res.status === 404) {
-        res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-      }
-      if (res.status === 404) {
-        res = await fetch(`${API_BASE_URL}/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-      }
     } finally {
       clearTimeout(timeout);
     }
@@ -98,9 +81,6 @@ export async function backendLogin(
     }
 
     const token = data.access_token || data.token;
-    if (token && typeof window !== "undefined") {
-      localStorage.setItem("resq_jwt_token", token);
-    }
 
     const rawRole = data.role || data.user?.role || "NORMAL_USER";
     const mappedRole =
@@ -165,22 +145,6 @@ export async function backendSignup(
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
-      if (res.status === 404) {
-        res = await fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-      }
-      if (res.status === 404) {
-        res = await fetch(`${API_BASE_URL}/api/auth/signup`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-      }
     } finally {
       clearTimeout(timeout);
     }
@@ -194,9 +158,6 @@ export async function backendSignup(
     }
 
     const token = data.access_token || data.token;
-    if (token && typeof window !== "undefined" && process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
-      localStorage.setItem("resq_jwt_token", token);
-    }
 
     const user: UserProfile = {
       id: data.user?.id || (data.user_id ? String(data.user_id) : `user_${Date.now()}`),

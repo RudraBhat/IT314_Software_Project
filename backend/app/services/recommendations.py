@@ -22,7 +22,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app import db
-from app.config import get_settings
 
 logger = logging.getLogger("drch.recommendations")
 
@@ -37,7 +36,6 @@ SCENARIO_CAPABILITY_RULES: dict[str, list[str]] = {
     "INDUSTRIAL_FIRE": ["fire", "water_tender", "hazmat"],
     "FIRE": ["fire", "water_tender", "hazmat"],
     "CYCLONE": ["search_and_rescue", "cyclone_response"],
-    "EARTHQUAKE": ["search_and_rescue", "heavy_extrication", "medical"],
 }
 
 # Secondary/bonus capability tags that enhance field effectiveness
@@ -45,7 +43,6 @@ SECONDARY_CAPABILITIES: dict[str, list[str]] = {
     "URBAN_FLOODING": ["diver_squad", "inflatable_boats", "medical"],
     "INDUSTRIAL_FIRE": ["chemical_foam", "gas_leak", "smoke_extraction", "high_rise_rescue"],
     "CYCLONE": ["boat", "heavy_extrication", "water_rescue", "heavy_machinery"],
-    "EARTHQUAKE": ["canine_unit", "triage_support", "critical_care"],
 }
 
 
@@ -87,240 +84,6 @@ class RecommendedTeam(BaseModel):
     reasons: list[str] = Field(default_factory=list)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. AUTHORITATIVE GUJARAT SEED TEAMS (In-Memory Fallback)
-# Mirrors backend/db/seeds/seed_data.sql for offline, test, and demo resilience.
-# ─────────────────────────────────────────────────────────────────────────────
-
-_FALLBACK_TEAMS: list[dict[str, Any]] = [
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000001",
-        "name": "NDRF 601 Urban Search & Rescue (Vadodara)",
-        "agency_id": "a0000000-0000-0000-0000-000000000007",
-        "agency_name": "NDRF 6th Battalion (Vadodara)",
-        "latitude": 22.3072,
-        "longitude": 73.1812,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "search_and_rescue": True,
-            "heavy_extrication": True,
-            "boat": True,
-            "canine_unit": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000002",
-        "name": "NDRF 602 Flood & Water Rescue Unit (Ahmedabad Sabarmati)",
-        "agency_id": "a0000000-0000-0000-0000-000000000007",
-        "agency_name": "NDRF 6th Battalion (Vadodara)",
-        "latitude": 23.0225,
-        "longitude": 72.5714,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "boat": True,
-            "water_rescue": True,
-            "flood_rescue": True,
-            "inflatable_boats": True,
-            "diver_squad": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000003",
-        "name": "NDRF 603 Cyclone Coastal Rescue Unit (Jamnagar)",
-        "agency_id": "a0000000-0000-0000-0000-000000000007",
-        "agency_name": "NDRF 6th Battalion (Vadodara)",
-        "latitude": 22.4707,
-        "longitude": 70.0577,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "cyclone_response": True,
-            "search_and_rescue": True,
-            "boat": True,
-            "water_rescue": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000004",
-        "name": "AFES Fire Tender Unit 1 (Ahmedabad Navrangpura)",
-        "agency_id": "a0000000-0000-0000-0000-000000000008",
-        "agency_name": "Gujarat Fire and Emergency Services (Ahmedabad HQ)",
-        "latitude": 23.0373,
-        "longitude": 72.5613,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "fire": True,
-            "water_tender": True,
-            "high_rise_rescue": True,
-            "smoke_extraction": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000005",
-        "name": "AFES Fire Tender Unit 2 (Ahmedabad Maninagar)",
-        "agency_id": "a0000000-0000-0000-0000-000000000008",
-        "agency_name": "Gujarat Fire and Emergency Services (Ahmedabad HQ)",
-        "latitude": 22.9784,
-        "longitude": 72.6042,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "fire": True,
-            "water_tender": True,
-            "heavy_extrication": True,
-            "smoke_extraction": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000006",
-        "name": "Surat Hazira Chemical Hazard & Industrial Fire Team",
-        "agency_id": "a0000000-0000-0000-0000-000000000008",
-        "agency_name": "Gujarat Fire and Emergency Services (Ahmedabad HQ)",
-        "latitude": 21.1025,
-        "longitude": 72.6841,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "hazmat": True,
-            "chemical_foam": True,
-            "gas_leak": True,
-            "industrial_fire": True,
-            "fire": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000007",
-        "name": "Rajkot Fire & Rescue Quick Reaction Unit",
-        "agency_id": "a0000000-0000-0000-0000-000000000008",
-        "agency_name": "Gujarat Fire and Emergency Services (Ahmedabad HQ)",
-        "latitude": 22.3039,
-        "longitude": 70.8022,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "fire": True,
-            "water_tender": True,
-            "high_rise_rescue": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000008",
-        "name": "108 ALS Disaster Ambulance Alpha (Ahmedabad Civil)",
-        "agency_id": "a0000000-0000-0000-0000-000000000010",
-        "agency_name": "EMRI Green Health Services Gujarat (108 Ambulance)",
-        "latitude": 23.0525,
-        "longitude": 72.6042,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "medical": True,
-            "ambulance": True,
-            "critical_care": True,
-            "triage_support": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000009",
-        "name": "108 ALS Disaster Ambulance Beta (Surat New Civil)",
-        "agency_id": "a0000000-0000-0000-0000-000000000010",
-        "agency_name": "EMRI Green Health Services Gujarat (108 Ambulance)",
-        "latitude": 21.1702,
-        "longitude": 72.8311,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "medical": True,
-            "ambulance": True,
-            "emergency_stabilization": True,
-            "triage_support": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000010",
-        "name": "108 Mobile Triage Unit Gamma (Vadodara SSG)",
-        "agency_id": "a0000000-0000-0000-0000-000000000010",
-        "agency_name": "EMRI Green Health Services Gujarat (108 Ambulance)",
-        "latitude": 22.3072,
-        "longitude": 73.1812,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "medical": True,
-            "ambulance": True,
-            "triage_support": True,
-            "critical_care": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000011",
-        "name": "SDRF Flood Quick Response Team (Rajkot Aji River)",
-        "agency_id": "a0000000-0000-0000-0000-000000000011",
-        "agency_name": "SDRF Gujarat Command (State Disaster Response Force)",
-        "latitude": 22.3039,
-        "longitude": 70.8022,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "boat": True,
-            "flood_rescue": True,
-            "diver_squad": True,
-            "water_rescue": True,
-            "inflatable_boats": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000012",
-        "name": "SDRF Cyclone & Hazmat Response Unit (Bhuj, Kutch)",
-        "agency_id": "a0000000-0000-0000-0000-000000000011",
-        "agency_name": "SDRF Gujarat Command (State Disaster Response Force)",
-        "latitude": 23.2420,
-        "longitude": 69.6669,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "cyclone_response": True,
-            "search_and_rescue": True,
-            "heavy_extrication": True,
-            "canine_unit": True,
-            "heavy_machinery": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000013",
-        "name": "SDRF River Rescue & Dive Squad (Gandhinagar)",
-        "agency_id": "a0000000-0000-0000-0000-000000000011",
-        "agency_name": "SDRF Gujarat Command (State Disaster Response Force)",
-        "latitude": 23.2156,
-        "longitude": 72.6369,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "boat": True,
-            "water_rescue": True,
-            "flood_rescue": True,
-            "diver_squad": True,
-        },
-    },
-    {
-        "resource_id": "r0000000-0000-0000-0000-000000000014",
-        "name": "SDRF Urban SAR & Medical Support (Surat)",
-        "agency_id": "a0000000-0000-0000-0000-000000000011",
-        "agency_name": "SDRF Gujarat Command (State Disaster Response Force)",
-        "latitude": 21.2000,
-        "longitude": 72.8500,
-        "status": "AVAILABLE",
-        "quantity_available": 1,
-        "capability_tags": {
-            "search_and_rescue": True,
-            "heavy_extrication": True,
-            "medical": True,
-            "triage_support": True,
-        },
-    },
-]
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -518,31 +281,15 @@ def get_recommended_teams(
     limit: int = 5,
     conn: Any = None,
 ) -> list[RecommendedTeam]:
-    """
-    Recommend and rank response teams for a verified emergency incident.
+    """Rank AVAILABLE TEAM resources for an incident (advisory only: nothing is reserved).
 
-    - Uses PostGIS ST_Distance if database connection is available.
-    - Falls back to in-memory haversine calculation if offline / demo mode.
-    - Ranks by capability match count (primary) and proximity in km (secondary).
+    Ranks by capability match (primary) then distance in km (secondary). Returns an empty
+    list when no team is available; there is deliberately no built-in fallback roster, so
+    dispatchers are never shown teams that do not exist in the database.
     """
-    settings = get_settings()
-
-    # Try PostGIS query if database is configured
     if conn is not None:
-        try:
-            db_teams = fetch_available_teams_postgis(conn, latitude, longitude)
-            if db_teams:
-                return score_and_rank_teams(db_teams, latitude, longitude, scenario, limit=limit)
-        except Exception:
-            logger.exception("PostGIS team query failed; falling back to in-memory seed teams")
-    elif settings.database_url:
-        try:
-            with db.transaction() as auto_conn:
-                db_teams = fetch_available_teams_postgis(auto_conn, latitude, longitude)
-                if db_teams:
-                    return score_and_rank_teams(db_teams, latitude, longitude, scenario, limit=limit)
-        except Exception:
-            logger.exception("Database pool query failed; falling back to in-memory seed teams")
-
-    # In-memory authoritative seed fallback
-    return score_and_rank_teams(_FALLBACK_TEAMS, latitude, longitude, scenario, limit=limit)
+        teams = fetch_available_teams_postgis(conn, latitude, longitude)
+    else:
+        with db.transaction() as auto_conn:
+            teams = fetch_available_teams_postgis(auto_conn, latitude, longitude)
+    return score_and_rank_teams(teams, latitude, longitude, scenario, limit=limit)

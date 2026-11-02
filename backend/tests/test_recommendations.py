@@ -1,5 +1,7 @@
 """Comprehensive Unit Tests for S1-11 Team-Recommendation Engine."""
 
+import pytest
+
 from app.services.recommendations import (
     get_recommended_teams,
     get_required_capabilities,
@@ -13,10 +15,11 @@ def test_scenario_rule_mapping():
     assert "water_rescue" in get_required_capabilities("FLOOD")
     assert "fire" in get_required_capabilities("INDUSTRIAL_FIRE")
     assert "cyclone_response" in get_required_capabilities("CYCLONE")
-    assert "search_and_rescue" in get_required_capabilities("EARTHQUAKE")
+    assert get_required_capabilities("EARTHQUAKE") == ["search_and_rescue"]  # unsupported: generic default only
 
 
-def test_seed_incidents_top_teams():
+@pytest.mark.db
+def test_seed_incidents_top_teams(sql):
     """Verify top recommended response teams across Gujarat disaster scenarios."""
     # 1. Ahmedabad flood
     flood_recs = get_recommended_teams(23.0373, 72.5613, "URBAN_FLOODING", limit=3)
@@ -35,11 +38,6 @@ def test_seed_incidents_top_teams():
     cyclone_recs = get_recommended_teams(23.1139, 70.0278, "CYCLONE", limit=3)
     assert len(cyclone_recs) == 3
     assert "cyclone_response" in cyclone_recs[0].matched_capabilities
-
-    # 4. Bhuj earthquake
-    quake_recs = get_recommended_teams(23.2420, 69.6669, "EARTHQUAKE", limit=3)
-    assert len(quake_recs) == 3
-    assert quake_recs[0].distance_km < 1.0  # Local Bhuj team
 
 
 def test_unavailable_and_zero_quantity_excluded():
@@ -117,3 +115,28 @@ def test_maintenance_status_excluded():
     ids = [u.resource_id for u in ranked]
     assert "r-maint" not in ids
     assert "r-avail" in ids
+
+
+@pytest.mark.db
+def test_no_fallback_roster_when_no_team_is_available(client, make, sql):
+    """With no AVAILABLE team nearby the API returns an empty list, never invented teams."""
+    sql.execute("UPDATE resources SET status = 'UNAVAILABLE' WHERE type = 'TEAM'")
+    try:
+        staff = make.staff()
+        incident = make.incident()
+        r = client.get(f"/api/v1/dm/incidents/{incident['incident_id']}/team-recommendations", headers=staff["headers"])
+        assert r.status_code == 200 and r.json()["recommendations"] == []
+        assert r.json()["requires_confirmation"] is True
+    finally:
+        sql.execute("UPDATE resources SET status = 'AVAILABLE' WHERE type = 'TEAM' AND quantity_available > 0")
+
+
+@pytest.mark.db
+def test_team_recommendations_contract_shape(client, make):
+    staff = make.staff()
+    incident = make.incident(latitude=23.0373, longitude=72.5613)
+    r = client.get(f"/api/v1/dm/incidents/{incident['incident_id']}/team-recommendations", headers=staff["headers"])
+    body = r.json()
+    assert r.status_code == 200 and body["scenario"] == "urban_flooding"
+    assert body["recommendations"] and {"resource_id", "team_name", "agency", "distance_km", "capability_match", "rank", "reasons"} <= set(body["recommendations"][0])
+    assert client.get(f"/api/v1/dm/incidents/{incident['incident_id']}/team-recommendations").status_code == 401

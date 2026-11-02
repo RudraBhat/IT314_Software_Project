@@ -94,15 +94,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   onSignOut,
   onClose,
 }) => {
-  const {
-    currentUser,
-    logout,
-    submitCitizenReport,
-    reports: contextReports,
-    incidents: contextIncidents,
-    alerts: contextAlerts,
-    infrastructure: contextInfrastructure,
-  } = useResQ();
+  const { currentUser, logout } = useResQ();
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<CitizenTabId>("overview");
@@ -124,8 +116,6 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   const [formLon, setFormLon] = useState(78.9629);
   const [formAffected, setFormAffected] = useState(1);
   const [formNeeds, setFormNeeds] = useState<string[]>([]);
-  const [formPhoto, setFormPhoto] = useState<string | null>(null);
-  const [formPhotoName, setFormPhotoName] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ success: boolean; reportId?: string; error?: string } | null>(null);
 
@@ -142,119 +132,31 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
     setRefreshKey((k) => k + 1);
   }, []);
 
-  // Fetch real data (Backend with Context Fallback)
+  // Fetch live data. There is NO demo fallback: on failure the lists stay empty and the offline banner shows.
   useEffect(() => {
     if (!currentUser || currentUser.id === "GUEST-000") return;
 
     let isMounted = true;
-    const apiOpts = { userId: currentUser.id, userRole: currentUser.role };
 
     Promise.all([
-      CitizenApi.fetchMyReports(apiOpts),
+      CitizenApi.fetchMyReports(),
       CitizenApi.fetchPublicIncidents(),
       CitizenApi.fetchPublicAlerts(),
       CitizenApi.fetchShelters(),
     ]).then(([reportsRes, incidentsRes, alertsRes, sheltersRes]) => {
       if (!isMounted) return;
-
-      const online = reportsRes.isBackend || incidentsRes.isBackend;
-      setBackendOnline(online);
-
-      // 1. My Reports
-      if (reportsRes.data) {
-        setMyReports(reportsRes.data);
-      } else {
-        const fallback = contextReports
-          .filter(
-            (r) =>
-              r.reporterName.toLowerCase() === currentUser.name.toLowerCase() ||
-              r.reporterPhone === currentUser.phone ||
-              r.source === "CITIZEN_APP"
-          )
-          .map((r) => ({
-            id: r.id,
-            category: r.category,
-            description: r.description,
-            location_name: r.locationName,
-            lat: r.lat,
-            lon: r.lon,
-            affected_people_count: r.affectedPeopleCount,
-            urgent_needs: r.urgentNeeds || [],
-            verification_status: r.verificationStatus,
-            submitted_at: r.submittedAt || (r as any).timestamp || new Date().toISOString(),
-            linked_incident_id: r.linkedIncidentId || null,
-            source: r.source,
-          }));
-        setMyReports(fallback);
-      }
-
-      // 2. Public Incidents
-      if (incidentsRes.data) {
-        setPublicIncidents(incidentsRes.data);
-      } else {
-        const fallback = contextIncidents
-          .filter((i) => !["CLOSED", "RESOLVED", "REJECTED"].includes(i.lifecycleStatus))
-          .map((i) => ({
-            id: i.id,
-            category: i.category,
-            title: i.title,
-            lat: i.lat,
-            lon: i.lon,
-            location_name: i.locationName,
-            severity: i.severity,
-            lifecycle_status: i.lifecycleStatus,
-            detected_at: i.detectedAt,
-            affected_people_estimate: i.affectedPeopleEstimate,
-          }));
-        setPublicIncidents(fallback);
-      }
-
-      // 3. Public Alerts
-      if (alertsRes.data) {
-        setPublicAlerts(alertsRes.data);
-      } else {
-        const fallback = contextAlerts.map((a) => ({
-          id: a.id,
-          type: a.type,
-          severity: a.severity,
-          title: a.title,
-          description: a.description,
-          timestamp: a.timestamp,
-          related_incident_id: a.relatedIncidentId || null,
-        }));
-        setPublicAlerts(fallback);
-      }
-
-      // 4. Shelters
-      if (sheltersRes.data) {
-        setShelters(sheltersRes.data);
-      } else {
-        const fallback = contextInfrastructure
-          .filter((i) => i.type === "SHELTER" || i.type === "HOSPITAL")
-          .map((i) => ({
-            id: i.id,
-            name: i.name,
-            type: i.type,
-            lat: i.lat,
-            lon: i.lon,
-            address: i.address || "",
-            total_capacity: i.totalCapacity || null,
-            current_occupancy: i.currentOccupancy || null,
-            available_beds: i.availableBeds ?? null,
-            contact_number: i.contactNumber || "",
-            status: i.status,
-            notes: i.notes || null,
-          }));
-        setShelters(fallback);
-      }
-
+      setBackendOnline(!reportsRes.error && !incidentsRes.error && !alertsRes.error);
+      setMyReports(reportsRes.data ?? []);
+      setPublicIncidents(incidentsRes.data ?? []);
+      setPublicAlerts(alertsRes.data ?? []);
+      setShelters(sheltersRes.data ?? []);
       setIsLoading(false);
     });
 
     return () => {
       isMounted = false;
     };
-  }, [currentUser, contextReports, contextIncidents, contextAlerts, contextInfrastructure, refreshKey]);
+  }, [currentUser, refreshKey]);
 
   // Geolocation for report form
   useEffect(() => {
@@ -388,77 +290,31 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
     setSubmitting(true);
     setSubmitResult(null);
 
-    const payload: CitizenApi.ReportPayload = {
-      category: formCategory,
+    const payload: CitizenApi.IncidentReportPayload = {
+      scenario: CitizenApi.CATEGORY_TO_SCENARIO[formCategory],
       description: formDescription.trim(),
-      location_name: formLocation.trim(),
-      lat: formLat,
-      lon: formLon,
-      affected_people_count: formAffected,
-      urgent_needs: formNeeds,
-      reporter_name: currentUser.name,
-      reporter_phone: currentUser.phone || "",
+      people_affected: formAffected,
+      location_source: "MAP_PIN",
+      latitude: formLat,
+      longitude: formLon,
+      address_text: formLocation.trim(),
+      details: { urgent_needs: formNeeds },
     };
 
-    // 1. Try FastAPI backend first
-    const res = await CitizenApi.createReport(
-      { userId: currentUser.id, userRole: currentUser.role },
-      payload
-    );
+    const res = await CitizenApi.createReport(payload, { idempotencyKey: crypto.randomUUID() });
 
     if (res.data) {
-      setSubmitResult({ success: true, reportId: res.data.id });
+      setSubmitResult({ success: true, reportId: res.data.incident_ref });
       setFormDescription("");
       setFormLocation("");
       setFormAffected(1);
       setFormNeeds([]);
-      setFormPhoto(null);
-      setFormPhotoName(null);
-      handleRefresh();
-    } else if (!res.isBackend) {
-      // 2. Offline / Demo fallback
-      const contextReport = submitCitizenReport({
-        source: "CITIZEN_APP",
-        lat: formLat,
-        lon: formLon,
-        locationName: formLocation.trim(),
-        category: formCategory,
-        description: formDescription.trim(),
-        affectedPeopleCount: formAffected,
-        urgentNeeds: formNeeds,
-        photoUrls: formPhoto ? [formPhoto] : [],
-        reporterName: currentUser.name,
-        reporterPhone: currentUser.phone || "",
-      });
-      setSubmitResult({ success: true, reportId: contextReport.id });
-      setFormDescription("");
-      setFormLocation("");
-      setFormAffected(1);
-      setFormNeeds([]);
-      setFormPhoto(null);
-      setFormPhotoName(null);
       handleRefresh();
     } else {
       setSubmitResult({ success: false, error: res.error || "Failed to submit disaster report. Please try again." });
     }
 
     setSubmitting(false);
-  };
-
-  // Photo change handler
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert("File size exceeds 5MB limit.");
-      return;
-    }
-    setFormPhotoName(file.name);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setFormPhoto(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
   };
 
   // Metrics (real data only)
@@ -1009,23 +865,6 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                         onChange={(e) => setFormAffected(parseInt(e.target.value) || 1)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900"
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Optional Evidence / Photo
-                      </label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePhotoUpload}
-                        className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer"
-                      />
-                      {formPhotoName && (
-                        <div className="text-[10px] text-emerald-600 font-medium mt-1">
-                          ✓ Attached: {formPhotoName}
-                        </div>
-                      )}
                     </div>
                   </div>
 

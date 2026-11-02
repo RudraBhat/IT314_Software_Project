@@ -208,8 +208,8 @@ jobs:
           done
 
           echo "Checking and applying seeds in version order..."
-          for seed in $(find backend/db/seeds -maxdepth 1 -name '*.sql' | sort -V); do
-            version=$(basename "$seed")
+          for seed in $(find backend/db/seeds -mindepth 2 -maxdepth 2 -name '*.sql' | sort -t/ -k5,5 -V); do
+            version="seeds/$(basename "$(dirname "$seed")")/$(basename "$seed")"
             already=$(psql -h localhost -U postgres -d drch_test -t -A -c "SELECT 1 FROM schema_migrations WHERE version = '$version';")
             if [ "$already" = "1" ]; then
               echo "  [SKIP] Seed already applied: $version"
@@ -260,19 +260,35 @@ jobs:
         run: |
           python -m pytest tests/ -v --tb=short
 
-      - name: Execute Core Loop Smoke Test
+      - name: Environment variable documentation check
         working-directory: .
+        run: python scripts/check_env_docs.py
+
+      - name: AI triage service tests
+        working-directory: ./ai-workers
+        run: |
+          pip install -r requirements-dev.txt
+          python -m pytest tests -v
+
+      - name: Execute Core Loop Smoke Test (strict)
+        working-directory: ./backend
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/drch_test"
           JWT_SECRET: "ci_pipeline_jwt_secret_token_minimum_32_characters_key"
+          DRCH_STAFF_PASSWORD: "Correct-Horse-Battery-9"
         run: |
-          cd backend
-          python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+          EMAIL="ci-smoke-$RANDOM@test.drch"
+          OUT=$(python -m app.cli create-staff --email "$EMAIL" --name "CI Smoke Dispatcher" --permissions DISPATCH,CLOSURE)
+          export SMOKE_STAFF_EMAIL="$EMAIL"
+          export SMOKE_STAFF_PASSWORD="$DRCH_STAFF_PASSWORD"
+          export SMOKE_STAFF_TOTP_SECRET="$(echo "$OUT" | awk '/Secret key/ {print $NF}')"
+          python -m uvicorn main:app --host 127.0.0.1 --port 8000 &
           SERVER_PID=$!
-          cd ..
-          sleep 4
-          python scripts/smoke.py --base-url http://localhost:8000
+          sleep 5
+          python ../scripts/smoke.py --base-url http://127.0.0.1:8000
+          STATUS=$?
           kill $SERVER_PID || true
+          exit $STATUS
 
   # ============================================================================
   # 4. Container Build Validation (Matrix on Changed Components Only)

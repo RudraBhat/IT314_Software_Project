@@ -2,22 +2,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { isInGujarat, clampToGujarat, GUJARAT_CENTER } from "@/lib/geo";
-import { createReport } from "@/services/citizenApi";
+import { isInGujarat, GUJARAT_CENTER } from "@/lib/geo";
+import { createReport, type Scenario } from "@/services/citizenApi";
 
 const SCENARIOS = [
   { id: "urban_flooding", label: "Urban Flooding", icon: "🌊", desc: "Waterlogging, rising flood water, stranded residents" },
   { id: "cyclone", label: "Cyclone / Storm", icon: "🌀", desc: "High winds, structural damage, coastal surges" },
   { id: "industrial_fire", label: "Fire Emergency", icon: "🔥", desc: "Building, chemical, or industrial fires" },
-  { id: "earthquake", label: "Earthquake", icon: "🏚️", desc: "Structural collapse, tremors, trapped victims" },
 ];
-
-const SCENARIO_TO_CATEGORY: Record<string, string> = {
-  urban_flooding: "Flood / Urban Flood",
-  cyclone: "Cyclone / Coastal Flooding",
-  industrial_fire: "Major Urban / Building Fire",
-  earthquake: "Earthquake / Structural Collapse",
-};
 
 const URGENCIES = [
   { id: "LOW", label: "Low", color: "border-slate-600 text-slate-300" },
@@ -36,7 +28,7 @@ export default function ReportIncidentPage() {
   const [longitude, setLongitude] = useState(GUJARAT_CENTER[1]);
   const [addressText, setAddressText] = useState("");
   const [landmark, setLandmark] = useState("");
-  const [locationSource, setLocationSource] = useState<"GPS" | "MAP_PIN" | "ADDRESS">("MAP_PIN");
+  const [locationSource, setLocationSource] = useState<"GPS" | "MAP_PIN" | "MANUAL">("MAP_PIN");
 
   // Idempotency key per form session (initialized lazily)
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => {
@@ -72,12 +64,11 @@ export default function ReportIncidentPage() {
         const rawLat = pos.coords.latitude;
         const rawLon = pos.coords.longitude;
         if (!isInGujarat(rawLat, rawLon)) {
-          const [clampedLat, clampedLon] = clampToGujarat(rawLat, rawLon);
-          setLatitude(clampedLat);
-          setLongitude(clampedLon);
+          // Never move the reporter: a report from the wrong place would send responders to the wrong place.
           setErrorMessage(
-            `Your detected GPS location (${rawLat.toFixed(4)}, ${rawLon.toFixed(4)}) is outside Gujarat. Coordinates were adjusted to the nearest Gujarat border.`
+            `Your detected location (${rawLat.toFixed(4)}, ${rawLon.toFixed(4)}) is outside Gujarat. Pick the incident location on the map or search for an address in Gujarat.`
           );
+          return;
         } else {
           setLatitude(Number(rawLat.toFixed(5)));
           setLongitude(Number(rawLon.toFixed(5)));
@@ -142,7 +133,7 @@ export default function ReportIncidentPage() {
     setLatitude(lat);
     setLongitude(lon);
     setAddressText(result.display_name);
-    setLocationSource("ADDRESS");
+    setLocationSource("MANUAL");
     setSearchResults([]);
     setSearchQuery("");
   };
@@ -164,26 +155,16 @@ export default function ReportIncidentPage() {
     setIsSubmitting(true);
 
     try {
-      const resolvedCategory = SCENARIO_TO_CATEGORY[scenario] || "Flood / Urban Flood";
       const payload = {
-        scenario,
+        scenario: scenario as Scenario,
         description: description.trim(),
-        reported_urgency: urgency,
+        reported_urgency: urgency as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
         people_affected: Number(peopleAffected),
         location_source: locationSource,
         latitude,
         longitude,
         address_text: addressText.trim() || undefined,
         landmark: landmark.trim() || undefined,
-        // Stand-in compatible fields
-        category: resolvedCategory,
-        location_name: addressText || landmark || "Gujarat Incident Location",
-        lat: latitude,
-        lon: longitude,
-        affected_people_count: Number(peopleAffected),
-        urgent_needs: [urgency],
-        reporter_name: "Citizen Reporter",
-        reporter_phone: "",
       };
 
       const res = await createReport(payload, { idempotencyKey });
@@ -194,10 +175,13 @@ export default function ReportIncidentPage() {
         return;
       }
 
-      const refNumber = res.data?.incident_ref || res.data?.id || `INC-GUJ-${Date.now().toString().slice(-6)}`;
-      const status = res.data?.status || res.data?.verification_status || "SUBMITTED";
-
-      setSuccessResult({ reference: refNumber, status });
+      const refNumber = res.data?.incident_ref;
+      if (!refNumber) {
+        // Never invent a reference number: without one the report was not confirmed by the server.
+        setErrorMessage("The server did not confirm your report. Please try again.");
+        return;
+      }
+      setSuccessResult({ reference: refNumber, status: res.data?.status || "SUBMITTED" });
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Failed to submit report. Please try again.");
     } finally {
