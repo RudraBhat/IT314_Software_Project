@@ -7,7 +7,7 @@ Role and permissions are always resolved from the database on each request
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -17,6 +17,7 @@ from app.errors import ApiError
 from app.security import ACCESS, decode_token
 
 DM_ROLE = "DISASTER_MGMT"
+FIELD_ROLE = "FIELD_TEAM"
 PERMISSIONS = ("PUBLISHER", "MODERATOR", "CLOSURE", "DISPATCH", "SUPERVISOR")
 
 _bearer = HTTPBearer(auto_error=False)
@@ -166,3 +167,85 @@ Moderator = Annotated[Principal, Depends(require_permission("MODERATOR"))]
 Closer = Annotated[Principal, Depends(require_permission("CLOSURE"))]
 Dispatcher = Annotated[Principal, Depends(require_permission("DISPATCH"))]
 Supervisor = Annotated[Principal, Depends(require_permission("SUPERVISOR"))]
+
+
+@dataclass(frozen=True)
+class FieldPrincipal:
+    """Security principal and operational context for field team responders."""
+
+    user_id: uuid.UUID
+    email: str
+    full_name: str
+    role: str
+    member_id: uuid.UUID
+    team_resource_id: uuid.UUID
+    team_name: str
+    agency_id: uuid.UUID | None
+    agency_name: str | None
+    callsign: str | None
+    is_leader: bool
+    capabilities: dict[str, Any] | list[Any] = field(default_factory=dict)
+    ip: str | None = None
+
+
+def require_field(request: Request, principal: CurrentUser) -> FieldPrincipal:
+    """Validate responder role and resolve team membership from database."""
+    if principal.role != FIELD_ROLE:
+        raise _deny(principal, request, "ROLE_REQUIRED", "Field Team role required", needed=FIELD_ROLE)
+
+    from app.config import get_settings
+
+    settings = get_settings()
+    if not settings.database_url:
+        demo_team_id = uuid.UUID("18e69001-0000-0000-0000-000000000001")
+        return FieldPrincipal(
+            user_id=principal.user_id,
+            email=principal.email,
+            full_name=principal.full_name,
+            role=principal.role,
+            member_id=uuid.UUID("28e69001-0000-0000-0000-000000000001"),
+            team_resource_id=demo_team_id,
+            team_name="Demo Field Unit 1",
+            agency_id=uuid.UUID("08e69001-0000-0000-0000-000000000001"),
+            agency_name="Gujarat Emergency Services",
+            callsign="ECHO-1",
+            is_leader=True,
+            capabilities={"rescue": True, "boat": True},
+            ip=principal.ip,
+        )
+
+    with db.transaction() as conn:
+        row = conn.execute(
+            """
+            SELECT m.member_id, m.resource_id AS team_resource_id, m.callsign, m.is_leader,
+                   r.name AS team_name, r.agency_id, r.capability,
+                   a.name AS agency_name
+            FROM field_team_members m
+            JOIN resources r ON r.resource_id = m.resource_id
+            LEFT JOIN agencies a ON a.agency_id = r.agency_id
+            WHERE m.user_id = %s
+            """,
+            (principal.user_id,),
+        ).fetchone()
+
+    if row is None:
+        raise _deny(principal, request, "NO_TEAM_ASSIGNED", "Field user is not assigned to any active team")
+
+    return FieldPrincipal(
+        user_id=principal.user_id,
+        email=principal.email,
+        full_name=principal.full_name,
+        role=principal.role,
+        member_id=row["member_id"],
+        team_resource_id=row["team_resource_id"],
+        team_name=row["team_name"],
+        agency_id=row["agency_id"],
+        agency_name=row["agency_name"],
+        callsign=row["callsign"],
+        is_leader=bool(row["is_leader"]),
+        capabilities=row["capability"] or {},
+        ip=principal.ip,
+    )
+
+
+FieldUser = Annotated[FieldPrincipal, Depends(require_field)]

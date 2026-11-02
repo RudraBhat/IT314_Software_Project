@@ -11,8 +11,9 @@ from app import db
 from app.config import get_settings
 from app.errors import install_error_handlers
 from app.routers import auth, internal
+from app.routers import field as field_router
 from app.routers.dm import router as dm_router
-from app.routers.public import router as public_router  # Nisarg S1-07: public incidents API
+from app.routers.public import router as public_router
 from app.schemas.citizen import (
     CreateReportRequest,
     PublicAlertResponse,
@@ -175,8 +176,9 @@ app = FastAPI(
 install_error_handlers(app)
 app.include_router(auth.router)
 app.include_router(dm_router)
-app.include_router(public_router)  # Nisarg S1-07: public incidents (no auth required)
+app.include_router(public_router)
 app.include_router(internal.router)  # S2-09, S2-16: internal maintenance & ingestion cron
+app.include_router(field_router.router)  # S2-01: frontline responder operations
 
 
 # CORS — allow frontend dev server and production origins
@@ -306,7 +308,7 @@ async def get_citizen_report(
 # ═══════════════════════════════════════════════════════════════════
 # PUBLIC DATA ENDPOINTS (no auth required)
 # DEPRECATED: /api/public/incidents and /api/public/alerts are superseded
-# by the production PostGIS router at /api/v1/public/incidents (Nisarg S1-07).
+# by the production PostGIS router at /api/v1/public/incidents.
 # These stubs are kept for backwards compatibility with any demo frontend that
 # has not yet migrated.  They will be removed after Sprint 1 sign-off.
 # ═══════════════════════════════════════════════════════════════════
@@ -321,7 +323,7 @@ async def get_citizen_report(
 async def list_public_incidents_legacy():
     """
     DEPRECATED — SQLite demo endpoint.
-    Migrated to PostgreSQL/PostGIS: GET /api/v1/public/incidents (Nisarg S1-07).
+    Migrated to PostgreSQL/PostGIS: GET /api/v1/public/incidents.
     This endpoint will be removed after Sprint 1.
     """
     if not _SQLITE_CITIZEN_AVAILABLE:
