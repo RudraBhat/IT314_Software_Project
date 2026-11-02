@@ -19,6 +19,7 @@ export function useStaff() {
 const NAV: { href: string; label: string; icon: string; permission?: string }[] = [
   { href: "/dm", label: "Dashboard", icon: "▦" },
   { href: "/dm/incidents", label: "Incidents", icon: "⚑" },
+  { href: "/dm/signals", label: "Signals", icon: "⚡" },
   { href: "/", label: "Live map", icon: "◎" },
   { href: "/dm/dispatches", label: "Dispatches", icon: "➜" },
   { href: "/dm/resources", label: "Resources", icon: "▣" },

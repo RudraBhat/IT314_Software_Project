@@ -37,11 +37,23 @@ export default function DispatchPage() {
   const { id } = useParams<{ id: string }>();
   const { can } = useStaff();
   const { data, error, reload, loading } = useQuery<Detail>(`dispatches/${id}`);
+  const teamRequests = useQuery<
+    Array<{
+      request_id: string;
+      required_capability: string;
+      note: string | null;
+      status: string;
+      requested_by_name: string;
+      created_at: string;
+    }>
+  >("team-requests", { dispatch_id: id, status: "OPEN" });
   const { run, busy } = useAction(reload);
   const [kind, setKind] = useState<EventKind | null>(null);
   const [who, setWho] = useState("");
   const [channel, setChannel] = useState("PHONE");
   const [text, setText] = useState("");
+  const [decisionReq, setDecisionReq] = useState<{ id: string; decision: "APPROVED" | "DECLINED" } | null>(null);
+  const [decisionRationale, setDecisionRationale] = useState("");
 
   if (error && !data) return <ErrorState message={error} onRetry={reload} />;
   if (!data) return <LoadingRows rows={6} />;
@@ -75,6 +87,25 @@ export default function DispatchPage() {
     const ok = await run(kind, calls[kind], `${EVENT_COPY[kind].title.replace(/^Record |^Mark /, "")}: saved`);
     if (ok !== undefined) {
       setKind(null);
+      reload();
+    }
+  }
+
+  async function submitDecision() {
+    if (!decisionReq || decisionRationale.trim().length < 3) return;
+    const ok = await run(
+      "decision",
+      () =>
+        api(`team-requests/${decisionReq.id}/decision`, {
+          method: "POST",
+          body: { decision: decisionReq.decision, rationale: decisionRationale.trim() },
+        }),
+      `Team request ${decisionReq.decision.toLowerCase()}`,
+    );
+    if (ok !== undefined) {
+      setDecisionReq(null);
+      setDecisionRationale("");
+      teamRequests.reload();
       reload();
     }
   }
@@ -126,6 +157,55 @@ export default function DispatchPage() {
               ))}
             </ul>
           </Card>
+
+          {/* Open Team Requests from Field Responders */}
+          {teamRequests.data && teamRequests.data.length > 0 && (
+            <Card
+              title="Backup Team Requests"
+              subtitle="Requested by responders on-scene. Advisory: approving does not automatically dispatch."
+              bodyClassName="p-0"
+            >
+              <ul className="divide-y divide-border text-sm">
+                {teamRequests.data.map((req) => (
+                  <li key={req.request_id} className="p-4 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Badge tone="high">{req.required_capability}</Badge>
+                        <span className="text-xs text-muted">
+                          Requested by <strong className="text-foreground">{req.requested_by_name}</strong> · {formatDateTime(req.created_at)}
+                        </span>
+                      </div>
+                      {dispatcher && (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => {
+                              setDecisionReq({ id: req.request_id, decision: "APPROVED" });
+                              setDecisionRationale("Approved backup team");
+                            }}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setDecisionReq({ id: req.request_id, decision: "DECLINED" });
+                              setDecisionRationale("Declined backup request");
+                            }}
+                          >
+                            Decline
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    {req.note && <p className="text-xs text-muted bg-surface-muted p-2 rounded">{req.note}</p>}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           <Card title="Event history" subtitle="Every state change with the person or integration that recorded it">
             <ol className="space-y-3 text-sm">
               {d.events.map((e) => (
@@ -196,6 +276,43 @@ export default function DispatchPage() {
             <p className="text-xs text-muted">Saved with your name as the recorder.</p>
           </div>
         )}
+      </Dialog>
+
+      <Dialog
+        open={decisionReq !== null}
+        onClose={() => setDecisionReq(null)}
+        title={decisionReq?.decision === "APPROVED" ? "Approve Backup Team Request" : "Decline Backup Team Request"}
+        footer={
+          <>
+            <Button onClick={() => setDecisionReq(null)}>Cancel</Button>
+            <Button
+              variant={decisionReq?.decision === "APPROVED" ? "primary" : "danger"}
+              disabled={decisionRationale.trim().length < 3}
+              busy={busy === "decision"}
+              onClick={submitDecision}
+            >
+              Confirm Decision
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-muted">
+            Approving indicates authorization for extra resources. You must still create a dispatch order to reserve and assign them.
+          </p>
+          <Field label="Decision Rationale" hint="Minimum 3 characters explaining your decision.">
+            {(fid) => (
+              <Textarea
+                id={fid}
+                rows={3}
+                value={decisionRationale}
+                onChange={(e) => setDecisionRationale(e.target.value)}
+                placeholder="Rationale..."
+                maxLength={2000}
+              />
+            )}
+          </Field>
+        </div>
       </Dialog>
     </>
   );
