@@ -18,9 +18,10 @@ import argparse
 import getpass
 import os
 import sys
+import uuid
 
 from app import audit, db, security
-from app.auth import DM_ROLE, PERMISSIONS
+from app.auth import DM_ROLE, FIELD_ROLE, PERMISSIONS
 
 MIN_PASSWORD_LENGTH = 12
 
@@ -34,7 +35,7 @@ def _parse_permissions(raw: str) -> list[str]:
 
 
 def _read_password() -> str:
-    password = os.getenv("DRCH_STAFF_PASSWORD")
+    password = os.getenv("DRCH_STAFF_PASSWORD") or os.getenv("DRCH_FIELD_PASSWORD")
     if not password:
         password = getpass.getpass("Password: ")
         if password != getpass.getpass("Repeat password: "):
@@ -139,6 +140,72 @@ def reset_mfa(args) -> None:
         )
 
 
+def create_field(args) -> None:
+    password_hash = security.hash_password(_read_password())
+    with db.transaction() as conn:
+        if conn.execute("SELECT 1 FROM users WHERE email = %s", (args.email,)).fetchone():
+            sys.exit(f"An account with email {args.email} already exists")
+
+        team = None
+        team_input = args.team.strip()
+        try:
+            team_uuid = uuid.UUID(team_input)
+            team = conn.execute(
+                "SELECT resource_id, name, agency_id FROM resources WHERE resource_id = %s AND type = 'TEAM'",
+                (team_uuid,),
+            ).fetchone()
+        except ValueError:
+            team = conn.execute(
+                "SELECT resource_id, name, agency_id FROM resources WHERE type = 'TEAM' AND name ILIKE %s LIMIT 1",
+                (f"%{team_input}%",),
+            ).fetchone()
+
+        if not team:
+            sys.exit(f"Team '{team_input}' not found in resources table with type 'TEAM'")
+
+        user_id = conn.execute(
+            """
+            INSERT INTO users (role_id, email, full_name, phone, designation, status)
+            SELECT role_id, %s, %s, %s, %s, 'ACTIVE' FROM roles WHERE code = %s
+            RETURNING user_id
+            """,
+            (args.email, args.name, args.phone, args.designation or "Field Responder", FIELD_ROLE),
+        ).fetchone()["user_id"]
+
+        conn.execute(
+            "INSERT INTO user_auth (user_id, password_hash, mfa_enabled) VALUES (%s, %s, FALSE)",
+            (user_id, password_hash),
+        )
+
+        conn.execute(
+            """
+            INSERT INTO field_team_members (user_id, resource_id, callsign, is_leader)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (user_id, team["resource_id"], args.callsign, bool(args.leader)),
+        )
+
+        audit.record(
+            conn,
+            actor=None,
+            action="FIELD_USER_PROVISIONED",
+            entity_type="user",
+            entity_id=user_id,
+            rationale="Provisioned with app.cli create-field",
+            after={
+                "role": FIELD_ROLE,
+                "team_id": str(team["resource_id"]),
+                "team_name": team["name"],
+                "callsign": args.callsign,
+                "is_leader": bool(args.leader),
+            },
+        )
+
+    leader_text = " (Team Leader)" if args.leader else ""
+    callsign_text = f" [Callsign: {args.callsign}]" if args.callsign else ""
+    print(f"Created Field Team account {args.email} for '{team['name']}'{callsign_text}{leader_text}")
+
+
 def verify_audit(args) -> None:
     with db.transaction() as conn:
         valid, _count, msg = audit.verify_audit_chain(conn)
@@ -178,6 +245,16 @@ def main(argv: list[str] | None = None) -> None:
     create.add_argument("--designation")
     create.add_argument("--permissions", help=f"Comma-separated: {','.join(PERMISSIONS)}")
     create.set_defaults(func=create_staff)
+
+    create_f = sub.add_parser("create-field", help="Provision a field team responder account")
+    create_f.add_argument("--email", required=True, help="Field responder email address")
+    create_f.add_argument("--name", required=True, help="Full name of responder")
+    create_f.add_argument("--team", required=True, help="Resource UUID or team name matching resources table")
+    create_f.add_argument("--callsign", help="Radio callsign or tactical unit identifier")
+    create_f.add_argument("--leader", action="store_true", help="Mark responder as designated team lead")
+    create_f.add_argument("--phone", help="Emergency contact telephone number")
+    create_f.add_argument("--designation", help="Official field title or unit designation")
+    create_f.set_defaults(func=create_field)
 
     perms = sub.add_parser("set-permissions", help="Replace a staff member's permissions")
     perms.add_argument("--email", required=True)

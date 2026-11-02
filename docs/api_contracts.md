@@ -204,65 +204,20 @@
 
 ## 3. Field Team Responder API (Owner: Nisarg)
 
-### 3.1 Field Profile & Active Assignments
-* **Path:** `GET /api/v1/field/me`
-* **Auth:** Bearer Token (`require_field`)
-* **Path:** `GET /api/v1/field/assignments`
-* **Auth:** Bearer Token (`require_field`)
-* **Response (200 OK):**
-```json
-[
-  {
-    "dispatch_id": "5f9e8312-328b-4921-995a-0e6e7d6cfb33",
-    "dispatch_ref": "DISP-2026-000012",
-    "status": "DISPATCHED",
-    "incident_ref": "INC-GUJ-2026-001",
-    "scenario": "urban_flooding",
-    "priority": "HIGH",
-    "address_text": "Usmanpura Underpass, Ahmedabad",
-    "latitude": 23.0478,
-    "longitude": 72.5694,
-    "instructions": "Deploy inflatable boat squad for vehicle evacuation.",
-    "dispatched_at": "2026-10-24T14:45:00Z"
-  }
-]
-```
+> [!NOTE]
+> This section is a high-level summary stub retained for Sprint 1 traceability. For the complete, production-grade Sprint 2 API specification — including full request/response contracts, state transition rules, idempotency, isolation guarantees, and error codes — refer to **[Section 5: Field Operations API](#5-field-operations-api-sprint-2--s2-01)**.
 
-### 3.2 Acknowledge / Reject Dispatch
-* **Path:** `POST /api/v1/field/dispatches/{id}/acknowledgement`
-* **Auth:** Bearer Token (`require_field`)
-* **Response (200 OK):** `{"status": "ACKNOWLEDGED", "updated_at": "..."}`
-* **Path:** `POST /api/v1/field/dispatches/{id}/rejection`
-* **Request Body:** `{"reason": "Vehicle mechanical breakdown en-route"}`
-* **Response (200 OK):** `{"status": "REJECTED", "updated_at": "..."}`
+| Endpoint | Path | Method |
+| :--- | :--- | :--- |
+| Responder profile | `/api/v1/field/me` | `GET` |
+| Active assignments | `/api/v1/field/assignments` | `GET` |
+| Acknowledge dispatch | `/api/v1/field/dispatches/{id}/acknowledgement` | `POST` |
+| Reject dispatch | `/api/v1/field/dispatches/{id}/rejection` | `POST` |
+| Report progress | `/api/v1/field/dispatches/{id}/progress` | `POST` |
+| Request backup team | `/api/v1/field/dispatches/{id}/team-requests` | `POST` |
+| Complete mission | `/api/v1/field/dispatches/{id}/completion` | `POST` |
 
-### 3.3 Progress Update & Backup Team Request
-* **Path:** `POST /api/v1/field/dispatches/{id}/progress`
-* **Request Body:**
-```json
-{
-  "status": "ON_SCENE",
-  "note": "Arrived on location. Water level approx 4.5 feet. Commencing boat launch."
-}
-```
-* **Path:** `POST /api/v1/field/dispatches/{id}/team-requests`
-* **Request Body:**
-```json
-{
-  "required_capability": "medical_ambulance",
-  "note": "2 rescued elderly citizens require immediate hypothermia treatment."
-}
-```
-
-### 3.4 Mission Completion
-* **Path:** `POST /api/v1/field/dispatches/{id}/completion`
-* **Request Body:**
-```json
-{
-  "summary": "14 stranded civilians evacuated to dry shelter. Underpass barricaded."
-}
-```
-*(Dispatch becomes `COMPLETED`; incident remains open for dispatcher resolution).*
+*(All routes require `Authorization: Bearer <token>` with `FIELD_TEAM` role. See Section 5 for full contracts.)*
 
 ---
 
@@ -321,11 +276,231 @@
 
 ---
 
-## 5. Team Recommendation Engine API (Owner: Nisarg)
+## 5. Field Operations API (Sprint 2 — S2-01)
 
-### 5.1 Query Recommended Teams
-* **Path:** `GET /api/v1/dm/incidents/{id}/team-recommendations`
+> [!IMPORTANT]
+> All field endpoints require `Authorization: Bearer <token>` issued to a `FIELD_TEAM` role user. Field users do **not** require TOTP MFA — password authentication only. Every dispatch-specific route enforces strict cross-team isolation: requesting another team's dispatch returns `404 NOT_FOUND` (never `403`) to eliminate enumeration attacks.
+
+### 5.1 Field Responder Profile
+
+* **Path:** `GET /api/v1/field/me`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Response (200 OK):**
+```json
+{
+  "user_id": "a1b2c3d4-0000-0000-0000-000000000001",
+  "email": "responder@ndrf.gov.in",
+  "full_name": "Arjun Mehta",
+  "phone": "+919876543210",
+  "role": "FIELD_TEAM",
+  "callsign": "NDRF-602-A",
+  "is_leader": true,
+  "member_id": "b2c3d4e5-0000-0000-0000-000000000002",
+  "team_resource_id": "18e69001-f111-4ebc-87d0-c3d3bb7a0002",
+  "team_name": "NDRF 602 Flood Rescue Unit (Ahmedabad Sabarmati)",
+  "agency_id": "a0000000-0000-0000-0000-000000000001",
+  "agency_name": "NDRF 6th Battalion (Vadodara)",
+  "capabilities": ["boat", "flood_rescue", "water_rescue", "dewatering_pump"],
+  "status": "AVAILABLE"
+}
+```
+* **Errors:**
+  * `401 UNAUTHORIZED`: Missing or expired token.
+  * `403 FORBIDDEN`: Authenticated user does not have `FIELD_TEAM` role.
+  * `404 NOT_FOUND`: Responder's team membership record not found.
+
+---
+
+### 5.2 Active Assignments
+
+* **Path:** `GET /api/v1/field/assignments`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Query Parameters:**
+  * `active` *(optional boolean, default `false`)*: If `true`, returns only dispatches in statuses `REQUESTED`, `ACKNOWLEDGED`, or `DISPATCHED`.
+* **Response (200 OK):**
+```json
+[
+  {
+    "dispatch_id": "d0000000-0000-0000-0000-000000000001",
+    "dispatch_ref": "DSP-2026-000042",
+    "status": "ACKNOWLEDGED",
+    "priority": "HIGH",
+    "incident_id": "3c0b05b3-3a1e-450e-a226-bcfe69d0d939",
+    "incident_ref": "INC-2026-000104",
+    "scenario": "urban_flooding",
+    "district": "Ahmedabad",
+    "address_text": "Near Usmanpura Underpass",
+    "landmark": "Opposite Jain Temple",
+    "latitude": 23.0225,
+    "longitude": 72.5714,
+    "instructions": "Deploy inflatable boat to rescue stranded residents on 3rd floor.",
+    "dispatched_at": "2026-10-24T15:00:00Z",
+    "acknowledged_at": "2026-10-24T15:04:00Z",
+    "overdue": false
+  }
+]
+```
+* **Isolation Rule:** Only dispatches assigned to the authenticated responder's team are returned. No other team's data is ever included.
+
+---
+
+### 5.3 Acknowledge Dispatch
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/acknowledgement`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:** *(empty — no body required)*
+* **Response (200 OK):**
+```json
+{
+  "status": "ACKNOWLEDGED",
+  "dispatch_ref": "DSP-2026-000042",
+  "acknowledged_at": "2026-10-24T15:04:00Z"
+}
+```
+* **State Transition:** `REQUESTED` → `ACKNOWLEDGED`
+* **Idempotency:** If the dispatch is already `ACKNOWLEDGED`, returns `200 OK` without error (safe for mobile network retries).
+* **Errors:**
+  * `404 NOT_FOUND`: Dispatch does not exist or is not assigned to the caller's team.
+  * `409 DISPATCH_STATE_CONFLICT`: Dispatch is in a terminal state and cannot be acknowledged.
+
+---
+
+### 5.4 Reject Dispatch
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/rejection`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:**
+```json
+{
+  "reason": "Team currently engaged in active rescue; capacity unavailable for secondary deployment."
+}
+```
+* **Response (200 OK):**
+```json
+{
+  "status": "REJECTED",
+  "dispatch_ref": "DSP-2026-000042",
+  "updated_at": "2026-10-24T15:06:00Z"
+}
+```
+* **State Transition:** `REQUESTED` / `ACKNOWLEDGED` → `REJECTED`
+* **Side Effect:** All reserved resources (`resource_assignments`) for the dispatch are released back to `status = 'AVAILABLE'`.
+* **Errors:**
+  * `422 VALIDATION_FAILED`: `reason` field is missing or too short (minimum 3 characters).
+  * `404 NOT_FOUND`: Dispatch not found or not assigned to caller's team.
+  * `409 DISPATCH_STATE_CONFLICT`: Dispatch is already in a non-rejectable state.
+
+---
+
+### 5.5 Report Operational Progress
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/progress`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:**
+```json
+{
+  "status": "EN_ROUTE",
+  "note": "ETA 8 minutes. All equipment loaded.",
+  "latitude": 23.0310,
+  "longitude": 72.5650
+}
+```
+* **Valid `status` values:** `EN_ROUTE`, `ON_SCENE`, `UPDATE`, `DELAYED`
+* **Response (200 OK):**
+```json
+{
+  "progress_id": "e5f6a7b8-0000-0000-0000-000000000003",
+  "dispatch_id": "d0000000-0000-0000-0000-000000000001",
+  "status": "EN_ROUTE",
+  "note": "ETA 8 minutes. All equipment loaded.",
+  "recorded_at": "2026-10-24T15:08:00Z"
+}
+```
+* **State Transitions (automatic):**
+  * `EN_ROUTE` + dispatch is `ACKNOWLEDGED` → dispatch advances to `DISPATCHED`; parent incident advances from `VERIFIED` → `DISPATCHED`.
+  * All other events record progress milestone only (no dispatch status change).
+* **GPS coordinates:** Optional. If provided, stored in `dispatch_progress` for audit and situational tracking.
+* **Errors:**
+  * `404 NOT_FOUND`: Dispatch not found or not assigned to caller's team.
+  * `409 DISPATCH_NOT_ACKNOWLEDGED`: Cannot report `EN_ROUTE` without prior acknowledgement.
+
+---
+
+### 5.6 Request Backup / Reinforcement Team
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/team-requests`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:**
+```json
+{
+  "required_capability": "hazmat",
+  "note": "Chemical spill detected in basement — require hazmat decontamination unit urgently."
+}
+```
+* **Response (201 Created):**
+```json
+{
+  "request_id": "f7a8b9c0-0000-0000-0000-000000000004",
+  "dispatch_id": "d0000000-0000-0000-0000-000000000001",
+  "required_capability": "hazmat",
+  "note": "Chemical spill detected in basement — require hazmat decontamination unit urgently.",
+  "status": "OPEN",
+  "created_at": "2026-10-24T15:12:00Z"
+}
+```
+* **Side Effects:**
+  * Inserts a record into `team_requests` with `status = 'OPEN'`.
+  * Sends an in-app notification to all active dispatchers (`DISPATCH` permission) with the requesting team name and capability needed.
+* **Errors:**
+  * `422 VALIDATION_FAILED`: `required_capability` missing or `note` exceeds 1000 characters.
+  * `404 NOT_FOUND`: Dispatch not found or not assigned to caller's team.
+
+---
+
+### 5.7 Complete Mission
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/completion`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:**
+```json
+{
+  "summary": "All stranded residents evacuated. Area secured. No further immediate risk.",
+  "civilians_evacuated": 14,
+  "civilians_treated": 3,
+  "notes": "Handoff to district relief camp. Structural damage assessment pending."
+}
+```
+* **Response (200 OK):**
+```json
+{
+  "status": "COMPLETED",
+  "dispatch_ref": "DSP-2026-000042",
+  "civilians_evacuated": 14,
+  "civilians_treated": 3,
+  "updated_at": "2026-10-24T17:45:00Z"
+}
+```
+* **State Transition:** `DISPATCHED` → `COMPLETED`
+* **Critical Rule:** The **parent incident remains open** (status is NOT changed to `RESOLVED`). The incident must be resolved separately by a dispatcher after all assigned teams report completion.
+* **Side Effect:** All assigned team resources (`resource_assignments`) are released back to `status = 'AVAILABLE'`.
+* **Errors:**
+  * `422 VALIDATION_FAILED`: `summary` missing or too short (minimum 5 characters).
+  * `404 NOT_FOUND`: Dispatch not found or not assigned to caller's team.
+  * `409 DISPATCH_STATE_CONFLICT`: Dispatch is not in `DISPATCHED` state.
+
+---
+
+## 6. Team Recommendation Engine & Backup Decision API (Sprint 2 — S2-02)
+
+> [!NOTE]
+> The ranking engine scores candidates as: **Score = (Capability Overlap Count × 10) − (Distance km × 0.05)**. Higher score = higher rank. If incident coordinates are unavailable, the engine falls back to the district centroid from `get_district_centroid()` (33 Gujarat districts pre-loaded), and finally to Ahmedabad State HQ coordinates.
+
+### 6.1 Query Recommended Teams
+
+* **Path:** `GET /api/v1/dm/incidents/{incident_id}/team-recommendations`
 * **Auth:** Staff Session (`DISASTER_MGMT`)
+* **Query Parameters:**
+  * `limit` *(optional integer, 1–20, default `5`)*: Maximum candidate teams to return.
 * **Response (200 OK):**
 ```json
 {
@@ -336,31 +511,142 @@
     {
       "resource_id": "18e69001-f111-4ebc-87d0-c3d3bb7a0002",
       "team_name": "NDRF 602 Flood Rescue Unit (Ahmedabad Sabarmati)",
-      "agency": "NDRF 6th Battalion (Vadodara)",
+      "agency_id": "a0000000-0000-0000-0000-000000000001",
+      "agency_name": "NDRF 6th Battalion (Vadodara)",
       "distance_km": 3.4,
       "capability_match": ["boat", "flood_rescue", "water_rescue"],
+      "matched_count": 3,
+      "score": 29.83,
       "rank": 1,
-      "reasons": "Exact capability match (inflatable boat + flood rescue) and closest proximity (3.4 km)"
+      "advisory": true,
+      "reasons": "Exact capability match (boat, flood_rescue, water_rescue) and closest proximity (3.4 km)"
     },
     {
       "resource_id": "18e69001-f111-4ebc-87d0-c3d3bb7a0007",
       "team_name": "SDRF Flood Quick Response Team (Rajkot)",
-      "agency": "SDRF Gujarat Command",
+      "agency_id": "a0000000-0000-0000-0000-000000000002",
+      "agency_name": "SDRF Gujarat Command",
       "distance_km": 215.0,
       "capability_match": ["boat", "flood_rescue"],
+      "matched_count": 2,
+      "score": 9.25,
       "rank": 2,
-      "reasons": "Capability match available as regional backup reserve"
+      "advisory": true,
+      "reasons": "Capability match available as regional backup reserve (215.0 km away)"
     }
-  ]
+  ],
+  "generated_at": "2026-10-24T15:00:00Z"
 }
 ```
-*(Advisory only: query NEVER automatically reserves or dispatches a team without human confirmation).*
+* **Scenario → Capability Mapping:**
+
+| Scenario | Critical Capabilities Ranked |
+| :--- | :--- |
+| `urban_flooding` | `boat`, `flood_rescue`, `water_rescue`, `dewatering_pump` |
+| `cyclone` | `debris_clearing`, `shelter_management`, `high_wind_rescue`, `medical_first_aid` |
+| `industrial_fire` | `hazmat`, `fire_tender`, `chemical_foam`, `breathing_apparatus` |
+| `earthquake` | `search_and_rescue`, `collapse_rescue`, `structural_shoring`, `canine_unit`, `trauma_care` |
+
+* **Constraints:**
+  * Only `AVAILABLE` resources of `type = 'TEAM'` are ranked; unavailable or already-dispatched teams are **strictly excluded**.
+  * `requires_confirmation: true` is **always** returned — this endpoint is **strictly advisory** and never auto-creates a dispatch.
+* **Errors:**
+  * `404 NOT_FOUND`: Incident does not exist.
+  * `403 FORBIDDEN`: Caller lacks `DISASTER_MGMT` role.
 
 ---
 
-## 6. Payments & Donations Foundation API (Owner: Shlok)
+### 6.2 List Field Backup Requests
 
-### 6.1 Create Donation Order
+* **Path:** `GET /api/v1/dm/team-requests`
+* **Auth:** Staff Session (`DISASTER_MGMT`)
+* **Query Parameters:**
+  * `status` *(optional, default `OPEN`)*: `OPEN` | `APPROVED` | `DECLINED` | `ALL`
+  * `limit` *(optional integer, 1–100, default `50`)*
+  * `offset` *(optional integer, default `0`)*
+* **Response (200 OK):**
+```json
+[
+  {
+    "request_id": "f7a8b9c0-0000-0000-0000-000000000004",
+    "dispatch_id": "d0000000-0000-0000-0000-000000000001",
+    "dispatch_ref": "DSP-2026-000042",
+    "incident_id": "3c0b05b3-3a1e-450e-a226-bcfe69d0d939",
+    "incident_ref": "INC-2026-000104",
+    "requested_by": "a1b2c3d4-0000-0000-0000-000000000001",
+    "requested_by_name": "Arjun Mehta",
+    "team_name": "NDRF 602 Flood Rescue Unit (Ahmedabad Sabarmati)",
+    "required_capability": "hazmat",
+    "note": "Chemical spill detected in basement.",
+    "status": "OPEN",
+    "decision_rationale": null,
+    "decided_by": null,
+    "decided_at": null,
+    "created_at": "2026-10-24T15:12:00Z"
+  }
+]
+```
+
+---
+
+### 6.3 Decide on a Backup Request (Approve / Decline)
+
+* **Path:** `POST /api/v1/dm/team-requests/{request_id}/decision`
+* **Auth:** Staff Session (`DISASTER_MGMT`)
+* **Request Body:**
+```json
+{
+  "action": "APPROVE",
+  "target_resource_id": "18e69001-f111-4ebc-87d0-c3d3bb7a0009",
+  "rationale": "Hazmat unit dispatched from Vatva Industrial Zone depot."
+}
+```
+* **`action` values:** `APPROVE` | `DECLINE`
+* **`rationale`:** Required for `DECLINE`; optional for `APPROVE`.
+* **Response (200 OK — APPROVE):**
+```json
+{
+  "request_id": "f7a8b9c0-0000-0000-0000-000000000004",
+  "status": "APPROVED",
+  "decision_rationale": "Hazmat unit dispatched from Vatva Industrial Zone depot.",
+  "decided_at": "2026-10-24T15:20:00Z",
+  "dispatch_draft": {
+    "incident_id": "3c0b05b3-3a1e-450e-a226-bcfe69d0d939",
+    "incident_ref": "INC-2026-000104",
+    "required_capability": "hazmat",
+    "suggested_resource_id": "18e69001-f111-4ebc-87d0-c3d3bb7a0009",
+    "suggested_resource_name": "NDRF Hazmat Response Unit (Vadodara)",
+    "receiving_agency_id": "a0000000-0000-0000-0000-000000000001",
+    "priority": "HIGH",
+    "instructions": "Reinforce DSP-2026-000042: Deploy hazmat unit as requested by frontline responders."
+  }
+}
+```
+* **Response (200 OK — DECLINE):**
+```json
+{
+  "request_id": "f7a8b9c0-0000-0000-0000-000000000004",
+  "status": "DECLINED",
+  "decision_rationale": "No hazmat units currently available in district. Escalated to state HQ.",
+  "decided_at": "2026-10-24T15:21:00Z",
+  "dispatch_draft": null
+}
+```
+* **Concurrency:** Uses `SELECT ... FOR UPDATE` row lock; double-deciding a request returns `409 TEAM_REQUEST_ALREADY_DECIDED`.
+* **Side Effects:**
+  * On `APPROVE`: Updates `team_requests.status = 'APPROVED'`; writes audit entry; notifies the requesting field user.
+  * On `DECLINE`: Updates `team_requests.status = 'DECLINED'`; writes audit entry with rationale; notifies the requesting field user.
+  * `dispatch_draft` (approve only): Pre-populated dispatch creation payload — dispatcher must **manually** create the dispatch using this data.
+* **Errors:**
+  * `404 NOT_FOUND`: Request ID does not exist.
+  * `409 TEAM_REQUEST_ALREADY_DECIDED`: Request has already been approved or declined.
+  * `422 VALIDATION_FAILED`: `action = DECLINE` requires non-empty `rationale`.
+
+---
+
+## 7. Payments & Donations Foundation API (Owner: Shlok)
+
+### 7.1 Create Donation Order
 * **Path:** `POST /api/v1/donations`
 * **Auth:** Optional Citizen Bearer Token or Guest Email
 * **Headers:** `Idempotency-Key: <unique-key>`
@@ -388,7 +674,7 @@
 }
 ```
 
-### 6.2 Verify Payment & Issue Receipt
+### 7.2 Verify Payment & Issue Receipt
 * **Path:** `POST /api/v1/donations/{id}/verify`
 * **Request Body:**
 ```json
@@ -409,9 +695,9 @@
 
 ---
 
-## 7. AI Triage Service Contract (Owner: Rudra / Neeti)
+## 8. AI Triage Service Contract (Owner: Rudra / Neeti)
 
-### 7.1 Fast Triage Prediction
+### 8.1 Fast Triage Prediction
 * **Path:** `POST /triage`
 * **Request Body:**
 ```json
@@ -439,13 +725,13 @@
   ]
 }
 ```
-### 7.2 AI Service Health
+### 8.2 AI Service Health
 * **Path:** `GET /health`
 * **Response (200 OK):** `{"status": "ok", "service": "drch-ai-triage"}`
 
 ---
 
-## 8. Owner Sign-Off Matrix
+## 9. Owner Sign-Off Matrix
 
 | Endpoint Domain | Responsible Owner | Contract Status |
 | :--- | :--- | :--- |
