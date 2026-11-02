@@ -1,0 +1,17 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented test tokens and local development fixtures"
+paths = [
+    '''backend/tests/.*''',
+    '''\.env\.example''',
+    '''docker-compose.*''',
+    '''docs/.*''',
+]
+stopwords = [
+    "secret_test_ingest_token_48_characters_long_for_testing",
+    "secret_ingest_token_48_chars_long_for_sachet_tests",
+    "test-only-secret",
+    "test-only-secret-xxxxxxxxxxxxxxxxxxxxxxxx",
+]
