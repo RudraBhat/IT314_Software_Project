@@ -35,6 +35,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `GIT_SHA` | no | `dev` | Commit id shown by `/api/v1/health` (CD smoke test). |
 | `RATE_LIMIT_ENABLED` | no | `true` | Set `false` only in automated tests. |
 | `DRCH_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff`. |
+| `DRCH_FIELD_PASSWORD` (S) | no | - | Non-interactive password for the field-team provisioning command in `python -m app.cli`; `DRCH_STAFF_PASSWORD` is used first when both are set. |
 
 ## Frontend (Next.js)
 
