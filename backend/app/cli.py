@@ -235,6 +235,77 @@ def purge_demo_data(args) -> None:
     print(f"Removed {len(removed)} simulated incident(s)")
 
 
+def load_fallback_alerts(args) -> None:
+    """Insert 3 clearly labelled sample external alerts with is_fallback = TRUE (development only)."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    if settings.app_env != "development":
+        sys.exit(f"load-fallback-alerts is only allowed when APP_ENV=development (current: {settings.app_env})")
+
+    alerts = [
+        (
+            "SACHET",
+            "FALLBACK-CYC-01",
+            "CYCLONE",
+            "CRITICAL",
+            "Coastal Saurashtra and Kutch, Gujarat (Sample Alert)",
+            22.3000,
+            69.6000,
+            '{"headline": "Sample Alert: Very Severe Cyclonic Storm Warning", "is_fallback": true}',
+        ),
+        (
+            "SACHET",
+            "FALLBACK-FLD-02",
+            "URBAN_FLOODING",
+            "HIGH",
+            "Ahmedabad-Gandhinagar Urban Corridor, Gujarat (Sample Alert)",
+            23.0225,
+            72.5714,
+            '{"headline": "Sample Alert: Heavy Rainfall and Inundation Warning", "is_fallback": true}',
+        ),
+        (
+            "SACHET",
+            "FALLBACK-FIRE-03",
+            "INDUSTRIAL_FIRE",
+            "MEDIUM",
+            "Dahej PCPIR Industrial Zone, Bharuch, Gujarat (Sample Alert)",
+            21.7100,
+            72.5800,
+            '{"headline": "Sample Alert: Industrial Chemical Fire Alert", "is_fallback": true}',
+        ),
+    ]
+
+    with db.transaction() as conn:
+        for src, uid, ev, sev, area, lat, lon, payload in alerts:
+            conn.execute(
+                """
+                INSERT INTO external_alerts (
+                    source, source_uid, event_type, severity, area_text,
+                    latitude, longitude, geom, is_fallback, effective_at, expires_at, raw_payload
+                ) VALUES (
+                    %s, %s, %s, %s, %s,
+                    %s, %s,
+                    ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                    TRUE, now(), now() + interval '7 days', %s::jsonb
+                )
+                ON CONFLICT (source, source_uid) DO UPDATE SET
+                    event_type = EXCLUDED.event_type,
+                    severity = EXCLUDED.severity,
+                    area_text = EXCLUDED.area_text,
+                    latitude = EXCLUDED.latitude,
+                    longitude = EXCLUDED.longitude,
+                    geom = EXCLUDED.geom,
+                    is_fallback = TRUE,
+                    effective_at = EXCLUDED.effective_at,
+                    expires_at = EXCLUDED.expires_at,
+                    raw_payload = EXCLUDED.raw_payload
+                """,
+                (src, uid, ev, sev, area, lat, lon, lon, lat, payload),
+            )
+    print("Loaded 3 fallback alerts (is_fallback=TRUE)")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -271,6 +342,9 @@ def main(argv: list[str] | None = None) -> None:
 
     purge = sub.add_parser("purge-demo-data", help="Remove simulated (is_simulated) incidents")
     purge.set_defaults(func=purge_demo_data)
+
+    fb_alerts = sub.add_parser("load-fallback-alerts", help="Load 3 sample alerts with is_fallback=TRUE (dev only)")
+    fb_alerts.set_defaults(func=load_fallback_alerts)
 
     args = parser.parse_args(argv)
     args.func(args)

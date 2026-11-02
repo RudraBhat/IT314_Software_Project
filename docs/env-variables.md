@@ -32,6 +32,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `GEOJSON_GUJARAT_DISTRICTS_URL` | no | empty | GeoJSON FeatureCollection of Gujarat districts. Empty = sync disabled (packaged state polygon + PostGIS data are used). |
 | `PAYMENT_GATEWAY` | no | `mock` | Only `mock` is implemented. |
 | `MOCK_GATEWAY_SECRET` (S) | when donations are used | - | HMAC key for the sandbox gateway. |
+| `SACHET_FEED_URL` | no | empty | CAP alert XML feed URL for SACHET/NDMA automated ingestion. Empty = adapter disabled. |
 | `GIT_SHA` | no | `dev` | Commit id shown by `/api/v1/health` (CD smoke test). |
 | `RATE_LIMIT_ENABLED` | no | `true` | Set `false` only in automated tests. |
 | `DRCH_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff`. |

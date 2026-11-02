@@ -50,7 +50,7 @@ def _db_available() -> bool:
     if not TEST_DB_URL:
         return False
     try:
-        with psycopg.connect(TEST_DB_URL, connect_timeout=3):
+        with psycopg.connect(TEST_DB_URL, connect_timeout=15):
             return True
     except psycopg.OperationalError:
         return False

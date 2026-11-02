@@ -56,6 +56,7 @@ class Settings:
     app_env: str
     git_sha: str
     payment_gateway: str
+    sachet_feed_url: str = ""
 
     def require(self, name: str) -> str:
         value = getattr(self, name)
@@ -94,6 +95,7 @@ def get_settings() -> Settings:
         app_env=app_env,
         git_sha=os.getenv("GIT_SHA", "dev"),
         payment_gateway=os.getenv("PAYMENT_GATEWAY", "mock").lower(),
+        sachet_feed_url=os.getenv("SACHET_FEED_URL", "").strip(),
     )
 
 

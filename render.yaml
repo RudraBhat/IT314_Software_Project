@@ -32,3 +32,5 @@ services:
         value: mock
       - key: MOCK_GATEWAY_SECRET
         sync: false
+      - key: SACHET_FEED_URL
+        sync: false
