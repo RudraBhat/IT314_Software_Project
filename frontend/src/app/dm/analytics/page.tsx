@@ -30,6 +30,24 @@ function sum<T>(rows: T[], pick: (r: T) => number) {
   return rows.reduce((n, r) => n + pick(r), 0);
 }
 
+/** Aggregated figures only (no reporter data); opens in any spreadsheet. */
+function exportCsv(d: Analytics) {
+  const rows: (string | number)[][] = [["section", "key", "detail", "value"]];
+  d.incidents.by_scenario_status.forEach((r) => rows.push(["incidents", r.scenario, r.status, r.n]));
+  d.incidents.by_priority.forEach((r) => rows.push(["priority", r.priority, "", r.n]));
+  d.incidents.per_day.forEach((r) => rows.push(["per_day", r.day, "", r.n]));
+  d.dispatches.forEach((r) => rows.push(["dispatches", r.status, r.priority, r.n]));
+  d.resources.forEach((r) => rows.push(["resources", r.type, r.status, r.n]));
+  const cell = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  const blob = new Blob([rows.map((r) => r.map(cell).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `drch-analytics-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AnalyticsPage() {
   const [scenario, setScenario] = useState("");
   const [from, setFrom] = useState("");
@@ -41,7 +59,12 @@ export default function AnalyticsPage() {
       <PageHeader
         title="Analytics"
         description={data ? `Generated ${formatDateTime(data.generated_at)}${data.data_fresh_as_of ? ` · latest incident change ${timeAgo(data.data_fresh_as_of)}` : ""}` : "Operational and contribution analytics"}
-        actions={<Button onClick={reload} busy={loading && !!data}>Refresh</Button>}
+        actions={
+          <>
+            {data && <Button onClick={() => exportCsv(data)}>Export CSV</Button>}
+            <Button onClick={reload} busy={loading && !!data}>Refresh</Button>
+          </>
+        }
       />
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <Field label="Scenario">
