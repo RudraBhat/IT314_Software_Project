@@ -35,6 +35,8 @@ class BoundarySource:
 def get_registered_sources() -> list[BoundarySource]:
     """Return all configured administrative boundary sources."""
     settings = get_settings()
+    if not settings.geojson_gujarat_districts_url:
+        return []
     return [
         BoundarySource(
             key="gujarat_districts",

@@ -87,20 +87,20 @@ def run_ingest(
             try:
                 conn.execute(
                     """
-                    INSERT INTO ingest_runs (run_id, source, status, items_fetched, items_stored, started_at, completed_at)
+                    INSERT INTO ingest_runs (run_id, source, status, items_fetched, items_stored, started_at, finished_at)
                     VALUES (%s, %s, %s, %s, %s, now(), now())
                     """,
-                    (run_id, source.upper(), "SUCCESS", items_fetched, items_stored),
+                    (run_id, source.upper(), "NOT_IMPLEMENTED", items_fetched, items_stored),
                 )
             except Exception:
                 logger.exception("Failed to write to ingest_runs table")
 
-    logger.info("Ingestion trigger completed successfully for source=%s (run_id=%s)", source, run_id)
+    logger.warning("Ingestion trigger ran but no adapters are installed (source=%s, run_id=%s)", source, run_id)
     return IngestRunResponse(
         run_id=str(run_id),
         source=source.upper(),
         items_fetched=items_fetched,
         items_stored=items_stored,
-        status="SUCCESS",
-        message="Scheduled ingestion completed successfully",
+        status="NOT_IMPLEMENTED",
+        message="No ingestion adapters are installed yet; nothing was fetched.",
     )

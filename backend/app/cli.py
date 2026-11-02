@@ -214,6 +214,26 @@ def verify_audit(args) -> None:
         print(f"✅ [AUDIT INTEGRITY VERIFIED] {msg}")
 
 
+def purge_demo_data(args) -> None:
+    """Delete simulated incidents (is_simulated = TRUE) left in a database by older seed files."""
+    with db.transaction() as conn:
+        blocked = conn.execute(
+            "SELECT COUNT(*) AS n FROM incidents i WHERE i.is_simulated "
+            "AND EXISTS (SELECT 1 FROM dispatch_orders d WHERE d.incident_id = i.incident_id)"
+        ).fetchone()["n"]
+        if blocked:
+            sys.exit(f"{blocked} simulated incident(s) have dispatch orders; close/reassign them first")
+        removed = conn.execute("DELETE FROM incidents WHERE is_simulated RETURNING incident_id").fetchall()
+        audit.record(
+            conn,
+            actor=None,
+            action="DEMO_DATA_PURGED",
+            entity_type="incident",
+            rationale=f"Removed {len(removed)} simulated incident(s) with app.cli",
+        )
+    print(f"Removed {len(removed)} simulated incident(s)")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -247,6 +267,9 @@ def main(argv: list[str] | None = None) -> None:
 
     v_audit = sub.add_parser("verify-audit", help="Verify cryptographic SHA-256 hash chaining of audit_logs")
     v_audit.set_defaults(func=verify_audit)
+
+    purge = sub.add_parser("purge-demo-data", help="Remove simulated (is_simulated) incidents")
+    purge.set_defaults(func=purge_demo_data)
 
     args = parser.parse_args(argv)
     args.func(args)

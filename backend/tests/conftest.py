@@ -42,6 +42,7 @@ os.environ["DATABASE_URL"] = TEST_DB_URL or ""
 os.environ["JWT_SECRET"] = "test-only-secret-" + "x" * 32
 os.environ["MFA_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
 os.environ["DISPATCH_ACK_TIMEOUT_MINUTES"] = "15"
+os.environ["RATE_LIMIT_ENABLED"] = "false"  # rate limiting has its own test
 os.environ.pop("AI_TRIAGE_URL", None)
 
 
@@ -69,7 +70,7 @@ def _ensure_schema() -> None:
                 if m.name != "01_schema.sql":
                     conn.execute(m.read_text(encoding="utf-8"))
         # Apply all seeds in ascending version order
-        for s in sorted((SQL_DIR / "seeds").glob("*.sql")):
+        for s in sorted((SQL_DIR / "seeds").glob("*/*.sql"), key=lambda f: f.name):
             conn.execute(s.read_text(encoding="utf-8"))
 
 

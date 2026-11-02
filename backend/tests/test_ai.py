@@ -104,3 +104,14 @@ def test_cannot_decide_on_unavailable_recommendation(client, make):
         json={"action": "ACCEPTED", "rationale": "looks right"},
     )
     assert r.status_code == 409 and r.json()["error"]["code"] == "NO_RECOMMENDATION"
+
+
+def test_scrub_pii_removes_contact_details_before_ai_calls():
+    from app.services.ai_provider import scrub_pii
+
+    text = "Call Ramesh on +91 98765 43210 or ramesh.p@example.in, Aadhaar 1234 5678 9012. 15 people on the roof."
+    clean = scrub_pii(text)
+    assert "98765" not in clean and "@" not in clean and "1234 5678" not in clean
+    assert "15 people on the roof" in clean
+    assert scrub_pii({"note": "mail a@b.in", "n": 3, "l": ["+919876543210"]}) == {
+        "note": "mail [email removed]", "n": 3, "l": ["[phone removed]"]}
