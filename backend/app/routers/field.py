@@ -73,6 +73,7 @@ def _get_verified_team_dispatch(
               SELECT 1 FROM resource_assignments ra
               WHERE ra.dispatch_id = d.dispatch_id
                 AND ra.resource_id = %(team_id)s
+                AND ra.released_at IS NULL
           )
         FOR UPDATE OF d
         """,

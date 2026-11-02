@@ -542,3 +542,37 @@ def test_completion_requires_valid_summary():
     # Negative civilians evacuated
     with pytest.raises(ValidationError):
         FieldCompletionRequest(summary="Valid summary", civilians_evacuated=-1)
+
+
+# ── 7. Active Assignment Verification (released_at IS NULL) ─────────────
+
+
+def test_released_historical_assignment_rejected(field_principal: FieldPrincipal):
+    """Historical resource assignments with released_at set must be rejected with 404."""
+    dispatch_id = uuid.uuid4()
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchone.return_value = None
+
+    with pytest.raises(ApiError) as exc_info:
+        _get_verified_team_dispatch(mock_conn, field_principal, dispatch_id)
+
+    assert exc_info.value.status == 404
+    assert exc_info.value.code == "NOT_FOUND"
+
+    sql_called = mock_conn.execute.call_args[0][0]
+    assert "ra.released_at IS NULL" in sql_called
+
+
+def test_active_unreleased_assignment_authorized(field_principal: FieldPrincipal):
+    """Active resource assignment with released_at IS NULL returns dispatch record."""
+    dispatch_id = uuid.uuid4()
+    mock_row = {"dispatch_id": dispatch_id, "status": "REQUESTED"}
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchone.return_value = mock_row
+
+    result = _get_verified_team_dispatch(mock_conn, field_principal, dispatch_id)
+    assert result["dispatch_id"] == dispatch_id
+
+    sql_called = mock_conn.execute.call_args[0][0]
+    assert "ra.released_at IS NULL" in sql_called
+

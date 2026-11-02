@@ -216,6 +216,10 @@ def test_cross_team_dispatch_isolation_returns_404(
             field_acknowledge_dispatch(foreign_dispatch_id, responder_principal)
         assert exc_info.value.status == 404
 
+    # 3. Verify query requires ra.released_at IS NULL
+    sql_executed = mock_conn.execute.call_args[0][0]
+    assert "ra.released_at IS NULL" in sql_executed
+
 
 # ── 4. Role Enforcement & Authentication ────────────────────────────────
 
