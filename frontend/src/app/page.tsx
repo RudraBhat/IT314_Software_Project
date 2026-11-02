@@ -135,6 +135,7 @@ function CommandDashboard({
   onCloseDispatch: () => void;
   onOpenDispatch: (incident: IncidentRecord) => void;
 }) {
+  const { isAuthenticated, currentUser, logout, roleCategory } = useResQ();
   const active = incidents.filter((incident) => !["RESOLVED", "CLOSED"].includes(incident.lifecycleStatus)).length;
   const critical = incidents.filter((incident) => incident.severity === "CRITICAL").length;
   const cards = [
@@ -165,16 +166,41 @@ function CommandDashboard({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            href="/login"
-            className="flex items-center gap-1.5 rounded-lg bg-[#07569c] hover:bg-[#064782] px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition"
-          >
-            <span>🔐</span>
-            <span>Sign In / Staff Portal</span>
-          </Link>
+          {!isAuthenticated ? (
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 rounded-lg bg-[#07569c] hover:bg-[#064782] px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition"
+              title="Sign In to ResQ"
+            >
+              <span>🔐</span>
+              <span>Sign In</span>
+            </Link>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 border border-sky-200 text-xs shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-semibold text-slate-800">{currentUser.name}</span>
+                <span className="text-[10px] text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded font-medium">
+                  {currentUser.role.split("/")[0]}
+                </span>
+              </div>
+              <button
+                onClick={() => logout()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-red-300 bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 text-xs font-semibold shadow-xs transition cursor-pointer"
+                title="Sign out of your active session"
+              >
+                <span>🚪</span>
+                <span>Sign Out</span>
+              </button>
+            </div>
+          )}
           <div className="text-right hidden sm:block">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Regional command</p>
-            <p className="mt-0.5 text-sm font-semibold">National Operations Center</p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+              {roleCategory === "admin" ? "Regional command" : "Public Safety Network"}
+            </p>
+            <p className="mt-0.5 text-sm font-semibold">
+              {roleCategory === "admin" ? "National Operations Center" : "Gujarat Disaster Response"}
+            </p>
           </div>
         </div>
       </header>
@@ -1576,154 +1602,166 @@ function ResQGeoPortalInner() {
               <span>Sign In</span>
             </Link>
           ) : (
-            /* Unified Role Display & Switcher Dropdown */
-            <div className="relative">
+            <div className="flex items-center gap-1.5">
+              {/* Unified Role Display & Switcher Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    if (roleCategory === "user") {
+                      setCitizenViewPublicMap(false);
+                    } else {
+                      setShowRoleWorkspace(true);
+                    }
+                  }}
+                  className={`bg-slate-900/90 hover:bg-slate-900 border px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-sm transition ${roleCategory === "user"
+                    ? "border-sky-500/70 text-sky-200"
+                    : roleCategory === "admin"
+                      ? "border-blue-500/70 text-blue-200"
+                      : "border-amber-500/70 text-amber-200"
+                    }`}
+                  title="Open Operational Role Workspace"
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${roleCategory === "user"
+                      ? "bg-sky-400"
+                      : roleCategory === "admin"
+                        ? "bg-blue-400 animate-pulse"
+                        : "bg-amber-400 animate-pulse"
+                      }`}
+                  />
+                  <span className="font-semibold text-slate-800">
+                    {roleCategory === "user"
+                      ? "Citizen"
+                      : roleCategory === "admin"
+                      ? "Command HQ"
+                      : "Field Responder"}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-normal hidden md:inline">
+                    ({currentUser.name.split(" ")[0]}
+                    {currentUser.assignedUnitCallsign ? ` • ${currentUser.assignedUnitCallsign}` : ""})
+                  </span>
+                  <span className="text-[9px] text-slate-400 ml-0.5">▼</span>
+                </button>
+
+                {showRoleMenu && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-[1100] text-xs space-y-1 text-slate-700">
+                    <div className="px-2.5 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
+                      <span>Select Operational Role</span>
+                      <span className="text-[9px] text-sky-600 font-medium">Active: {roleCategory}</span>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        switchRole("Public / Citizen");
+                        setShowRoleMenu(false);
+                      }}
+                      className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                        roleCategory === "user"
+                          ? "bg-sky-50 text-[#07569c] font-semibold"
+                          : "hover:bg-slate-50 text-slate-700"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>👤</span> Citizen / Public
+                      </span>
+                      {roleCategory === "user" && <span className="text-[10px] text-sky-600 font-bold">✓ Active</span>}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        switchRole("Command Officer / Incident Commander");
+                        setShowRoleMenu(false);
+                      }}
+                      className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                        roleCategory === "admin"
+                          ? "bg-sky-50 text-[#07569c] font-semibold"
+                          : "hover:bg-slate-50 text-slate-700"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>🛡️</span> Incident Commander (Admin)
+                      </span>
+                      {roleCategory === "admin" && <span className="text-[10px] text-sky-600 font-bold">✓ Active</span>}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        switchRole("Medic / Ambulance Team");
+                        setShowRoleMenu(false);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-700 flex items-center justify-between transition cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>🚑</span> Paramedic Medic
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        switchRole("Firefighter / Fire Service Officer");
+                        setShowRoleMenu(false);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-700 flex items-center justify-between transition cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>🚒</span> Firefighter
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        switchRole("NDRF / SDRF Team Leader or Responder");
+                        setShowRoleMenu(false);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-700 flex items-center justify-between transition cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>🚤</span> NDRF Rescue
+                      </span>
+                    </button>
+
+                    <div className="pt-1.5 border-t border-slate-100 space-y-1">
+                      <Link
+                        href="/login"
+                        onClick={() => setShowRoleMenu(false)}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-sky-50 text-[#07569c] flex items-center gap-2 transition cursor-pointer font-medium"
+                      >
+                        <span>🔐</span> Staff &amp; Citizen Sign In (/login)
+                      </Link>
+
+                      <button
+                        onClick={() => {
+                          setShowRoleWorkspace(true);
+                          setShowRoleMenu(false);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-sky-50 text-[#07569c] flex items-center gap-2 transition cursor-pointer font-medium"
+                      >
+                        <span>📋</span> Open Role Workspace
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          logout();
+                          setShowRoleMenu(false);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-red-50 text-red-600 flex items-center gap-2 transition cursor-pointer font-semibold"
+                      >
+                        <span>🚪</span> Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Direct Quick Log Out Button */}
               <button
-                onClick={() => {
-                  if (roleCategory === "user") {
-                    setCitizenViewPublicMap(false);
-                  } else {
-                    setShowRoleWorkspace(true);
-                  }
-                }}
-                className={`bg-slate-900/90 hover:bg-slate-900 border px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-sm transition ${roleCategory === "user"
-                  ? "border-sky-500/70 text-sky-200"
-                  : roleCategory === "admin"
-                    ? "border-blue-500/70 text-blue-200"
-                    : "border-amber-500/70 text-amber-200"
-                  }`}
-                title="Open Operational Role Workspace"
+                onClick={() => logout()}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-red-300 bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 text-xs font-semibold shadow-xs transition cursor-pointer"
+                title="Sign out of your active session"
               >
-                <span
-                  className={`w-2 h-2 rounded-full ${roleCategory === "user"
-                    ? "bg-sky-400"
-                    : roleCategory === "admin"
-                      ? "bg-blue-400 animate-pulse"
-                      : "bg-amber-400 animate-pulse"
-                    }`}
-                />
-                <span className="font-semibold text-slate-800">
-                  {roleCategory === "user"
-                    ? "Citizen"
-                    : roleCategory === "admin"
-                    ? "Command HQ"
-                    : "Field Responder"}
-                </span>
-                <span className="text-[11px] text-slate-500 font-normal hidden md:inline">
-                  ({currentUser.name.split(" ")[0]}
-                  {currentUser.assignedUnitCallsign ? ` • ${currentUser.assignedUnitCallsign}` : ""})
-                </span>
-                <span className="text-[9px] text-slate-400 ml-0.5">▼</span>
+                <span>🚪</span>
+                <span>Sign Out</span>
               </button>
-
-              {showRoleMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-[1100] text-xs space-y-1 text-slate-700">
-                  <div className="px-2.5 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
-                    <span>Select Operational Role</span>
-                    <span className="text-[9px] text-sky-600 font-medium">Active: {roleCategory}</span>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      switchRole("Public / Citizen");
-                      setShowRoleMenu(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition cursor-pointer ${
-                      roleCategory === "user"
-                        ? "bg-sky-50 text-[#07569c] font-semibold"
-                        : "hover:bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span>👤</span> Citizen / Public
-                    </span>
-                    {roleCategory === "user" && <span className="text-[10px] text-sky-600 font-bold">✓ Active</span>}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      switchRole("Command Officer / Incident Commander");
-                      setShowRoleMenu(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition cursor-pointer ${
-                      roleCategory === "admin"
-                        ? "bg-sky-50 text-[#07569c] font-semibold"
-                        : "hover:bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span>🛡️</span> Incident Commander (Admin)
-                    </span>
-                    {roleCategory === "admin" && <span className="text-[10px] text-sky-600 font-bold">✓ Active</span>}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      switchRole("Medic / Ambulance Team");
-                      setShowRoleMenu(false);
-                    }}
-                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-700 flex items-center justify-between transition cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2">
-                      <span>🚑</span> Paramedic Medic
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      switchRole("Firefighter / Fire Service Officer");
-                      setShowRoleMenu(false);
-                    }}
-                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-700 flex items-center justify-between transition cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2">
-                      <span>🚒</span> Firefighter
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      switchRole("NDRF / SDRF Team Leader or Responder");
-                      setShowRoleMenu(false);
-                    }}
-                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-700 flex items-center justify-between transition cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2">
-                      <span>🚤</span> NDRF Rescue
-                    </span>
-                  </button>
-
-                  <div className="pt-1.5 border-t border-slate-100 space-y-1">
-                    <Link
-                      href="/login"
-                      onClick={() => setShowRoleMenu(false)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-sky-50 text-[#07569c] flex items-center gap-2 transition cursor-pointer font-medium"
-                    >
-                      <span>🔐</span> Staff &amp; Citizen Sign In (/login)
-                    </Link>
-
-                    <button
-                      onClick={() => {
-                        setShowRoleWorkspace(true);
-                        setShowRoleMenu(false);
-                      }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-sky-50 text-[#07569c] flex items-center gap-2 transition cursor-pointer font-medium"
-                    >
-                      <span>📋</span> Open Role Workspace
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        logout();
-                        setShowRoleMenu(false);
-                      }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-red-50 text-red-600 flex items-center gap-2 transition cursor-pointer font-semibold"
-                    >
-                      <span>🚪</span> Sign Out
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 

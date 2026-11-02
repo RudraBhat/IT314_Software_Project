@@ -63,6 +63,8 @@ class Settings:
     frontend_url: str
     invitation_token_hours: int
     password_reset_token_minutes: int
+    google_client_id: str | None
+    google_client_secret: str | None
 
     def require(self, name: str) -> str:
         value = getattr(self, name)
@@ -111,4 +113,6 @@ def get_settings() -> Settings:
         frontend_url=os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/"),
         invitation_token_hours=_int("INVITATION_TOKEN_HOURS", 48),
         password_reset_token_minutes=_int("PASSWORD_RESET_TOKEN_MINUTES", 15),
+        google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
+        google_client_secret=os.getenv("GOOGLE_CLIENT_SECRET") or None,
     )

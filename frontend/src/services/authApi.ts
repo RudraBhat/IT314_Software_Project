@@ -1,6 +1,13 @@
 import { UserProfile } from "../types/resq";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+export function getApiBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface AuthApiResponse {
   success: boolean;
@@ -219,6 +226,87 @@ export async function backendSignup(
       success: false,
       isOffline: true,
       error: "Backend gateway unreachable",
+    };
+  }
+}
+
+/**
+ * Sign in or Register using Google OAuth 2.0 (Google Identity Services credential).
+ */
+export async function backendGoogleLogin(
+  credential: string
+): Promise<AuthApiResponse & { mfa_required?: boolean; mfa_token?: string }> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let res: Response;
+    const baseUrl = getApiBaseUrl();
+    try {
+      res = await fetch(`${baseUrl}/api/v1/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        success: false,
+        error: data.error?.message || data.detail || "Google authentication failed.",
+      };
+    }
+
+    if (data.mfa_required) {
+      return {
+        success: false,
+        mfa_required: true,
+        mfa_token: data.mfa_token,
+        message: data.message || "Multi-factor authentication required for privileged account.",
+      };
+    }
+
+    const token = data.access_token || data.token;
+    if (token && typeof window !== "undefined") {
+      localStorage.setItem("resq_jwt_token", token);
+    }
+
+    const roleName =
+      data.user?.role === "NORMAL_USER"
+        ? "Public / Citizen"
+        : data.user?.role || "Public / Citizen";
+
+    const user: UserProfile = {
+      id: data.user?.id || `user_${Date.now()}`,
+      name: data.user?.name || "Citizen",
+      email: data.user?.email || "",
+      phone: data.user?.phone || "",
+      role: roleName as any,
+      agency: data.user?.role === "NORMAL_USER" ? "Public Resident / Citizen" : "Disaster Response Staff",
+    };
+
+    return {
+      success: true,
+      token,
+      user,
+      message: data.message,
+    };
+  } catch (err: any) {
+    console.error("Google Auth Request Error:", err);
+    const msg =
+      err?.name === "AbortError"
+        ? "Google authentication request timed out."
+        : err?.message
+        ? `Backend connection error: ${err.message}`
+        : "Backend authentication gateway unreachable.";
+    return {
+      success: false,
+      isOffline: true,
+      error: msg,
     };
   }
 }

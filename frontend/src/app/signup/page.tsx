@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ResQProvider, useResQ } from "../../context/ResQContext";
 import { backendSignup } from "../../services/authApi";
+import { GoogleSignInButton } from "../../components/GoogleSignInButton";
 
 /**
  * Public self-registration — Citizens / general public ONLY.
@@ -277,6 +278,9 @@ function SignupPageContent() {
               </button>
             </div>
           </form>
+
+          {/* Social Google Sign-In */}
+          <GoogleSignInButton mode="signup" onError={setErrorMsg} />
 
           {/* Footer nav */}
           <div className="pt-3 border-t border-slate-800 text-center text-xs text-slate-400 space-y-2">

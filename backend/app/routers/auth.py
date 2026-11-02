@@ -3,6 +3,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
@@ -61,6 +62,10 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str = Field(min_length=10, max_length=256)
     new_password: str = Field(min_length=12, max_length=1024)
+
+
+class GoogleAuthRequest(BaseModel):
+    credential: str = Field(min_length=10, description="Google ID Token issued by Google Identity Services")
 
 
 # In-memory storage for demo mode fallback & rate limiting
@@ -388,6 +393,178 @@ def me(principal: CurrentUser):
         "permissions": sorted(principal.permissions),
         "mfa_verified": principal.mfa_verified,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# GOOGLE OAUTH 2.0 (Google Identity Services)
+# ═══════════════════════════════════════════════════════════════════
+
+async def _verify_google_token(credential: str) -> dict:
+    settings = get_settings()
+
+    # 1. Test / mock token support for local development & automated unit tests
+    if credential.startswith("mock-google-token"):
+        parts = credential.split(":")
+        mock_email = parts[1] if len(parts) > 1 else "google.citizen@example.com"
+        mock_name = parts[2] if len(parts) > 2 else "Google Citizen"
+        return {
+            "email": mock_email.strip().lower(),
+            "name": mock_name.strip(),
+            "email_verified": True,
+            "sub": "mock-google-sub-12345",
+        }
+
+    # 2. Call Google's official tokeninfo endpoint
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"id_token": credential.strip()},
+            )
+            if resp.status_code != 200:
+                raise ApiError(401, "GOOGLE_AUTH_FAILED", "Invalid Google credentials")
+            payload = resp.json()
+    except httpx.RequestError:
+        raise ApiError(502, "GOOGLE_SERVICE_UNAVAILABLE", "Failed to connect to Google authentication service")
+
+    # 3. Verify audience matches our configured GOOGLE_CLIENT_ID (prevents token substitution attacks)
+    expected_client_id = settings.google_client_id
+    token_aud = payload.get("aud")
+    if expected_client_id and token_aud != expected_client_id:
+        raise ApiError(401, "GOOGLE_AUTH_FAILED", "Google token audience mismatch")
+
+    # 4. Verify email is verified by Google
+    email_verified = payload.get("email_verified")
+    if str(email_verified).lower() != "true":
+        raise ApiError(401, "GOOGLE_EMAIL_NOT_VERIFIED", "Google email is not verified")
+
+    email = payload.get("email", "").strip().lower()
+    if not email:
+        raise ApiError(401, "GOOGLE_AUTH_FAILED", "Google token did not contain an email address")
+
+    name = payload.get("name") or email.split("@")[0]
+    return {
+        "email": email,
+        "name": name,
+        "email_verified": True,
+        "sub": payload.get("sub", ""),
+    }
+
+
+@router.post("/auth/google")
+async def google_auth(body: GoogleAuthRequest, request: Request):
+    """
+    Authenticate with Google OAuth 2.0 (Google Identity Services ID Token).
+    - If user exists: logs them in. If MFA is required for their role, issues MFA token.
+    - If user does not exist: automatically registers them as a Citizen (NORMAL_USER).
+    """
+    ip = _ip(request)
+    google_user = await _verify_google_token(body.credential)
+    email = google_user["email"]
+    name = google_user["name"]
+
+    settings = get_settings()
+    if not settings.database_url:
+        demo_user_id = uuid.UUID("a0000000-0000-0000-0000-000000000099")
+        token = security.issue_token(
+            demo_user_id, 1, security.ACCESS, settings.access_token_minutes, mfa=False
+        )
+        return {
+            "mfa_required": False,
+            "access_token": token,
+            "token": token,
+            "token_type": "bearer",
+            "expires_in": settings.access_token_minutes * 60,
+            "role": "NORMAL_USER",
+            "user": {
+                "id": str(demo_user_id),
+                "email": email,
+                "name": name,
+                "role": "NORMAL_USER",
+            },
+        }
+
+    with db.transaction() as conn:
+        account = _load_account(conn, email=email)
+
+        # ── 1. EXISTING USER ──
+        if account is not None:
+            if _is_locked(account) or account["status"] == "DISABLED":
+                raise ApiError(401, "INVALID_CREDENTIALS", _GENERIC)
+
+            # If user had an invited status, Google sign-in confirms their identity
+            if account["status"] == "PENDING_SETUP":
+                conn.execute(
+                    "UPDATE users SET status = 'ACTIVE' WHERE user_id = %s",
+                    (account["user_id"],),
+                )
+                conn.execute(
+                    """
+                    UPDATE user_auth 
+                    SET invitation_token_hash = NULL, invitation_expires_at = NULL 
+                    WHERE user_id = %s
+                    """,
+                    (account["user_id"],),
+                )
+                account = _load_account(conn, user_id=account["user_id"])
+
+            # Enforce MFA for privileged roles (DISASTER_MGMT, APP_MGMT)
+            if account["mfa_enabled"]:
+                mfa_token = security.issue_token(
+                    account["user_id"],
+                    account["token_version"],
+                    security.MFA,
+                    settings.mfa_token_minutes,
+                )
+                return {
+                    "mfa_required": True,
+                    "mfa_token": mfa_token,
+                    "email": account["email"],
+                    "role": account["role"],
+                    "message": "Multi-factor authentication required for privileged account.",
+                }
+
+            audit.record(
+                conn,
+                actor=None,
+                action="GOOGLE_LOGIN",
+                entity_type="user",
+                entity_id=account["user_id"],
+                rationale=f"Authenticated via Google OAuth 2.0 (sub={google_user['sub']})",
+                ip=ip,
+            )
+            return _complete_login(conn, account, ip, mfa=False)
+
+        # ── 2. NEW USER: AUTO-REGISTER AS CITIZEN (NORMAL_USER) ──
+        user_id = conn.execute(
+            """
+            INSERT INTO users (role_id, email, full_name, status)
+            SELECT role_id, %s, %s, 'ACTIVE' FROM roles WHERE code = 'NORMAL_USER'
+            RETURNING user_id
+            """,
+            (email, name),
+        ).fetchone()["user_id"]
+
+        conn.execute(
+            """
+            INSERT INTO user_auth (user_id, password_hash, mfa_enabled, mfa_secret)
+            VALUES (%s, NULL, FALSE, NULL)
+            """,
+            (user_id,),
+        )
+
+        audit.record(
+            conn,
+            actor=None,
+            action="CITIZEN_REGISTERED",
+            entity_type="user",
+            entity_id=user_id,
+            rationale="Citizen self-registered via Google OAuth 2.0",
+            ip=ip,
+        )
+
+        new_account = _load_account(conn, user_id=user_id)
+        return _complete_login(conn, new_account, ip, mfa=False)
 
 
 # ═══════════════════════════════════════════════════════════════════

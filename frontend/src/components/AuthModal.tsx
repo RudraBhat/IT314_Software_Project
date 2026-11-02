@@ -6,6 +6,7 @@ import { PortalRoleCategory, UserProfile, UserRole } from "../types/resq";
 import { DEMO_USERS } from "../services/resqStorage";
 import { StaffSignIn } from "../app/login/staff-sign-in";
 import { backendLogin, backendSignup } from "../services/authApi";
+import { GoogleSignInButton } from "./GoogleSignInButton";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -593,6 +594,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </form>
           )}
+
+          {/* Social Google Sign-In */}
+          <GoogleSignInButton mode={mode} onSuccess={onClose} onError={setErrorMsg} />
 
           {/* Guest / Public Mode Fallback */}
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">

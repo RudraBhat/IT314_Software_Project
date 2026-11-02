@@ -8,13 +8,14 @@ import { PortalRoleCategory, UserProfile, UserRole } from "../../types/resq";
 import { DEMO_USERS } from "../../services/resqStorage";
 import { StaffSignIn } from "./staff-sign-in";
 import { backendLogin, checkBackendHealth } from "../../services/authApi";
+import { GoogleSignInButton } from "../../components/GoogleSignInButton";
 
 // Administrator (Command & Dispatch) signs in against the backend; other tabs keep the demo flow.
 const usesStaffSignIn = (category: PortalRoleCategory): boolean => category === "admin";
 
 function LoginPageContent() {
   const router = useRouter();
-  const { login, allUsers } = useResQ();
+  const { login, logout, allUsers, currentUser, isAuthenticated } = useResQ();
   // Protected workspace redirects arrive as /login?next=/dm...; open the staff tab for them.
   const next = useSearchParams().get("next") ?? undefined;
 
@@ -212,6 +213,66 @@ function LoginPageContent() {
 
       {/* Main Container */}
       <main className="flex-1 flex items-center justify-center p-4 py-8">
+        {isAuthenticated ? (
+          <div className="bg-[#0b1324] border border-slate-700/80 rounded-2xl shadow-2xl max-w-lg w-full p-6 md:p-8 space-y-6 text-center animate-fadeIn">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-3xl mx-auto shadow-inner">
+              ✅
+            </div>
+
+            <div className="space-y-1">
+              <h1 className="text-2xl font-extrabold text-white tracking-tight">
+                Signed In to ResQ
+              </h1>
+              <p className="text-xs text-slate-400">
+                You are currently authenticated in the Disaster Response Coordination Hub.
+              </p>
+            </div>
+
+            <div className="p-4 bg-slate-900/90 rounded-xl border border-slate-800 text-left space-y-2.5">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="text-xs text-slate-400">Account Name:</span>
+                <span className="text-xs font-bold text-white">{currentUser.name}</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="text-xs text-slate-400">Email:</span>
+                <span className="text-xs font-mono text-sky-400">{currentUser.email || "Google Account"}</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="text-xs text-slate-400">Operational Role:</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                  {currentUser.role}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Agency / Affiliation:</span>
+                <span className="text-xs text-slate-300">{currentUser.agency || "Citizen"}</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <Link
+                href={next && next.startsWith("/") && !next.startsWith("//") ? next : "/"}
+                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-sky-600/30 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Continue to Dashboard</span>
+                <span>→</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => {
+                  logout();
+                  setErrorMsg(null);
+                  setSuccessMsg("Signed out successfully.");
+                }}
+                className="w-full bg-slate-800 hover:bg-red-950/60 hover:border-red-600/60 border border-slate-700 text-slate-300 hover:text-red-200 font-semibold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>🚪</span>
+                <span>Log Out / Switch Account</span>
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="bg-[#0b1324] border border-slate-700/80 rounded-2xl shadow-2xl max-w-lg w-full p-6 md:p-8 space-y-6">
           <div className="text-center space-y-1">
             <h1 className="text-2xl font-extrabold text-white tracking-tight">
@@ -376,6 +437,9 @@ function LoginPageContent() {
           </form>
           )}
 
+          {/* Social Google Sign-In */}
+          <GoogleSignInButton next={next} onError={setErrorMsg} />
+
           {/* Footer Navigation */}
           <div className="pt-3 border-t border-slate-800 text-center text-xs text-slate-400 space-y-2">
             <div>
@@ -391,7 +455,8 @@ function LoginPageContent() {
             </div>
           </div>
         </div>
-      </main>
+      )}
+    </main>
 
       {/* Footer */}
       <footer className="py-3 text-center text-[11px] text-slate-500 border-t border-slate-800/60 bg-slate-950">
