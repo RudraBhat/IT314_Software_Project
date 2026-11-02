@@ -13,7 +13,8 @@ def _signal(sql, **fields):
               "location_text": "Ashram Road, Ahmedabad", "is_simulated": True}
     values.update(fields)
     cols = ", ".join(values)
-    return sql.execute(f"INSERT INTO source_signals ({cols}) VALUES ({', '.join(['%s'] * len(values))}) RETURNING *",
+    # Column names come from the fixed dict above, never from user input; values are bound parameters.
+    return sql.execute(f"INSERT INTO source_signals ({cols}) VALUES ({', '.join(['%s'] * len(values))}) RETURNING *",  # nosec B608
                        list(values.values())).fetchone()
 
 
