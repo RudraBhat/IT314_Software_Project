@@ -148,16 +148,7 @@ def require_citizen(request: Request, principal: CurrentUser) -> Principal:
     return principal
 
 
-def require_field(request: Request, principal: CurrentUser) -> Principal:
-    if principal.role != FIELD_ROLE:
-        raise _deny(principal, request, "ROLE_REQUIRED", "Field team role required")
-    if not principal.mfa_verified:
-        raise ApiError(401, "MFA_REQUIRED", "Multi-factor authentication is required")
-    return principal
-
-
 Citizen = Annotated[Principal, Depends(require_citizen)]
-FieldUser = Annotated[Principal, Depends(require_field)]
 
 
 def require_permission(permission: str):
@@ -209,6 +200,8 @@ def require_field(request: Request, principal: CurrentUser) -> FieldPrincipal:
     """Validate responder role and resolve team membership from database."""
     if principal.role != FIELD_ROLE:
         raise _deny(principal, request, "ROLE_REQUIRED", "Field Team role required", needed=FIELD_ROLE)
+    if not principal.mfa_verified:
+        raise ApiError(401, "MFA_REQUIRED", "Multi-factor authentication is required")
 
     from app.config import get_settings
 
