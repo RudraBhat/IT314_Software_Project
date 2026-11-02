@@ -260,6 +260,19 @@ def _nearest_district(latitude: float, longitude: float) -> str | None:
     return best_name
 
 
+def get_district_centroid(district: str | None) -> tuple[float, float] | None:
+    """Return (latitude, longitude) centroid for a given Gujarat district name."""
+    if not district:
+        return None
+    d_clean = district.strip().lower()
+    centroids = _GEO_CACHE.get("district_centroids") or _DISTRICT_CENTROIDS
+    for name, clat, clon in centroids:
+        name_clean = name.lower()
+        if name_clean == d_clean or d_clean in name_clean or name_clean in d_clean:
+            return (clat, clon)
+    return None
+
+
 def resolve_district_online(latitude: float, longitude: float) -> tuple[str | None, str | None]:
     """Dynamically resolve administrative district and state from Google Maps or OpenStreetMap.
     
