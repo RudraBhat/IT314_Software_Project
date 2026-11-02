@@ -373,6 +373,7 @@ def test_decide_team_request_approve_with_dispatch_draft(
         "resource_id": target_team_id,
         "name": "108 ALS Disaster Ambulance Alpha",
         "agency_id": uuid.uuid4(),
+        "capabilities": {"medical_first_aid": True},
     }
 
     mock_conn = MagicMock()
@@ -523,3 +524,152 @@ def test_decide_team_request_conflict_if_already_decided(
 def test_team_request_decision_requires_valid_action():
     with pytest.raises(ValidationError):
         TeamRequestDecisionRequest(action="INVALID_ACTION")
+
+
+def test_decide_team_request_approve_autosuggests_by_required_capability(
+    dispatcher_principal: Principal,
+):
+    """Auto-suggesting a backup team matches required_capability, not just incident scenario."""
+    request_id = uuid.uuid4()
+    # Scenario is flood, but field requested a specialized hazmat unit
+    mock_req_row = {
+        "request_id": request_id,
+        "dispatch_id": uuid.uuid4(),
+        "dispatch_ref": "DISP-2026-000999",
+        "incident_id": uuid.uuid4(),
+        "incident_ref": "INC-2026-000999",
+        "scenario": "URBAN_FLOODING",
+        "priority": "HIGH",
+        "latitude": 21.15,
+        "longitude": 72.75,
+        "district": "Surat",
+        "requested_by": uuid.uuid4(),
+        "required_capability": "hazmat",
+        "status": "OPEN",
+    }
+
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchone.return_value = mock_req_row
+
+    @contextmanager
+    def mock_tx():
+        yield mock_conn
+
+    with (
+        patch("app.db.transaction", mock_tx),
+        patch("app.audit.record"),
+        patch("app.routers.dm.recommendations.notify"),
+    ):
+        body = TeamRequestDecisionRequest(
+            action="APPROVE",
+            rationale="Approved hazmat reinforcement",
+        )
+        res = decide_team_request(
+            request_id=request_id,
+            body=body,
+            principal=dispatcher_principal,
+        )
+
+    assert res.status == "APPROVED"
+    assert res.dispatch_draft is not None
+    assert res.dispatch_draft["required_capability"] == "hazmat"
+    # Should suggest the Hazmat team from seed fallback teams, NOT a boat team
+    assert "Hazmat" in res.dispatch_draft["suggested_resource_name"] or "Chemical" in res.dispatch_draft["suggested_resource_name"]
+
+
+def test_decide_team_request_approve_mismatched_capability_raises_422(
+    dispatcher_principal: Principal,
+):
+    """Explicitly selecting a resource lacking the requested capability raises 422."""
+    request_id = uuid.uuid4()
+    target_team_id = uuid.uuid4()
+    mock_req_row = {
+        "request_id": request_id,
+        "dispatch_id": uuid.uuid4(),
+        "dispatch_ref": "DISP-2026-000555",
+        "incident_id": uuid.uuid4(),
+        "incident_ref": "INC-2026-000555",
+        "scenario": "URBAN_FLOODING",
+        "priority": "HIGH",
+        "latitude": 23.02,
+        "longitude": 72.57,
+        "requested_by": uuid.uuid4(),
+        "required_capability": "hazmat",
+        "status": "OPEN",
+    }
+
+    # Selected resource only has boat capabilities, lacking hazmat
+    mock_resource = {
+        "resource_id": target_team_id,
+        "name": "NDRF Boat Squad",
+        "agency_id": uuid.uuid4(),
+        "capabilities": {"boat": True, "water_rescue": True},
+    }
+
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchone.side_effect = [
+        mock_req_row,
+        mock_resource,
+    ]
+
+    @contextmanager
+    def mock_tx():
+        yield mock_conn
+
+    with patch("app.db.transaction", mock_tx):
+        body = TeamRequestDecisionRequest(
+            action="APPROVE",
+            target_resource_id=target_team_id,
+            rationale="Attempting to assign boat squad for hazmat leak",
+        )
+        with pytest.raises(ApiError) as exc_info:
+            decide_team_request(request_id=request_id, body=body, principal=dispatcher_principal)
+
+        assert exc_info.value.status == 422
+        assert exc_info.value.code == "CAPABILITY_MISMATCH"
+
+
+def test_decide_team_request_approve_nonexistent_resource_raises_404(
+    dispatcher_principal: Principal,
+):
+    """Explicitly selecting a non-existent resource raises 404 Not Found."""
+    request_id = uuid.uuid4()
+    missing_team_id = uuid.uuid4()
+    mock_req_row = {
+        "request_id": request_id,
+        "dispatch_id": uuid.uuid4(),
+        "dispatch_ref": "DISP-2026-000777",
+        "incident_id": uuid.uuid4(),
+        "incident_ref": "INC-2026-000777",
+        "scenario": "URBAN_FLOODING",
+        "priority": "HIGH",
+        "latitude": 23.02,
+        "longitude": 72.57,
+        "requested_by": uuid.uuid4(),
+        "required_capability": "boat",
+        "status": "OPEN",
+    }
+
+    mock_conn = MagicMock()
+    # 1. Fetch team_request row, 2. Fetch resource returns None
+    mock_conn.execute.return_value.fetchone.side_effect = [
+        mock_req_row,
+        None,
+    ]
+
+    @contextmanager
+    def mock_tx():
+        yield mock_conn
+
+    with patch("app.db.transaction", mock_tx):
+        body = TeamRequestDecisionRequest(
+            action="APPROVE",
+            target_resource_id=missing_team_id,
+            rationale="Assign non-existent resource",
+        )
+        with pytest.raises(ApiError) as exc_info:
+            decide_team_request(request_id=request_id, body=body, principal=dispatcher_principal)
+
+        assert exc_info.value.status == 404
+        assert exc_info.value.code == "NOT_FOUND"
+

@@ -23,7 +23,7 @@ from app.schemas.recommendations import (
     TeamRequestDecisionResponse,
     TeamRequestItem,
 )
-from app.services.recommendations import recommend_candidate_teams
+from app.services.recommendations import extract_capability_tags, recommend_candidate_teams
 
 logger = logging.getLogger("drch.dm.recommendations")
 
@@ -294,30 +294,59 @@ def decide_team_request(
         # Resolve target team resource for dispatch draft
         target_res: dict[str, Any] | None = None
         if body.target_resource_id:
-            target_res = conn.execute(
+            res_row = conn.execute(
                 """
-                SELECT resource_id, name, agency_id FROM resources
+                SELECT resource_id, name, agency_id, status,
+                       COALESCE(capability_tags, capability, '{}'::jsonb) AS capabilities
+                FROM resources
                 WHERE resource_id = %s
                 """,
                 (body.target_resource_id,),
             ).fetchone()
+            if res_row is None:
+                raise not_found("Resource")
 
-        if target_res is None and row["latitude"] is not None and row["longitude"] is not None:
-            # Query top candidate matching the requested capability
-            candidates = recommend_candidate_teams(
-                latitude=float(row["latitude"]),
-                longitude=float(row["longitude"]),
-                scenario=row["scenario"],
-                limit=1,
-                conn=conn,
-            )
-            if candidates:
-                top = candidates[0]
-                target_res = {
-                    "resource_id": top.resource_id,
-                    "name": top.team_name,
-                    "agency_id": top.agency_id,
-                }
+            res_dict = dict(res_row)
+            team_caps = {c.lower() for c in extract_capability_tags(res_dict.get("capabilities"))}
+            req_cap = str(row["required_capability"]).strip().lower()
+            if req_cap not in team_caps:
+                raise ApiError(
+                    422,
+                    "CAPABILITY_MISMATCH",
+                    f"Selected team '{res_dict['name']}' does not possess requested capability '{row['required_capability']}'",
+                )
+            target_res = res_dict
+        else:
+            lat = row["latitude"]
+            lon = row["longitude"]
+            if (lat is None or lon is None) and row.get("district"):
+                centroid = get_district_centroid(row["district"])
+                if centroid:
+                    lat, lon = centroid
+
+            if lat is not None and lon is not None:
+                # Query candidate teams matching the specifically requested capability
+                candidates = recommend_candidate_teams(
+                    latitude=float(lat),
+                    longitude=float(lon),
+                    scenario=row["scenario"],
+                    limit=5,
+                    conn=conn,
+                    required_capabilities=[row["required_capability"]],
+                )
+                if candidates:
+                    top = candidates[0]
+                    target_res = {
+                        "resource_id": top.resource_id,
+                        "name": top.team_name,
+                        "agency_id": top.agency_id,
+                    }
+
+        instructions_text = (
+            f"Reinforce {row['dispatch_ref']}: Deploy {row['required_capability']} unit as requested by frontline responders. {body.rationale or ''}".strip()
+        )
+        if target_res is None:
+            instructions_text += f" [Note: No available team matched capability '{row['required_capability']}'; manual allocation required.]"
 
         dispatch_draft: dict[str, Any] = {
             "incident_id": str(row["incident_id"]),
@@ -327,7 +356,7 @@ def decide_team_request(
             "suggested_resource_name": target_res["name"] if target_res else None,
             "receiving_agency_id": str(target_res["agency_id"]) if target_res else None,
             "priority": row.get("priority") or "HIGH",
-            "instructions": f"Reinforce {row['dispatch_ref']}: Deploy {row['required_capability']} unit as requested by frontline responders. {body.rationale or ''}".strip(),
+            "instructions": instructions_text,
         }
 
         if row["requested_by"]:

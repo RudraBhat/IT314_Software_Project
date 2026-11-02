@@ -412,11 +412,14 @@ def recommend_candidate_teams(
     scenario: str,
     limit: int = 5,
     conn: Any = None,
+    required_capabilities: list[str] | str | None = None,
 ) -> list[CandidateTeam]:
     """Score and rank candidate response teams using Phase 4 criteria.
 
     Formula: Score = (Capability Overlap Count * 10) - (Distance (km) * 0.05)
     Returns ranked CandidateTeam models with structured operational justification text.
+    When required_capabilities is provided, candidate teams are filtered and scored specifically
+    against the requested capabilities.
     """
     raw_teams: list[dict[str, Any]] = []
 
@@ -442,9 +445,15 @@ def recommend_candidate_teams(
                 "distance_km": round(dist, 1),
             })
 
-    norm_scenario = normalize_scenario(scenario)
-    required = get_required_capabilities(norm_scenario)
-    required_set = {cap.lower() for cap in required}
+    if required_capabilities is not None:
+        if isinstance(required_capabilities, str):
+            required_set = {required_capabilities.strip().lower()}
+        else:
+            required_set = {cap.strip().lower() for cap in required_capabilities if cap.strip()}
+    else:
+        norm_scenario = normalize_scenario(scenario)
+        required = get_required_capabilities(norm_scenario)
+        required_set = {cap.lower() for cap in required}
 
     scored_candidates: list[dict[str, Any]] = []
 
@@ -457,6 +466,11 @@ def recommend_candidate_teams(
         matched = [cap for cap in team_caps if cap in required_set]
         overlap_count = len(matched)
         dist_km = round(float(t.get("distance_km", 0.0)), 1)
+
+        # When specific capabilities are required (e.g. backup reinforcement),
+        # exclude candidate teams lacking the requested capability.
+        if required_capabilities is not None and overlap_count == 0:
+            continue
 
         # Multi-factor score: (Overlap * 10) - (Distance * 0.05)
         score = (overlap_count * 10.0) - (dist_km * 0.05)
