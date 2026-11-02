@@ -24,7 +24,10 @@ for base, pattern, suffixes in (
     (ROOT / "frontend" / "src", JS, {".ts", ".tsx"}),
     (ROOT / "frontend" / "next.config.ts", JS, {".ts"}),
 ):
-    files = [base] if base.is_file() else [p for p in base.rglob("*") if p.suffix in suffixes and "node_modules" not in p.parts]
+    files = [base] if base.is_file() else [
+        p for p in base.rglob("*")
+        if p.suffix in suffixes and not any(part in {"node_modules", "venv", ".venv"} for part in p.parts)
+    ]
     for path in files:
         if "/model/" in path.as_posix() or "/tests/" in path.as_posix():
             continue
