@@ -108,6 +108,8 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   const [publicIncidents, setPublicIncidents] = useState<CitizenApi.PublicIncident[]>([]);
   const [publicAlerts, setPublicAlerts] = useState<CitizenApi.PublicAlert[]>([]);
   const [shelters, setShelters] = useState<CitizenApi.ShelterData[]>([]);
+  const [notifications, setNotifications] = useState<CitizenApi.InAppNotification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Form state
@@ -145,13 +147,15 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
       CitizenApi.fetchPublicIncidents(),
       CitizenApi.fetchPublicAlerts(),
       CitizenApi.fetchShelters(),
-    ]).then(([reportsRes, incidentsRes, alertsRes, sheltersRes]) => {
+      CitizenApi.fetchMyNotifications(),
+    ]).then(([reportsRes, incidentsRes, alertsRes, sheltersRes, notifRes]) => {
       if (!isMounted) return;
       setBackendOnline(!reportsRes.error && !incidentsRes.error && !alertsRes.error);
       setMyReports(reportsRes.data ?? []);
       setPublicIncidents(incidentsRes.data ?? []);
       setPublicAlerts(alertsRes.data ?? []);
       setShelters(sheltersRes.data ?? []);
+      setNotifications(notifRes.data?.items ?? []);
       setIsLoading(false);
     });
 
@@ -159,6 +163,19 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
       isMounted = false;
     };
   }, [currentUser, refreshKey]);
+
+  const unreadCount = notifications.filter((n) => !n.read_at).length;
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await CitizenApi.markNotificationRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.notification_id === id ? { ...n, read_at: new Date().toISOString() } : n))
+      );
+    } catch {
+      // ignore
+    }
+  };
 
   // Geolocation for report form
   useEffect(() => {
@@ -441,6 +458,77 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
               ✕ Close
             </button>
           )}
+
+          {/* Notification Bell */}
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-1.5 rounded-full hover:bg-sky-800/60 text-sky-100 transition cursor-pointer"
+              title="Notifications"
+              aria-label="View notifications"
+            >
+              <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-xs">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notification Dropdown Drawer */}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl border border-slate-200 bg-white p-3 shadow-xl z-50 text-slate-900">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Notifications ({unreadCount} unread)
+                  </span>
+                  <button
+                    onClick={() => setShowNotifications(false)}
+                    className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {notifications.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400">No notifications yet.</p>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto space-y-2">
+                    {notifications.map((item) => {
+                      const isUnread = !item.read_at;
+                      return (
+                        <div
+                          key={item.notification_id}
+                          className={`p-2.5 rounded-lg border text-xs transition ${
+                            isUnread
+                              ? "bg-sky-50/60 border-sky-200"
+                              : "bg-slate-50 border-slate-100 opacity-80"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-1">
+                            <span className="font-semibold text-slate-900">{item.title}</span>
+                            {isUnread && (
+                              <button
+                                onClick={() => handleMarkAsRead(item.notification_id)}
+                                className="text-[10px] text-sky-600 hover:text-sky-800 font-medium shrink-0 cursor-pointer"
+                              >
+                                Mark read
+                              </button>
+                            )}
+                          </div>
+                          <p className="mt-1 text-slate-600 text-[11px]">{item.body}</p>
+                          <span className="mt-1 block text-[10px] text-slate-400">
+                            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Sign Out Button */}
           <button

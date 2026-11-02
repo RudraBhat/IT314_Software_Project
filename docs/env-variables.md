@@ -42,6 +42,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 |---|---|---|---|
 | `API_URL` | server runtime | falls back to `NEXT_PUBLIC_API_URL`, then `http://localhost:8000` | Backend base URL used by server code (BFF routes, server actions). |
 | `NEXT_PUBLIC_API_URL` | build time | `http://localhost:8000` | Baked into the bundle; only used by `next.config.ts` rewrites. |
+| `NEXT_PUBLIC_PAYMENT_SANDBOX` | no | `false` | When `true`, enables sandbox payment test flow on `/donate`; never set in production. |
 | `NEXT_PUBLIC_DEMO_MODE` | no | `false` | **Development only.** Enables local demo fallbacks; must be unset in staging/production. |
 
 ## AI triage service (`ai-workers/`)
