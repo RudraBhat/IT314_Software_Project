@@ -138,6 +138,9 @@
   }
 }
 ```
+
+### 2.3 Password Reset Policy
+Until an enterprise transactional email provider is connected, public password reset endpoints (`POST /api/v1/auth/password-reset`) are deferred. Password or MFA resets must be requested through an authorized administrator using `python -m app.cli reset-mfa` or administrative staff tooling. Session tokens are automatically revoked upon credential replacement by incrementing the user's `token_version`.
 *(Citizens do NOT have MFA enabled by default; token is issued immediately).*
 
 ### 2.3 Submit Incident Report
