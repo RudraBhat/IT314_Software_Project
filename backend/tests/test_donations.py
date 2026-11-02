@@ -6,7 +6,7 @@ picks up the secret on first call.
 
 import os
 
-os.environ.setdefault("PAYMENT_SIGNING_SECRET", "test-only-payment-signing-secret")
+os.environ.setdefault("MOCK_GATEWAY_SECRET", "test-only-payment-signing-secret")
 
 # Clear settings cache so our env var is picked up even if conftest seeded it first.
 from app.config import get_settings

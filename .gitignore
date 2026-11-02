@@ -8,18 +8,27 @@
 .env
 .env.*
 *.env
-!.env.example
+**/.env
+**/.env.*
+**/*.env
 .env.local
+**/.env.local
 .env.development.local
 .env.test.local
 .env.production.local
+env/
+**/env/
 *.pem
 *.key
 *.crt
 *.cert
 *.pfx
 *.p12
+*.pdf
+Sprint-Member-Wise.pdf
 docker-compose.override.yml
+!.env.example
+!frontend/.env.example
 
 # ------------------------------------------------------------------------------
 # 2. Frontend (Next.js / React / TypeScript / Node.js)
@@ -233,7 +242,12 @@ Icon
 documents/
 
 # ------------------------------------------------------------------------------
-# 9. AI Tool Config Files (Not for project repos)
+# 9. Personal / Local AI Assistant Settings & Runtime Outputs
 # ------------------------------------------------------------------------------
-CLAUDE.md
-AGENTS.md
+.claude/settings.local.json
+.agents/settings.local.json
+.ai/tasks/
+.ai/reports/
+.ai/handoffs/
+
+

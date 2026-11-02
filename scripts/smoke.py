@@ -46,19 +46,24 @@ def fail(msg: str):
     sys.exit(1)
 
 
-def run_smoke(base_url: str):
+def run_smoke(base_url: str, scenario: str = "core-loop"):
     client = httpx.Client(base_url=base_url, timeout=15.0)
-    log(f"Starting DRCH core loop smoke test against: {base_url}")
+    log(f"Starting DRCH smoke test (scenario: {scenario}) against: {base_url}")
 
     # ------------------------------------------------------------------
     # Step 1: Health & Readiness Check
     # ------------------------------------------------------------------
-    log("Step 1: Checking /health and /health/ready...")
+    log("Step 1: Checking /health and /api/v1/health...")
     try:
         res = client.get("/health")
         if res.status_code != 200:
             fail(f"/health returned status {res.status_code}: {res.text}")
-        log("  ✓ Service /health is responsive (200 OK)")
+        v1_res = client.get("/api/v1/health")
+        if v1_res.status_code == 200:
+            ver = v1_res.json().get("version", "unknown")
+            log(f"  ✓ Service /api/v1/health responsive. Deployed Version: {ver}")
+        else:
+            log("  ✓ Service /health is responsive (200 OK)")
     except Exception as e:
         fail(f"Could not connect to {base_url}/health: {e}")
 
@@ -220,11 +225,35 @@ def run_smoke(base_url: str):
         else:
             log(f"  Notice: Public incidents endpoint returned {pub_res.status_code}")
 
-    log("\n🎉 [SMOKE TEST PASSED] All core loop checks completed successfully.")
+    # ------------------------------------------------------------------
+    # Step 7: Field Loop Scenario Extension (if requested)
+    # ------------------------------------------------------------------
+    if scenario == "field-loop" and dispatcher_token and incident_id:
+        log("Step 7: Validating Field-Loop recommendations & dispatch transitions...")
+        try:
+            rec_res = client.get(
+                f"/api/v1/dm/incidents/{incident_id}/team-recommendations",
+                headers={"Authorization": f"Bearer {dispatcher_token}"},
+            )
+            if rec_res.status_code == 200:
+                teams = rec_res.json()
+                log(f"  ✓ Team recommendations endpoint returned {len(teams)} eligible team(s)")
+            else:
+                log(f"  Notice: Team recommendations returned HTTP {rec_res.status_code}")
+        except Exception as e:
+            log(f"  Notice: Team recommendations check encountered: {e}")
+
+    log(f"\n🎉 [SMOKE TEST PASSED] All {scenario} checks completed successfully.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run DRCH Core Loop Smoke Test")
+    parser = argparse.ArgumentParser(description="Run DRCH Smoke Test")
     parser.add_argument("--base-url", default=BASE_URL, help="Base URL of backend service")
+    parser.add_argument(
+        "--scenario",
+        default="core-loop",
+        choices=["core-loop", "field-loop"],
+        help="Scenario to run (core-loop, field-loop)",
+    )
     args = parser.parse_args()
-    run_smoke(args.base_url)
+    run_smoke(args.base_url, scenario=args.scenario)

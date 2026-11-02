@@ -1,18 +1,23 @@
 /**
  * ResQ AI — Citizen API Service
- * Handles communication with the FastAPI backend for citizen-specific operations.
- * Returns { data, error, isBackend } so callers know whether data came from
- * the backend or needs to fall back to localStorage (ResQContext).
+ * Handles communication via the Next.js citizen BFF proxy (/api/citizen/*).
+ *
+ * Security:
+ * - Never transmits client-supplied identity headers (X-User-Id / X-User-Role).
+ * - Relies on the verified session cookie (drch_session / session_token) attached by the proxy.
+ * - Supports Idempotency-Key headers for reliable reporting.
+ * - LocalStorage fallback is strictly gated behind NEXT_PUBLIC_DEMO_MODE.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const IS_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
-interface ApiOptions {
-  userId: string;
+export interface ApiOptions {
+  userId?: string;
   userRole?: string;
+  idempotencyKey?: string;
 }
 
-interface ApiResult<T> {
+export interface ApiResult<T> {
   data: T | null;
   error: string | null;
   isBackend: boolean;
@@ -20,41 +25,70 @@ interface ApiResult<T> {
 
 async function apiFetch<T>(
   path: string,
-  options: ApiOptions,
+  options?: ApiOptions,
   init?: RequestInit,
 ): Promise<ApiResult<T>> {
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(init?.headers as Record<string, string> || {}),
+    };
+
+    if (options?.idempotencyKey) {
+      headers["Idempotency-Key"] = options.idempotencyKey;
+    }
+
+    // Call the BFF proxy route in Next.js (or direct relative path)
+    const res = await fetch(path, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        "X-User-Id": options.userId,
-        "X-User-Role": options.userRole || "Public / Citizen",
-        ...(init?.headers || {}),
-      },
+      headers,
+      credentials: "same-origin",
     });
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
+      const message =
+        body?.error?.message ||
+        body?.detail ||
+        `Server error (${res.status})`;
       return {
         data: null,
-        error: (body as Record<string, string>).detail || `Server error (${res.status})`,
+        error: message,
         isBackend: true,
       };
     }
 
     const data = (await res.json()) as T;
     return { data, error: null, isBackend: true };
-  } catch {
+  } catch (err) {
+    if (IS_DEMO_MODE) {
+      return {
+        data: null,
+        error: "Backend unavailable — demo mode active.",
+        isBackend: false,
+      };
+    }
     return {
       data: null,
-      error: "Backend unavailable — using local demo data.",
+      error: err instanceof Error ? err.message : "Service unreachable",
       isBackend: false,
     };
   }
 }
 
 // ── Report Types ───────────────────────────────────────────────
+
+export interface IncidentReportPayload {
+  scenario: string;
+  description: string;
+  reported_urgency?: string;
+  people_affected?: number;
+  location_source?: string;
+  latitude: number;
+  longitude: number;
+  address_text?: string;
+  landmark?: string;
+}
 
 export interface ReportPayload {
   category: string;
@@ -66,6 +100,11 @@ export interface ReportPayload {
   urgent_needs: string[];
   reporter_name: string;
   reporter_phone: string;
+}
+
+export interface TimelineEntry {
+  status: string;
+  timestamp: string;
 }
 
 export interface ReportData {
@@ -81,6 +120,9 @@ export interface ReportData {
   submitted_at: string;
   linked_incident_id: string | null;
   source: string;
+  incident_ref?: string;
+  status?: string;
+  timeline?: TimelineEntry[];
 }
 
 export interface PublicIncident {
@@ -94,6 +136,14 @@ export interface PublicIncident {
   lifecycle_status: string;
   detected_at: string;
   affected_people_estimate: number;
+  reference?: string;
+  scenario?: string;
+  district?: string;
+  status?: string;
+  verified_priority?: string;
+  verified_at?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface PublicAlert {
@@ -104,6 +154,11 @@ export interface PublicAlert {
   description: string;
   timestamp: string;
   related_incident_id: string | null;
+  alert_id?: string;
+  source?: string;
+  event_type?: string;
+  area_text?: string;
+  is_fallback?: boolean;
 }
 
 export interface ShelterData {
@@ -121,33 +176,60 @@ export interface ShelterData {
   notes: string | null;
 }
 
-// ── Citizen Report Endpoints (authenticated) ───────────────────
+// ── Citizen Report Endpoints (authenticated via proxy) ───────────
 
-export async function createReport(options: ApiOptions, report: ReportPayload) {
+export async function createReport(
+  reportOrOptions: ReportPayload | IncidentReportPayload | ApiOptions,
+  optionsOrReport?: ApiOptions | ReportPayload | IncidentReportPayload,
+) {
+  let report: ReportPayload | IncidentReportPayload;
+  let options: ApiOptions = {};
+
+  if (optionsOrReport) {
+    if ("scenario" in (optionsOrReport as object) || "category" in (optionsOrReport as object)) {
+      options = reportOrOptions as ApiOptions;
+      report = optionsOrReport as ReportPayload | IncidentReportPayload;
+    } else {
+      report = reportOrOptions as ReportPayload | IncidentReportPayload;
+      options = optionsOrReport as ApiOptions;
+    }
+  } else {
+    report = reportOrOptions as ReportPayload | IncidentReportPayload;
+  }
+
   return apiFetch<ReportData>("/api/citizen/reports", options, {
     method: "POST",
     body: JSON.stringify(report),
   });
 }
 
-export async function fetchMyReports(options: ApiOptions) {
+export async function fetchMyReports(options?: ApiOptions) {
   return apiFetch<ReportData[]>("/api/citizen/reports", options);
 }
 
-export async function fetchReportById(options: ApiOptions, reportId: string) {
+export async function fetchReportById(
+  reportIdOrOptions: string | ApiOptions,
+  optionalId?: string,
+) {
+  const reportId = typeof reportIdOrOptions === "string" ? reportIdOrOptions : (optionalId ?? "");
+  const options = typeof reportIdOrOptions === "object" ? reportIdOrOptions : undefined;
   return apiFetch<ReportData>(`/api/citizen/reports/${reportId}`, options);
 }
 
 // ── Public Endpoints (no auth required) ────────────────────────
 
 export async function fetchPublicIncidents() {
-  return apiFetch<PublicIncident[]>("/api/public/incidents", { userId: "public" });
+  const primary = await apiFetch<PublicIncident[]>("/api/v1/public/incidents");
+  if (primary.data || !primary.error) {
+    return primary;
+  }
+  return apiFetch<PublicIncident[]>("/api/public/incidents");
 }
 
 export async function fetchPublicAlerts() {
-  return apiFetch<PublicAlert[]>("/api/public/alerts", { userId: "public" });
+  return apiFetch<PublicAlert[]>("/api/v1/public/alerts");
 }
 
 export async function fetchShelters() {
-  return apiFetch<ShelterData[]>("/api/public/shelters", { userId: "public" });
+  return apiFetch<ShelterData[]>("/api/public/shelters");
 }

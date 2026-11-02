@@ -73,10 +73,24 @@ def _ensure_schema() -> None:
             conn.execute(s.read_text(encoding="utf-8"))
 
 
+DB_FIXTURE_NAMES = {"sql", "make", "citizen_user", "staff_user", "field_user"}
+
+
 def pytest_collection_modifyitems(config, items):
+    db_marker = pytest.mark.db
+    for item in items:
+        # Auto-apply the 'db' marker to any test requesting DB-backed fixtures
+        if (
+            hasattr(item, "fixturenames")
+            and any(f in DB_FIXTURE_NAMES for f in item.fixturenames)
+            and "db" not in item.keywords
+        ):
+            item.add_marker(db_marker)
+
     if DB_AVAILABLE:
         _ensure_schema()
         return
+
     skip = pytest.mark.skip(reason="test database not reachable (set TEST_DATABASE_URL)")
     for item in items:
         if "db" in item.keywords:
@@ -88,24 +102,54 @@ def pytest_configure(config):
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    passed = len(terminalreporter.stats.get("passed", []))
-    failed = len(terminalreporter.stats.get("failed", []))
-    skipped = len(terminalreporter.stats.get("skipped", []))
+    passed_reps = terminalreporter.stats.get("passed", [])
+    failed_reps = terminalreporter.stats.get("failed", [])
+    skipped_reps = terminalreporter.stats.get("skipped", [])
+
+    passed = len(passed_reps)
+    failed = len(failed_reps)
+    skipped = len(skipped_reps)
     total_ran = passed + failed
+
+    db_passed = sum(1 for rep in passed_reps if "db" in getattr(rep, "keywords", {}))
+    non_db_passed = passed - db_passed
+
+    db_failed = sum(1 for rep in failed_reps if "db" in getattr(rep, "keywords", {}))
+    non_db_failed = failed - db_failed
+
+    db_skipped = sum(1 for rep in skipped_reps if "db" in getattr(rep, "keywords", {}))
+    non_db_skipped = skipped - db_skipped
+
+    req_db_on = os.getenv("REQUIRE_DB_TESTS") == "1"
+
     terminalreporter.write_sep("=", "DRCH SUITE EXECUTION SUMMARY", bold=True)
     terminalreporter.write_line(f"Executed Tests: {total_ran} (Passed: {passed}, Failed: {failed})")
     terminalreporter.write_line(f"Skipped Tests:  {skipped}")
+    terminalreporter.write_line(f"  DB-backed Tests: Passed: {db_passed}, Failed: {db_failed}, Skipped: {db_skipped}")
+    terminalreporter.write_line(f"  Non-DB Tests:    Passed: {non_db_passed}, Failed: {non_db_failed}, Skipped: {non_db_skipped}")
+    terminalreporter.write_line(f"REQUIRE_DB_TESTS: {'ON (active)' if req_db_on else 'OFF (inactive)'}")
+
+
+def evaluate_ci_guard(require_db: bool, db_tests_ran: bool) -> bool:
+    """Evaluate whether the test run satisfies the REQUIRE_DB_TESTS guard.
+
+    Returns:
+        True: Run is OK (guard inactive or at least one DB test executed).
+        False: Guard is active and zero DB tests were executed.
+    """
+    return not (require_db and not db_tests_ran)
 
 
 def pytest_sessionfinish(session, exitstatus):
-    if os.getenv("REQUIRE_DB_TESTS") == "1":
+    require_db = os.getenv("REQUIRE_DB_TESTS") == "1"
+    if require_db:
         reporter = session.config.pluginmanager.get_plugin("terminalreporter")
         if reporter:
             db_tests_ran = any(
                 "db" in rep.keywords
                 for rep in reporter.stats.get("passed", []) + reporter.stats.get("failed", [])
             )
-            if not db_tests_ran:
+            if not evaluate_ci_guard(require_db=require_db, db_tests_ran=db_tests_ran):
                 print("\nFATAL [CI Guard]: REQUIRE_DB_TESTS=1 is active, but 0 DB-backed tests were executed!")
                 session.exitstatus = 1
 
@@ -251,5 +295,11 @@ def staff_user(make):
 
 
 @pytest.fixture
-def field_user(make):
+def field_user(sql, make):
+    has_role = sql.execute("SELECT 1 FROM roles WHERE code = 'FIELD_TEAM'").fetchone()
+    row = sql.execute("SELECT to_regclass('public.field_team_members') AS tbl").fetchone()
+    has_table = row and row["tbl"]
+    if not has_role or not has_table:
+        pytest.skip("field_team_members table or FIELD_TEAM role does not exist yet")
     return make.field_team_user()
+

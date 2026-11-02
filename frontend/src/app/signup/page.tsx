@@ -55,9 +55,8 @@ function SignupPageContent() {
 
     setIsSubmitting(true);
 
-    // 1. Sync to FastAPI backend gateway if reachable
     try {
-      await backendSignup({
+      const res = await backendSignup({
         name: fullName.trim(),
         email: email.trim().toLowerCase(),
         phone: phone.trim(),
@@ -65,24 +64,38 @@ function SignupPageContent() {
         agency: "Public Resident / Citizen",
         password: password,
       });
+
+      if (!res.success && !res.isOffline) {
+        setErrorMsg(res.error || "Registration failed. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (res.isOffline) {
+        if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+          signup({
+            name: fullName.trim(),
+            email: email.trim().toLowerCase(),
+            phone: phone.trim(),
+            role: "Public / Citizen",
+            agency: "Public Resident / Citizen",
+            password: password,
+          });
+        } else {
+          setErrorMsg("Registration service is temporarily unreachable. Please try again shortly.");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      setSuccessMsg(`Welcome, ${fullName.trim()}! Your citizen account has been created. Redirecting to login...`);
+      setTimeout(() => {
+        router.push("/login");
+      }, 1200);
     } catch {
-      // Offline fallback continues seamlessly
+      setErrorMsg("An unexpected error occurred during registration. Please try again.");
+      setIsSubmitting(false);
     }
-
-    // Role is always enforced as "Public / Citizen" — never accepted from form input.
-    const newUser = signup({
-      name: fullName.trim(),
-      email: email.trim().toLowerCase(),
-      phone: phone.trim(),
-      role: "Public / Citizen",  // HARDCODED — not from user input
-      agency: "Public Resident / Citizen",
-      password: password,
-    });
-
-    setSuccessMsg(`Welcome, ${newUser.name}! Your citizen account has been created.`);
-    setTimeout(() => {
-      router.push("/");
-    }, 800);
   };
 
   const inputClass =

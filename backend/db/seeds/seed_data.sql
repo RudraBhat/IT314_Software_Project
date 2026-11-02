@@ -98,62 +98,159 @@ INSERT INTO safety_content (scenario, title, body, status, version, published_at
   'PUBLISHED', 1, now(), 'SEOC Emergency Directive')
 ON CONFLICT (scenario, title, version) DO NOTHING;
 
--- ---------------------------------------------------------------------
+-- =====================================================================
 -- 6. FIELD RESPONSE TEAMS (TEAM Resources with PostGIS Locations)
--- ---------------------------------------------------------------------
+--    Owned by: Nisarg (S1-11, Sprint 1)
+--    14 teams across 9 Gujarat districts.
+--    Standard capability keys agreed with Siddh (Day 1 handoff):
+--      boat, water_rescue, flood_rescue, fire, water_tender, hazmat,
+--      chemical_foam, gas_leak, medical, ambulance, search_and_rescue,
+--      cyclone_response, heavy_extrication, canine_unit, diver_squad,
+--      high_rise_rescue, industrial_fire, triage_support, critical_care,
+--      smoke_extraction, inflatable_boats, heavy_machinery
+-- =====================================================================
+
+-- ── NDRF 6th Battalion (Vadodara) ───────────────────────────────────
+-- Team 1: NDRF 601 Urban Search & Rescue — Vadodara
 INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
-SELECT a.agency_id, 'TEAM'::resource_type, 'NDRF 601 Urban Search & Rescue (Vadodara)', 'AVAILABLE'::resource_status, 1, 1,
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'NDRF 601 Urban Search & Rescue (Vadodara)',
+       'AVAILABLE'::resource_status, 1, 1,
        ST_SetSRID(ST_MakePoint(73.1812, 22.3072), 4326)::geography,
-       '{"search_and_rescue": true, "boat": true, "heavy_extrication": true}'::jsonb
+       '{"search_and_rescue": true, "heavy_extrication": true, "boat": true, "canine_unit": true}'::jsonb
 FROM agencies a WHERE a.name = 'NDRF 6th Battalion (Vadodara)'
 ON CONFLICT DO NOTHING;
 
+-- Team 2: NDRF 602 Flood & Water Rescue — Ahmedabad (Sabarmati riverfront)
 INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
-SELECT a.agency_id, 'TEAM'::resource_type, 'NDRF 602 Flood Rescue Unit (Ahmedabad Sabarmati)', 'AVAILABLE'::resource_status, 1, 1,
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'NDRF 602 Flood & Water Rescue Unit (Ahmedabad Sabarmati)',
+       'AVAILABLE'::resource_status, 1, 1,
        ST_SetSRID(ST_MakePoint(72.5714, 23.0225), 4326)::geography,
-       '{"boat": true, "flood_rescue": true, "water_rescue": true, "inflatable_boats": true}'::jsonb
+       '{"boat": true, "water_rescue": true, "flood_rescue": true, "inflatable_boats": true, "diver_squad": true}'::jsonb
 FROM agencies a WHERE a.name = 'NDRF 6th Battalion (Vadodara)'
 ON CONFLICT DO NOTHING;
 
+-- Team 3: NDRF 603 Cyclone Coastal Rescue — Jamnagar (Saurashtra coast)
 INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
-SELECT a.agency_id, 'TEAM'::resource_type, 'AFES Fire Tender Unit 1 (Ahmedabad Navrangpura)', 'AVAILABLE'::resource_status, 1, 1,
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'NDRF 603 Cyclone Coastal Rescue Unit (Jamnagar)',
+       'AVAILABLE'::resource_status, 1, 1,
+       ST_SetSRID(ST_MakePoint(70.0577, 22.4707), 4326)::geography,
+       '{"cyclone_response": true, "search_and_rescue": true, "boat": true, "water_rescue": true}'::jsonb
+FROM agencies a WHERE a.name = 'NDRF 6th Battalion (Vadodara)'
+ON CONFLICT DO NOTHING;
+
+-- ── Gujarat Fire and Emergency Services ─────────────────────────────
+-- Team 4: AFES Fire Tender Unit 1 — Ahmedabad (Navrangpura station)
+INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'AFES Fire Tender Unit 1 (Ahmedabad Navrangpura)',
+       'AVAILABLE'::resource_status, 1, 1,
        ST_SetSRID(ST_MakePoint(72.5613, 23.0373), 4326)::geography,
        '{"fire": true, "water_tender": true, "high_rise_rescue": true, "smoke_extraction": true}'::jsonb
 FROM agencies a WHERE a.name = 'Gujarat Fire and Emergency Services (Ahmedabad HQ)'
 ON CONFLICT DO NOTHING;
 
+-- Team 5: AFES Fire Tender Unit 2 — Ahmedabad (Maninagar station)
 INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
-SELECT a.agency_id, 'TEAM'::resource_type, 'Surat Hazira Chemical Hazard Team', 'AVAILABLE'::resource_status, 1, 1,
-       ST_SetSRID(ST_MakePoint(72.8311, 21.1702), 4326)::geography,
-       '{"industrial_fire": true, "chemical_foam": true, "hazmat": true, "gas_leak": true}'::jsonb
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'AFES Fire Tender Unit 2 (Ahmedabad Maninagar)',
+       'AVAILABLE'::resource_status, 1, 1,
+       ST_SetSRID(ST_MakePoint(72.6042, 22.9784), 4326)::geography,
+       '{"fire": true, "water_tender": true, "heavy_extrication": true, "smoke_extraction": true}'::jsonb
 FROM agencies a WHERE a.name = 'Gujarat Fire and Emergency Services (Ahmedabad HQ)'
 ON CONFLICT DO NOTHING;
 
+-- Team 6: Hazira Hazmat Chemical Team — Surat (Hazira Industrial Zone)
 INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
-SELECT a.agency_id, 'TEAM'::resource_type, '108 ALS Disaster Ambulance Alpha (Ahmedabad Civil)', 'AVAILABLE'::resource_status, 1, 1,
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'Surat Hazira Chemical Hazard & Industrial Fire Team',
+       'AVAILABLE'::resource_status, 1, 1,
+       ST_SetSRID(ST_MakePoint(72.6841, 21.1025), 4326)::geography,
+       '{"hazmat": true, "chemical_foam": true, "gas_leak": true, "industrial_fire": true, "fire": true}'::jsonb
+FROM agencies a WHERE a.name = 'Gujarat Fire and Emergency Services (Ahmedabad HQ)'
+ON CONFLICT DO NOTHING;
+
+-- Team 7: Rajkot Fire Quick Reaction — Rajkot (city centre station)
+INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'Rajkot Fire & Rescue Quick Reaction Unit',
+       'AVAILABLE'::resource_status, 1, 1,
+       ST_SetSRID(ST_MakePoint(70.8022, 22.3039), 4326)::geography,
+       '{"fire": true, "water_tender": true, "high_rise_rescue": true}'::jsonb
+FROM agencies a WHERE a.name = 'Gujarat Fire and Emergency Services (Ahmedabad HQ)'
+ON CONFLICT DO NOTHING;
+
+-- ── EMRI Green Health Services Gujarat (108 Ambulance) ──────────────
+-- Team 8: 108 ALS Ambulance Alpha — Ahmedabad (Civil Hospital campus)
+INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
+SELECT a.agency_id, 'TEAM'::resource_type,
+       '108 ALS Disaster Ambulance Alpha (Ahmedabad Civil)',
+       'AVAILABLE'::resource_status, 1, 1,
        ST_SetSRID(ST_MakePoint(72.6042, 23.0525), 4326)::geography,
        '{"medical": true, "ambulance": true, "critical_care": true, "triage_support": true}'::jsonb
 FROM agencies a WHERE a.name = 'EMRI Green Health Services Gujarat (108 Ambulance)'
 ON CONFLICT DO NOTHING;
 
+-- Team 9: 108 ALS Ambulance Beta — Surat (New Civil Hospital)
 INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
-SELECT a.agency_id, 'TEAM'::resource_type, '108 Disaster Response Ambulance Beta (Surat)', 'AVAILABLE'::resource_status, 1, 1,
-       ST_SetSRID(ST_MakePoint(72.8500, 21.2000), 4326)::geography,
-       '{"medical": true, "ambulance": true, "emergency_stabilization": true}'::jsonb
+SELECT a.agency_id, 'TEAM'::resource_type,
+       '108 ALS Disaster Ambulance Beta (Surat New Civil)',
+       'AVAILABLE'::resource_status, 1, 1,
+       ST_SetSRID(ST_MakePoint(72.8311, 21.1702), 4326)::geography,
+       '{"medical": true, "ambulance": true, "emergency_stabilization": true, "triage_support": true}'::jsonb
 FROM agencies a WHERE a.name = 'EMRI Green Health Services Gujarat (108 Ambulance)'
 ON CONFLICT DO NOTHING;
 
+-- Team 10: 108 Mobile Triage Unit Gamma — Vadodara (SSG Hospital)
 INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
-SELECT a.agency_id, 'TEAM'::resource_type, 'SDRF Flood Quick Response Team (Rajkot Aji River)', 'AVAILABLE'::resource_status, 1, 1,
+SELECT a.agency_id, 'TEAM'::resource_type,
+       '108 Mobile Triage Unit Gamma (Vadodara SSG)',
+       'AVAILABLE'::resource_status, 1, 1,
+       ST_SetSRID(ST_MakePoint(73.1812, 22.3072), 4326)::geography,
+       '{"medical": true, "ambulance": true, "triage_support": true, "critical_care": true}'::jsonb
+FROM agencies a WHERE a.name = 'EMRI Green Health Services Gujarat (108 Ambulance)'
+ON CONFLICT DO NOTHING;
+
+-- ── SDRF Gujarat Command ─────────────────────────────────────────────
+-- Team 11: SDRF Flood QRT — Rajkot (Aji River zone)
+INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'SDRF Flood Quick Response Team (Rajkot Aji River)',
+       'AVAILABLE'::resource_status, 1, 1,
        ST_SetSRID(ST_MakePoint(70.8022, 22.3039), 4326)::geography,
-       '{"boat": true, "flood_rescue": true, "diver_squad": true, "water_rescue": true}'::jsonb
+       '{"boat": true, "flood_rescue": true, "water_rescue": true, "diver_squad": true, "inflatable_boats": true}'::jsonb
 FROM agencies a WHERE a.name = 'SDRF Gujarat Command (State Disaster Response Force)'
 ON CONFLICT DO NOTHING;
 
+-- Team 12: SDRF Cyclone & Hazmat Response — Bhuj, Kutch
 INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
-SELECT a.agency_id, 'TEAM'::resource_type, 'SDRF Hazardous Materials & Cyclone Response Unit (Bhuj, Kutch)', 'AVAILABLE'::resource_status, 1, 1,
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'SDRF Cyclone & Hazmat Response Unit (Bhuj, Kutch)',
+       'AVAILABLE'::resource_status, 1, 1,
        ST_SetSRID(ST_MakePoint(69.6669, 23.2420), 4326)::geography,
-       '{"search_and_rescue": true, "cyclone_response": true, "canine_unit": true, "heavy_machinery": true}'::jsonb
+       '{"cyclone_response": true, "search_and_rescue": true, "heavy_extrication": true, "canine_unit": true, "heavy_machinery": true}'::jsonb
+FROM agencies a WHERE a.name = 'SDRF Gujarat Command (State Disaster Response Force)'
+ON CONFLICT DO NOTHING;
+
+-- Team 13: SDRF River Rescue & Dive Squad — Gandhinagar (Sabarmati upstream)
+INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'SDRF River Rescue & Dive Squad (Gandhinagar)',
+       'AVAILABLE'::resource_status, 1, 1,
+       ST_SetSRID(ST_MakePoint(72.6369, 23.2156), 4326)::geography,
+       '{"boat": true, "water_rescue": true, "flood_rescue": true, "diver_squad": true}'::jsonb
+FROM agencies a WHERE a.name = 'SDRF Gujarat Command (State Disaster Response Force)'
+ON CONFLICT DO NOTHING;
+
+-- Team 14: SDRF Urban SAR & Medical Support — Surat (Diamond Nagar)
+INSERT INTO resources (agency_id, type, name, status, quantity_total, quantity_available, current_geom, capability_tags)
+SELECT a.agency_id, 'TEAM'::resource_type,
+       'SDRF Urban SAR & Medical Support (Surat)',
+       'AVAILABLE'::resource_status, 1, 1,
+       ST_SetSRID(ST_MakePoint(72.8500, 21.2000), 4326)::geography,
+       '{"search_and_rescue": true, "heavy_extrication": true, "medical": true, "triage_support": true}'::jsonb
 FROM agencies a WHERE a.name = 'SDRF Gujarat Command (State Disaster Response Force)'
 ON CONFLICT DO NOTHING;
 

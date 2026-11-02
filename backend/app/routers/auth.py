@@ -130,6 +130,7 @@ class SignupRequest(BaseModel):
 
 
 @router.post("/auth/signup", status_code=201)
+@router.post("/auth/register", status_code=201)
 def signup(body: SignupRequest, request: Request):
     ip = _ip(request)
     email = body.email.strip().lower()

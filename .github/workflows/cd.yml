@@ -44,6 +44,7 @@ jobs:
               - 'backend/**'
               - 'docker-compose*.yml'
               - 'render.yaml'
+              - 'scripts/**'
               - '.github/workflows/cd.yml'
             ai-workers:
               - 'ai-workers/**'
@@ -137,6 +138,8 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=backend
@@ -214,7 +217,7 @@ jobs:
         run: |
           if [ -n "$VERCEL_HOOK" ]; then
             echo "🚀 Triggering Vercel frontend deployment..."
-            response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$VERCEL_HOOK")
+            response=$(curl -s -L -o /dev/null -w "%{http_code}" -X POST "$VERCEL_HOOK")
             if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
               echo "✅ Successfully dispatched Vercel build (HTTP $response)."
             else
@@ -231,7 +234,7 @@ jobs:
         run: |
           if [ -n "$RENDER_HOOK" ]; then
             echo "🚀 Triggering Render backend deployment..."
-            response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$RENDER_HOOK")
+            response=$(curl -s -L -o /dev/null -w "%{http_code}" -X POST "$RENDER_HOOK")
             if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
               echo "✅ Successfully dispatched Render deployment (HTTP $response)."
             else
@@ -247,10 +250,15 @@ jobs:
           PROD_BACKEND_URL: ${{ secrets.PROD_BACKEND_URL }}
         run: |
           if [ -n "$PROD_BACKEND_URL" ]; then
-            echo "Waiting for production backend to complete deployment rollout..."
+            PROD_BACKEND_URL="${PROD_BACKEND_URL%/}"
+            PROD_BACKEND_URL="${PROD_BACKEND_URL%/api/v1}"
+            echo "Waiting for production backend to complete deployment rollout at $PROD_BACKEND_URL..."
             sleep 10
             for i in $(seq 1 30); do
-              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_BACKEND_URL/health" || echo "000")
+              HTTP_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 15 "$PROD_BACKEND_URL/health" || echo "000")
+              if [ "$HTTP_STATUS" != "200" ]; then
+                HTTP_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 15 "$PROD_BACKEND_URL/api/v1/health" || echo "000")
+              fi
               if [ "$HTTP_STATUS" = "200" ]; then
                 echo "✅ Production backend healthcheck passed (HTTP 200)."
                 exit 0
@@ -258,7 +266,84 @@ jobs:
               echo "Polling $PROD_BACKEND_URL/health - attempt $i/30 (got HTTP $HTTP_STATUS), retrying in 5s..."
               sleep 5
             done
-            echo "⚠️ Health check timed out or failed on $PROD_BACKEND_URL/health"
+            echo "⚠️ Health check timed out or failed on $PROD_BACKEND_URL"
           else
             echo "ℹ️ PROD_BACKEND_URL secret not set. Skipping live health verification."
           fi
+
+  # ============================================================================
+  # 5. Live Staging Smoke Gate (Live-SHA Verified)
+  # ============================================================================
+  smoke:
+    name: Staging Smoke / Live SHA Verification
+    needs: [detect-changes, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      (needs.detect-changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Smoke Test Dependencies
+        run: |
+          pip install httpx pyotp
+
+      - name: Wait until this commit is live
+        id: wait_live
+        env:
+          STAGING_URL: ${{ secrets.STAGING_BACKEND_URL }}
+        run: |
+          if [ -z "$STAGING_URL" ]; then
+            echo "::notice::STAGING_BACKEND_URL secret not set in GitHub Secrets. Skipping staging live version verification."
+            echo "is_live=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Normalize URL (strip trailing slashes and /api/v1 if included)
+          API_URL="${STAGING_URL%/}"
+          API_URL="${API_URL%/api/v1}"
+          echo "target_url=$API_URL" >> "$GITHUB_OUTPUT"
+
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          echo "Waiting for live commit $COMMIT_SHA ($SHORT_SHA) on $API_URL..."
+
+          for i in $(seq 1 36); do
+            HTTP_CODE=$(curl -s -L -o out.json -w "%{http_code}" --max-time 15 "$API_URL/api/v1/health" || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              v=$(jq -r .version out.json 2>/dev/null || echo "unknown")
+              echo "Polling attempt $i/36: HTTP 200, version '$v'"
+              if [ "$v" = "$COMMIT_SHA" ] || [ "$v" = "$SHORT_SHA" ]; then
+                echo "✅ Deployed build is live on staging!"
+                echo "is_live=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            else
+              echo "Polling attempt $i/36: got HTTP $HTTP_CODE"
+            fi
+            sleep 10
+          done
+
+          echo "::warning::New build $COMMIT_SHA not live on $API_URL after 6 minutes."
+          echo "is_live=false" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run Staging Smoke Test
+        if: ${{ steps.wait_live.outputs.is_live == 'true' }}
+        env:
+          API_URL: ${{ steps.wait_live.outputs.target_url }}
+          SMOKE_STAFF_EMAIL: ${{ secrets.SMOKE_STAFF_EMAIL }}
+          SMOKE_STAFF_PASSWORD: ${{ secrets.SMOKE_STAFF_PASSWORD }}
+          SMOKE_STAFF_TOTP_SECRET: ${{ secrets.SMOKE_STAFF_TOTP_SECRET }}
+        run: |
+          python scripts/smoke.py --base-url "$API_URL" --scenario field-loop

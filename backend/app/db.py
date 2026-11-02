@@ -23,7 +23,7 @@ def get_pool() -> ConnectionPool:
         conn_str = get_settings().require("database_url")
         if "connect_timeout" not in conn_str:
             sep = "&" if "?" in conn_str else "?"
-            conn_str = f"{conn_str}{sep}connect_timeout=2"
+            conn_str = f"{conn_str}{sep}connect_timeout=10"
         _pool = ConnectionPool(
             conn_str,
             min_size=1,
@@ -44,5 +44,5 @@ def close_pool() -> None:
 @contextmanager
 def transaction() -> Iterator[Connection]:
     """One connection, one transaction: commits on success, rolls back on any exception."""
-    with get_pool().connection(timeout=2.0) as conn, conn.transaction():
+    with get_pool().connection(timeout=10.0) as conn, conn.transaction():
         yield conn

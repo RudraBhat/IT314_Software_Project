@@ -50,8 +50,11 @@ class Settings:
     boundary_sync_interval_hours: int
     boundary_sync_check_interval_seconds: int
     geojson_gujarat_districts_url: str
+    ingest_token: str | None
+    mock_gateway_secret: str | None
+    app_env: str
+    git_sha: str
     payment_gateway: str
-    payment_signing_secret: str | None
     razorpay_key_id: str | None
     razorpay_key_secret: str | None
     razorpay_webhook_secret: str | None
@@ -90,8 +93,11 @@ def get_settings() -> Settings:
             "GEOJSON_GUJARAT_DISTRICTS_URL",
             "https://raw.githubusercontent.com/datameet/maps/master/Districts/Gujarat.geojson",
         ),
-        payment_gateway=os.getenv("PAYMENT_GATEWAY", "MOCK").strip().upper(),
-        payment_signing_secret=os.getenv("PAYMENT_SIGNING_SECRET") or None,
+        ingest_token=os.getenv("INGEST_TOKEN"),
+        mock_gateway_secret=os.getenv("MOCK_GATEWAY_SECRET"),
+        app_env=os.getenv("APP_ENV", "development").lower(),
+        git_sha=os.getenv("GIT_SHA", "dev"),
+        payment_gateway=os.getenv("PAYMENT_GATEWAY", "mock").lower(),
         razorpay_key_id=os.getenv("RAZORPAY_KEY_ID") or None,
         razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET") or None,
         razorpay_webhook_secret=os.getenv("RAZORPAY_WEBHOOK_SECRET") or None,

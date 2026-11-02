@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an improvement to the disaster response coordination platform.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe a software improvement. Do not include real emergency reports, personal information, credentials, or other sensitive data.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or need
+      description: What user need or problem would this feature address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior or outcome you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative approaches or workarounds you have considered.
+    validations:
+      required: false

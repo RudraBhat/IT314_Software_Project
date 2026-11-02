@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -9,8 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import db
 from app.config import get_settings
 from app.errors import install_error_handlers
-from app.routers import auth, donations
+from app.routers import auth, donations, internal
+from app.routers import field as field_router
 from app.routers.dm import router as dm_router
+from app.routers.public import router as public_router
 from app.schemas.citizen import (
     CreateReportRequest,
     PublicAlertResponse,
@@ -101,8 +104,11 @@ async def spatial_boundary_monthly_worker():
         while True:
             if settings.database_url:
                 try:
+                    from app.geo import load_boundaries_from_db
                     from app.services.spatial_sync import check_and_sync_all_sources
-                    await asyncio.to_thread(check_and_sync_all_sources)
+                    results = await asyncio.to_thread(check_and_sync_all_sources)
+                    if any(r.get("status") == "synced" for r in results):
+                        await asyncio.to_thread(load_boundaries_from_db)
                 except Exception:
                     logger.exception("Spatial boundary sync check encountered error; will retry next interval")
             await asyncio.sleep(settings.boundary_sync_check_interval_seconds)
@@ -130,6 +136,17 @@ async def lifespan(app: FastAPI):
             await asyncio.to_thread(apply_migrations)
         except Exception:
             logger.exception("Database migration failed on startup")
+
+        # Startup: load official PostGIS spatial boundaries into in-memory RAM cache (Option 2)
+        try:
+            from app.geo import load_boundaries_from_db
+            loaded = await asyncio.to_thread(load_boundaries_from_db)
+            if loaded:
+                logger.info("Loaded Gujarat boundary and district cache from PostGIS into RAM.")
+            else:
+                logger.info("PostGIS boundary table not yet populated; active on static fallback.")
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to load boundary cache from PostGIS; using static fallback.")
 
     # Startup: spawn worker tasks in background
     worker_task = asyncio.create_task(ai_workers_background_consumer())
@@ -160,6 +177,9 @@ install_error_handlers(app)
 app.include_router(auth.router)
 app.include_router(dm_router)
 app.include_router(donations.router)
+app.include_router(public_router)
+app.include_router(internal.router)  # S2-09, S2-16: internal maintenance & ingestion cron
+app.include_router(field_router.router)  # S2-01: frontline responder operations
 
 
 # CORS — allow frontend dev server and production origins
@@ -210,6 +230,7 @@ async def submit_citizen_report(
         "Flood / Urban Flood",
         "Cyclone / Coastal Flooding",
         "Major Urban / Building Fire",
+        "Earthquake / Structural Collapse",
     ]
     if payload.category not in allowed_categories:
         raise HTTPException(
@@ -287,18 +308,24 @@ async def get_citizen_report(
 
 # ═══════════════════════════════════════════════════════════════════
 # PUBLIC DATA ENDPOINTS (no auth required)
+# DEPRECATED: /api/public/incidents and /api/public/alerts are superseded
+# by the production PostGIS router at /api/v1/public/incidents.
+# These stubs are kept for backwards compatibility with any demo frontend that
+# has not yet migrated.  They will be removed after Sprint 1 sign-off.
 # ═══════════════════════════════════════════════════════════════════
 
 @app.get(
     "/api/public/incidents",
     response_model=list[PublicIncidentResponse],
-    summary="Get active verified incidents for public map",
+    summary="[DEPRECATED] Use /api/v1/public/incidents instead",
+    deprecated=True,
+    include_in_schema=True,
 )
-async def list_public_incidents():
+async def list_public_incidents_legacy():
     """
-    Returns currently active, verified incidents approved for public visibility.
-    Used by the citizen compact map. Does not expose unverified reports,
-    private responder data, or resolved/closed incidents.
+    DEPRECATED — SQLite demo endpoint.
+    Migrated to PostgreSQL/PostGIS: GET /api/v1/public/incidents.
+    This endpoint will be removed after Sprint 1.
     """
     if not _SQLITE_CITIZEN_AVAILABLE:
         return []
@@ -337,7 +364,7 @@ async def list_shelters():
 
 @app.get('/api/v1/health')
 def api_health():
-    """Liveness plus database reachability (SRS s.15.6)."""
+    """Liveness plus database reachability and deployed version (SRS s.15.6)."""
     database = "not_configured"
     if get_settings().database_url:
         try:
@@ -347,4 +374,9 @@ def api_health():
         except Exception:
             logger.exception("Database health check failed")
             database = "unavailable"
-    return {'status': 'healthy', 'service': 'drch-backend', 'database': database}
+    return {
+        'status': 'healthy',
+        'service': 'drch-backend',
+        'database': database,
+        'version': os.getenv("GIT_SHA", "dev"),
+    }

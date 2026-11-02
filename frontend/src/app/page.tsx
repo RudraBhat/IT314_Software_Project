@@ -1550,6 +1550,22 @@ function ResQGeoPortalInner() {
             <span>📊</span>
             <span>My workspace</span>
           </button>
+          <Link
+            href="/report"
+            className="flex items-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-500 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition"
+            title="File an emergency disaster report"
+          >
+            <span>🚨</span>
+            <span>Report Incident</span>
+          </Link>
+          <Link
+            href="/my-reports"
+            className="hidden sm:flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition"
+            title="View status of my reported incidents"
+          >
+            <span>📋</span>
+            <span>My Reports</span>
+          </Link>
           {!isAuthenticated ? (
             <Link
               href="/login"

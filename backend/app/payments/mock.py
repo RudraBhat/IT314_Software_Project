@@ -13,7 +13,7 @@ from app.payments.base import Order, PaymentGateway, Verification, WebhookEvent
 def _get_mock_secret() -> str:
     """Read mock signing secret from app settings. Never hardcoded."""
     settings = get_settings()
-    return settings.require("payment_signing_secret")
+    return settings.require("mock_gateway_secret")
 
 
 class MockGateway(PaymentGateway):

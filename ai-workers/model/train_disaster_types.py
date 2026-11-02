@@ -42,9 +42,7 @@ def load_split(tsv_path, name="data"):
     df = df[["image_path", "class_label"]].dropna().copy()
     df["class_label"] = df["class_label"].str.strip()
     df["full_path"] = df["image_path"].apply(
-        lambda path: str(
-            ROOT / path.strip().replace("data/aidr_disaster_types/", "data/", 1)
-        )
+        lambda path: str(ROOT / path.strip().replace("data/aidr_disaster_types/", "data/", 1))
     )
     exists = df["full_path"].apply(os.path.exists)
     missing = int((~exists).sum())
@@ -80,9 +78,7 @@ class DisasterClassifier(nn.Module):
 
     def __init__(self, model_name, num_classes):
         super().__init__()
-        self.backbone = timm.create_model(
-            model_name, pretrained=False, num_classes=0
-        )
+        self.backbone = timm.create_model(model_name, pretrained=False, num_classes=0)
         self.head = nn.Sequential(
             nn.Dropout(0.3),
             nn.Linear(self.backbone.num_features, num_classes),
@@ -100,9 +96,7 @@ def build_transforms():
         [
             transforms.RandomResizedCrop(IMG_SIZE, scale=(0.6, 1.0)),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomApply(
-                [transforms.GaussianBlur(5, sigma=(0.1, 2.0))], p=0.3
-            ),
+            transforms.RandomApply([transforms.GaussianBlur(5, sigma=(0.1, 2.0))], p=0.3),
             transforms.ColorJitter(0.3, 0.3, 0.3, 0.05),
             transforms.RandomRotation(10),
             transforms.ToTensor(),

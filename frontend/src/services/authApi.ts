@@ -159,12 +159,20 @@ export async function backendSignup(
 
     let res: Response;
     try {
-      res = await fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
+      res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
+      if (res.status === 404) {
+        res = await fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      }
       if (res.status === 404) {
         res = await fetch(`${API_BASE_URL}/api/auth/signup`, {
           method: "POST",
@@ -186,7 +194,7 @@ export async function backendSignup(
     }
 
     const token = data.access_token || data.token;
-    if (token && typeof window !== "undefined") {
+    if (token && typeof window !== "undefined" && process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
       localStorage.setItem("resq_jwt_token", token);
     }
 

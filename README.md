@@ -1,37 +1,108 @@
-# 🚨 Gujarat Disaster Management Platform (DRCH)
+# Gujarat Disaster Management Platform (DRCH)
 
-> **Mission-Critical Emergency Incident Triage, Spatial Clustering, and Field Dispatch Platform tailored for the State of Gujarat (GSDMA / SEOC / NDRF).**
-
----
-
-## 📌 Project Overview & Scope (Gujarat Only)
-
-The **Disaster Response Coordination Hub (DRCH)** is an operational emergency coordination platform built specifically for the **State of Gujarat**, integrating the state emergency operation centers (SEOC), Gujarat State Disaster Management Authority (GSDMA), district administrations across all 33 Gujarat districts, NDRF 6th Battalion (Vadodara), SDRF, and fire/medical emergency networks.
-
-### 🌐 What is Real vs. What is Simulated
-
-To maintain strict engineering rigor, the platform explicitly distinguishes between live production systems and simulated demonstration sandboxes:
-
-| Component | Status | Implementation Details |
-| :--- | :--- | :--- |
-| **Database & GIS** | **Real** | PostgreSQL 16 with PostGIS spatial geography types (`GEOGRAPHY(Point, 4326)`), GiST spatial indexing, BCNF normalization, and versioned migration runner. |
-| **Audit Trail** | **Real** | Append-only cryptographic audit log with SHA-256 hash chaining (`prev_hash` -> `row_hash`) enforced by database triggers. |
-| **Authentication & RBAC**| **Real** | Argon2id password hashing, TOTP-based Multi-Factor Authentication (MFA), token-version instantaneous JWT revocation, and database-backed permission guards. |
-| **Incident Lifecycle** | **Real** | Strict state machine (`SUBMITTED` -> `NEEDS_INFORMATION` -> `VERIFIED` -> `DISPATCHED` -> `RESOLVED` -> `CLOSED`), duplicate candidate detection, and 60-second auto-escalation loop. |
-| **Public Gujarat Map** | **Real** | Leaflet-based GIS map clamped strictly to Gujarat state boundaries (`GUJARAT_BBOX`), rendering only verified incidents without reporter PII. |
-| **External Ingestion** | **Real** | USGS real-time seismic feed filtered to Gujarat coordinates with duplicate avoidance on `(source, source_uid)`. |
-| **Payments & Donations** | **Simulated Sandbox** | `MockGateway` providing cryptographic HMAC signatures with explicit `SANDBOX` indicators; pluggable adapter ready for live test credentials. |
-| **Social Distress Feeds** | **Simulated / Replay** | Replay and synthetic distress post feeds flagged with `is_simulated = TRUE` for triage drills and prompt injection testing. |
-| **AI Triage Baseline** | **Real Rules / Sandbox LLM** | In-process rule-based priority and scenario classifier with guardrails, with an optional sandboxed LLM adapter for low-confidence cases. |
+Disaster Response Coordination Hub — an operational incident coordination
+platform built for the State of Gujarat. The system connects three groups of
+users: citizens who report emergencies, disaster management staff who triage
+and dispatch resources, and field teams who receive assignments and report
+progress in the field.
 
 ---
 
-## ⚡ Staging & Cold-Start Notice
+## What is real (verified in code)
 
-* **Backend Service (Render):** Deployed on Render's free tier. Services automatically sleep after inactivity. The first request after an idle period may experience a **30 to 50 second cold start** while the container initializes and connects to Neon PostgreSQL.
-* **Database (Neon):** Managed serverless PostgreSQL 16 with PostGIS enabled.
-* **Frontend (Vercel):** Next.js production preview deployments.
-* **Health Check:** Always verify system readiness at `GET /health` and `GET /health/ready`.
+The following capabilities are implemented end-to-end and covered by
+automated tests in `backend/tests/`.
+
+**Staff authentication with mandatory two-factor login.**
+Staff accounts require an Argon2id password followed by a TOTP code
+(RFC 6238, 30-second window). The MFA challenge is a short-lived,
+purpose-bound JWT. A failed code or expired challenge does not issue an
+access token. Login failures are counted; after five consecutive failures
+the account is locked and all existing tokens are revoked by incrementing
+`token_version`. (`backend/app/routers/auth.py`, `backend/app/security.py`)
+
+**Incident verification workflow.**
+A dispatcher can move an incident through the states SUBMITTED,
+NEEDS_INFORMATION, VERIFIED, REJECTED, DISPATCHED, RESOLVED, and CLOSED.
+Each transition is validated by a strict state machine, recorded in
+`incident_status_history`, written to the audit log, and triggers a
+notification to the reporting citizen. A VERIFIED decision requires a
+priority level (CRITICAL, HIGH, MEDIUM, or LOW) and a rationale.
+(`backend/app/routers/dm/incidents.py`)
+
+**Resource dispatch with row-level locking.**
+When a dispatcher creates a dispatch order, each requested resource row is
+locked with `SELECT ... FOR UPDATE` before the available quantity is
+decremented. Concurrent requests for the same resource that would
+over-allocate are refused with a 409 RESOURCE_CONFLICT response and no
+partial state is written. Resources are released automatically when a
+dispatch order is rejected or completed.
+(`backend/app/services/resources.py`, `backend/app/services/dispatch.py`)
+
+**Append-only, hash-chained audit log.**
+Every state change, login event, access denial, and dispatch action writes
+a row to `audit_logs`. A PostgreSQL trigger (`fn_audit_log_hash_chain`)
+computes a SHA-256 hash of each new row concatenated with the previous
+row's hash, storing it in `row_hash`. Database-level triggers also block
+UPDATE and DELETE on the table. The CI pipeline verifies the hash chain
+on every pull request. (`backend/db/migrations/01_schema.sql`, lines 602-629)
+
+**Gujarat boundary enforcement.**
+Incident coordinates are validated against Gujarat state boundaries via
+PostGIS spatial queries, with automatic fallback to the Google Maps
+Geocoding API (if `GOOGLE_MAPS_API_KEY` is configured) and then to
+OpenStreetMap Nominatim (free, no key required). Resolved districts are
+cached in the `administrative_boundaries` table.
+(`backend/app/geo.py`)
+
+**Advisory AI triage.**
+Submitting an incident to the AI triage endpoint returns a suggested
+scenario and priority level from an in-process rule-based classifier with
+guardrails. The result is advisory only: it is stored separately and never
+applied to the incident automatically. A human dispatcher makes the final
+verification decision. (`backend/app/services/ai_provider.py`,
+`backend/app/routers/dm/ai.py`)
+
+---
+
+## What is simulated
+
+**Demo seed incidents.**
+The database seed file inserts four demo incidents across Gujarat with
+`is_simulated = TRUE`. These exist only to give reviewers and testers
+something to look at on first boot. They are not live reports.
+(`backend/db/seeds/seed_data.sql`, section 8)
+
+**Mock payment gateway (SANDBOX).**
+The donation campaign data model and API are present, but there is no
+live payment gateway integration in the current codebase. Any payment flow
+shown in a demo uses simulated sandbox / placeholder responses.
+
+**Fallback fixtures for external alerts.**
+No live alert ingestion worker is active (`ai-workers` is an inactive stub).
+Alerts shown in demonstrations use fallback database fixtures flagged with
+`is_fallback = TRUE`. (`backend/db/migrations/03_core_extensions.sql`)
+
+**Synthetic or replayed social data.**
+Social distress signals and external disaster feeds are not ingested live;
+any social feed data displayed in the interface is synthetic or replayed.
+
+---
+
+## Staging and cold-start
+
+- Backend API (Render): Configured via `STAGING_URL` or Render web service `https://drch-backend.onrender.com`
+- Frontend (Vercel Preview): Deployment preview URL generated via Vercel integration
+
+The backend runs on Render's free tier. Free tier services sleep after a
+period of inactivity. The first request after an idle period may take 45 to
+90 seconds while the container wakes up, initializes database connection pools,
+and completes background worker checks. Cold-start polling and smoke scripts
+should use a 90-second timeout.
+
+Health check endpoints:
+- Liveness probe: `GET /health` returns `{"status": "healthy", "service": "drch-backend"}`
+- Database reachability: `GET /api/v1/health` returns `{"status": "healthy", "service": "drch-backend", "database": "ok"}` when PostGIS is connected, or `"unavailable"` / `"not_configured"` otherwise.
 
 ---
 

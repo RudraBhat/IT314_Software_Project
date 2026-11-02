@@ -1,1 +1,1 @@
-print('GenAI Triage Worker Initialized')
+print("GenAI Triage Worker Initialized")

@@ -26,9 +26,7 @@ from torchvision import transforms
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # ----------------------------- CONFIG ---------------------------------------
-CKPT_PATH = (
-    Path(__file__).resolve().parent / "best_model.pt"
-)  # next to app.py
+CKPT_PATH = Path(__file__).resolve().parent / "best_model.pt"  # next to app.py
 REVIEW_THRESHOLD = 0.60  # below this confidence -> needs_review = True
 # Stricter threshold for the weakest classes in testing (other_disaster F1 0.59, hurricane 0.72).
 # Tune these on the dev set.
@@ -61,9 +59,7 @@ STATE = {}
 async def lifespan(app: FastAPI):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not CKPT_PATH.exists():
-        raise FileNotFoundError(
-            f"Model file not found at {CKPT_PATH}. Copy best_model.pt into that folder."
-        )
+        raise FileNotFoundError(f"Model file not found at {CKPT_PATH}. Copy best_model.pt into that folder.")
     ckpt = torch.load(CKPT_PATH, map_location=device, weights_only=True)  # nosec B614
     classes = ckpt["classes"]
     img_size = ckpt["img_size"]
@@ -111,9 +107,7 @@ def predict(
     file: Annotated[UploadFile, File(description="Disaster image (jpg/png/webp)")],
 ):
     if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(
-            415, f"Unsupported file type '{file.content_type}'. Use jpg, png or webp."
-        )
+        raise HTTPException(415, f"Unsupported file type '{file.content_type}'. Use jpg, png or webp.")
 
     data = file.file.read()
     if len(data) > MAX_FILE_MB * 1024 * 1024:
@@ -130,10 +124,7 @@ def predict(
 
     classes = STATE["classes"]
     top_p, top_i = probs.topk(min(3, len(classes)))
-    top3 = [
-        {"label": classes[i], "confidence": round(p.item(), 4)}
-        for p, i in zip(top_p, top_i, strict=True)
-    ]
+    top3 = [{"label": classes[i], "confidence": round(p.item(), 4)} for p, i in zip(top_p, top_i, strict=True)]
 
     label, confidence = top3[0]["label"], top3[0]["confidence"]
     threshold = CLASS_THRESHOLDS.get(label, REVIEW_THRESHOLD)
@@ -143,9 +134,7 @@ def predict(
         "prediction": label,
         "confidence": confidence,
         "top3": top3,
-        "all_probabilities": {
-            c: round(p.item(), 4) for c, p in zip(classes, probs, strict=True)
-        },
+        "all_probabilities": {c: round(p.item(), 4) for c, p in zip(classes, probs, strict=True)},
         "needs_review": confidence < threshold,
         "review_threshold_used": threshold,
     }

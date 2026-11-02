@@ -45,9 +45,37 @@ function LoginPageContent() {
       return;
     }
     setSuccessMsg(`Signing in as ${user.name} (${user.role})...`);
+
+    // Create demo token and establish session cookie for proxy routes (/report, /my-reports)
+    try {
+      const demoPayload = {
+        sub: user.id || "citizen_demo",
+        role: "NORMAL_USER",
+        name: user.name,
+        email: user.email,
+      };
+      const b64 = (obj: object) =>
+        typeof window !== "undefined"
+          ? btoa(unescape(encodeURIComponent(JSON.stringify(obj)))).replace(/=+$/, "")
+          : Buffer.from(JSON.stringify(obj)).toString("base64url");
+      const demoToken = `${b64({ alg: "HS256", typ: "JWT" })}.${b64(demoPayload)}.mock_signature`;
+
+      await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: demoToken }),
+      });
+    } catch {
+      // Continue even if session cookie endpoint failed
+    }
+
     setTimeout(() => {
       login(user);
-      router.push("/");
+      if (next && next.startsWith("/") && !next.startsWith("//")) {
+        router.push(next);
+      } else {
+        router.push("/");
+      }
     }, 450);
   };
 
@@ -85,16 +113,29 @@ function LoginPageContent() {
     );
 
     if (apiRes.success && apiRes.user) {
-      setSuccessMsg(`✓ Authenticated via FastAPI Gateway! Welcome back, ${apiRes.user.name}!`);
+      if (apiRes.token) {
+        await fetch("/api/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: apiRes.token }),
+        }).catch(() => {});
+      }
+      setSuccessMsg(`✓ Authenticated! Welcome back, ${apiRes.user.name}!`);
       setTimeout(() => {
         login(apiRes.user!);
-        router.push("/");
+        if (next && next.startsWith("/") && !next.startsWith("//")) {
+          router.push(next);
+        } else if (apiRes.user?.role === "Public / Citizen" || (apiRes.user?.role as unknown as string) === "NORMAL_USER") {
+          router.push("/citizen/dashboard");
+        } else {
+          router.push("/");
+        }
       }, 400);
       return;
     }
 
-    // 2. Seamless Local Fallback (Guarantees zero downtime if backend is offline or syncing)
-    if (localMatch) {
+    // 2. Seamless Local Fallback (Only active when NEXT_PUBLIC_DEMO_MODE is true)
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true" && localMatch) {
       if (localMatch.password && password && localMatch.password !== password) {
         setErrorMsg("Incorrect password. Try using the 1-Click Quick Login below.");
         return;
@@ -102,15 +143,14 @@ function LoginPageContent() {
       setSuccessMsg(`Welcome back, ${localMatch.name}! Loading ${localMatch.role} dashboard...`);
       setTimeout(() => {
         login(localMatch);
-        router.push("/");
+        router.push(next || "/");
       }, 400);
       return;
     }
 
     // 3. Neither backend nor local matched
     setErrorMsg(
-      apiRes.error ||
-        `No account found matching "${identifier}". You can use the Quick Demo buttons below or Sign Up.`
+      apiRes.error || "Invalid credentials, or the account is temporarily unavailable."
     );
   };
 

@@ -28,10 +28,18 @@ async function post(path: string, body: unknown, token?: string) {
   }
 }
 
-function safeNext(value: FormDataEntryValue | null): string {
+function safeNext(value: FormDataEntryValue | null, role?: string): string {
   const next = typeof value === "string" ? value : "";
   // Only same-site workspace paths; never an absolute or protocol-relative URL.
-  return next.startsWith("/dm") && !next.startsWith("//") ? next : "/dm";
+  if (next.startsWith("/") && !next.startsWith("//")) {
+    if (next.startsWith("/dm") && role === "NORMAL_USER") {
+      return "/citizen/dashboard";
+    }
+    return next;
+  }
+  if (role === "NORMAL_USER") return "/citizen/dashboard";
+  if (role === "FIELD_TEAM") return "/field";
+  return "/dm";
 }
 
 async function signIn(form: FormData): Promise<LoginState> {
@@ -44,8 +52,17 @@ async function signIn(form: FormData): Promise<LoginState> {
     return { step: "password", error: (res.data as ApiError).error?.message ?? "Sign-in failed.", email };
   }
   if (!res.data.mfa_required) {
-    // Citizens authenticate without MFA; this workspace is for staff only.
-    return { step: "password", error: "This workspace is for Disaster Management staff.", email };
+    // Citizens authenticate without MFA (SRS s.15.3)
+    const token = res.data.access_token || res.data.token;
+    if (!token) {
+      return { step: "password", error: "Authentication response missing access token.", email };
+    }
+    const expiresIn = Number(res.data.expires_in) || 86400;
+    const jar = await cookies();
+    jar.set(SESSION_COOKIE, token, cookieOptions(expiresIn));
+    jar.set("drch_session", "1", cookieOptions(expiresIn));
+    const role = res.data.role || res.data.user?.role || "NORMAL_USER";
+    redirect(safeNext(form.get("next"), role));
   }
   (await cookies()).set(MFA_COOKIE, res.data.mfa_token, cookieOptions(300));
   return { step: "mfa", email };
@@ -67,12 +84,18 @@ async function verifyCode(prev: LoginState, form: FormData): Promise<LoginState>
   }
   jar.delete(MFA_COOKIE);
   if (res.data.role !== "DISASTER_MGMT") {
+    if (res.data.role === "NORMAL_USER") {
+      const expiresIn = Number(res.data.expires_in) || 86400;
+      jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(expiresIn));
+      jar.set("drch_session", "1", cookieOptions(expiresIn));
+      redirect(safeNext(form.get("next"), "NORMAL_USER"));
+    }
     await post("/api/v1/auth/logout", {}, res.data.access_token);
     return { step: "password", error: "This workspace is for Disaster Management staff." };
   }
   jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(res.data.expires_in));
   jar.set("drch_session", "1", cookieOptions(res.data.expires_in));
-  redirect(safeNext(form.get("next")));
+  redirect(safeNext(form.get("next"), res.data.role));
 }
 
 /** One action drives both steps, so the form always shows the step the server decided. */

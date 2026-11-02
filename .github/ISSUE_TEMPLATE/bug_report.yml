@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible problem in the disaster response coordination platform.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please use this form for software defects. **Do not include real emergency reports, personal information, credentials, or other sensitive data. This repository is not an emergency reporting channel.**
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the issue and what you expected to happen.
+      placeholder: A concise description of the unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest set of steps that reproduces the problem.
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include relevant versions and whether this occurred locally or in a deployment.
+      placeholder: Browser/OS, frontend/backend version or commit, and deployment environment.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Remove secrets, tokens, personal information, and real incident data before sharing.
+    validations:
+      required: false
