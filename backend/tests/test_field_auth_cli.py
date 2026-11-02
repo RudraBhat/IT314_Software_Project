@@ -210,7 +210,7 @@ def test_require_field_fallback_when_database_not_configured(monkeypatch):
         email="field1@drch.gov.in",
         full_name="Field Lead",
         role="FIELD_TEAM",
-        mfa_verified=False,
+        mfa_verified=True,
     )
 
     try:
@@ -246,7 +246,7 @@ def test_require_field_raises_when_no_team_membership(monkeypatch):
         email="unassigned@drch.gov.in",
         full_name="Unassigned Responder",
         role="FIELD_TEAM",
-        mfa_verified=False,
+        mfa_verified=True,
     )
 
     try:
@@ -296,7 +296,7 @@ def test_require_field_resolves_team_membership_successfully(monkeypatch):
         email="responder@drch.gov.in",
         full_name="Team Responder",
         role="FIELD_TEAM",
-        mfa_verified=False,
+        mfa_verified=True,
     )
 
     try:

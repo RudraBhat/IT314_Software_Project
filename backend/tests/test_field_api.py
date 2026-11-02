@@ -576,3 +576,11 @@ def test_active_unreleased_assignment_authorized(field_principal: FieldPrincipal
     sql_called = mock_conn.execute.call_args[0][0]
     assert "ra.released_at IS NULL" in sql_called
 
+
+
+@pytest.mark.db
+def test_field_user_mfa_required(client, make):
+    user = make.field_team_user()
+    r = client.get("/api/v1/field/assignments", headers=make.token(user, mfa=False))
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "MFA_REQUIRED"

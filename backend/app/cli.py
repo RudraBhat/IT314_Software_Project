@@ -173,7 +173,7 @@ def create_field(args) -> None:
         ).fetchone()["user_id"]
 
         conn.execute(
-            "INSERT INTO user_auth (user_id, password_hash, mfa_enabled) VALUES (%s, %s, FALSE)",
+            "INSERT INTO user_auth (user_id, password_hash) VALUES (%s, %s)",
             (user_id, password_hash),
         )
 
@@ -184,6 +184,7 @@ def create_field(args) -> None:
             """,
             (user_id, team["resource_id"], args.callsign, bool(args.leader)),
         )
+        _enrol_mfa(conn, user_id, args.email)
 
         audit.record(
             conn,
