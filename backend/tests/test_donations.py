@@ -199,7 +199,7 @@ def test_donation_inactive_campaign(client, sql):
     res = _post_donation(client, cid, _idem())
 
     assert res.status_code == 409
-    assert res.json()["code"] == "CAMPAIGN_NOT_ACTIVE"
+    assert res.json()["error"]["code"] == "CAMPAIGN_NOT_ACTIVE"
 
 
 @pytest.mark.db
@@ -275,7 +275,7 @@ def test_donation_guest_no_email_not_anonymous(client, sql):
     )
 
     assert res.status_code == 422
-    assert res.json()["code"] == "GUEST_EMAIL_REQUIRED"
+    assert res.json()["error"]["code"] == "GUEST_EMAIL_REQUIRED"
 
 
 @pytest.mark.db
