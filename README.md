@@ -156,157 +156,11 @@ gantt
 
 ---
 
-## 📋 Granular Phase-Wise Work Allocation for All 10 Members
+## 📋 Sprint Roadmap & Archived Work Allocation
 
-### Phase 1: Foundation, Schemas, Prototypes & Environment Setup (Weeks 1 - 2)
-*Goal: Establish system contracts, development environments, baseline microservices, and ingestion schemas.*
+The active implementation plan follows the **3-Sprint Production Delivery Roadmap** shown in the Gantt chart above.
 
-- **Member 1 (Architect)**: 
-  - Design system architecture, service dependency graph, and OpenAPI/REST specification.
-  - Setup core repository, database migration templates (PostgreSQL/PostGIS), and shared data models (`Incident`, `Alert`, `TriageResult`, `UserRole`).
-- **Member 2 (Gov/Telecom)**:
-  - Document C-DAC ERSS 112 API/VPN simulation specifications and mock data generator.
-  - Implement parser prototype for NDMA SACHET XML Common Alerting Protocol (CAP) schema.
-- **Member 3 (Indic NLP & GenAI)**:
-  - Setup social media ingestion connectors (Twitter/X API v2 mock, Telegram distress bot, WhatsApp Business webhook sandbox).
-  - Benchmark Indic-BERT / multilingual LLM models on Hindi, Marathi, Bengali, Tamil, Telugu, and Hinglish sample posts.
-- **Member 4 (Drone CV)**:
-  - Collect and curate drone footage dataset with simulated weather degradation (fog, downpour, heavy smoke).
-  - Research sensor degradation profiles (MPU6050 IMU drift and VL53L5CX ToF sensor noise filters under water droplets).
-- **Member 5 (Geospatial)**:
-  - Define PostGIS geospatial indexes, H3 hexagonal hierarchical spatial indexes (resolutions 7-9).
-  - Formulate NDMA Incident Response System (IRS) severity matrix rules (Scale 1–5 based on life risk, critical infrastructure impact, and environmental hazard).
-- **Member 6 (GIS Map UI)**:
-  - Initialize React / Next.js GIS frontend application with TailwindCSS/Vanilla CSS design system.
-  - Integrate Leaflet/Mapbox GL JS with custom dark tactical base maps and mock incident markers.
-- **Member 7 (Role Dashboards)**:
-  - Build role-based routing architecture (JWT authentication, role guards: `MEDIC`, `FIREFIGHTER`, `LOGISTICIAN`, `ADMIN`).
-  - Create wireframes and component scaffolding for Medic (casualties focus) and Firefighter (hazards focus) dashboards.
-- **Member 8 (Real-Time & Sync)**:
-  - Setup WebSocket server infrastructure using Socket.io / Stomp with Redis Pub/Sub adapter.
-  - Create message envelope schema (`INCIDENT_NEW`, `STATUS_UPDATE`, `CHAT_MESSAGE`, `GEO_LOCATION_PING`).
-- **Member 9 (Compliance & Summarizer)**:
-  - Create DPDP Act 2023 compliance matrix for PII scrubbing (phone numbers, Aadhaar, names, personal photos).
-  - Draft few-shot prompt templates for automated multi-source incident aggregation summaries.
-- **Member 10 (DevOps & QA)**:
-  - Configure Docker Compose for local development (Backend, Postgres/PostGIS, Redis, Kafka/RabbitMQ).
-  - Set up GitHub Actions CI for linting, unit test validation, and build verification.
-
----
-
-### Phase 2: Ingestion Pipelines, GenAI Triage & Clustering Engine (Weeks 3 - 4)
-*Goal: Functional automated triage pipeline from raw ingest to clustered, prioritized incidents.*
-
-- **Member 1 (Architect)**:
-  - Implement the Central Pipeline Orchestrator linking ingestion adapters to the Triage & Clustering engines.
-  - Implement rate limiting, circuit breakers, and dead-letter queues for resilient data flow.
-- **Member 2 (Gov/Telecom)**:
-  - Finalize SACHET XML CAP polling worker (every 60s) with coordinate polygon extraction for cyclone/flood zones.
-  - Build ERSS 112 mock streaming server simulating realistic call volume spikes correlated by district/zone.
-- **Member 3 (Indic NLP & GenAI)**:
-  - Build the GenAI Triage Pipeline: Distress classification + NER (extracting location landmarks, trapped count, medical urgency).
-  - Optimize inference time with prompt compression, local quantized models (e.g., Llama-3/Mistral/IndicLLM) to guarantee **< 10 second latency (NFR1)**.
-- **Member 4 (Drone CV)**:
-  - Train and deploy YOLOv8/v9 object detection model for aerial disaster cues: active flames, flood water coverage, collapsed structural debris.
-  - Implement temporal verification filter (cross-checking multi-frame detections to reject rain/smoke sensor artifacts).
-- **Member 5 (Geospatial)**:
-  - Implement Spatiotemporal Clustering: DBSCAN on spatio-temporal distance + cosine similarity on NLP embeddings to group duplicate reports into single incidents (FR4).
-  - Implement initial IRS Priority Scoring engine calculating `PriorityScore = f(Severity, Casualties, Infrastructure, WeatherAlert)`.
-- **Member 6 (GIS Map UI)**:
-  - Render dynamic clusters on the Dispatcher map with color-coded severity rings (Red: Critical, Orange: High, Yellow: Moderate, Green: Low).
-  - Implement interactive incident drawer displaying clustered source evidence (social posts, 112 calls, drone photos).
-- **Member 7 (Role Dashboards)**:
-  - Implement **Field Medic Dashboard**: Triage counter, casualty severity tags (Red/Yellow/Green/Black), nearest hospital routing overlay.
-  - Implement **Firefighter Dashboard**: Structural hazard badges, water supply proximity indicator, wind direction indicator.
-- **Member 8 (Real-Time & Sync)**:
-  - Connect frontend components to WebSocket broker for zero-refresh incident updates.
-  - Build incident room join/leave logic for real-time responder positioning and state broadcast.
-- **Member 9 (Compliance & Summarizer)**:
-  - Build automated PII sanitization pipeline (masking names, phone numbers, face blurring in social imagery) before DB storage.
-  - Validate output schemas for GenAI summary outputs.
-- **Member 10 (DevOps & QA)**:
-  - Setup Apache Kafka / RabbitMQ message queues between ingestion scrapers and the GenAI worker pool.
-  - Write automated end-to-end integration tests for the ingestion-to-clustering pipeline.
-
----
-
-### Phase 3: Tactical Dispatch, Real-Time Chat & Multi-Source Intelligence (Weeks 5 - 6)
-*Goal: Complete first-responder dispatch loop, real-time collaboration, and actionable situational awareness.*
-
-- **Member 1 (Architect)**:
-  - Build the Resource Allocation & Assignment Engine: Unit dispatch state machine (`PENDING` -> `ASSIGNED` -> `ACKNOWLEDGED` -> `EN_ROUTE` -> `ON_SCENE` -> `RESOLVED`).
-  - Implement API endpoints for cross-agency escalation to NDMA / State Disaster Management Authorities.
-- **Member 2 (Gov/Telecom)**:
-  - Implement automated correlation algorithm joining ERSS 112 call volume density spikes with social media distress clusters.
-  - Implement CAP alert geo-fencing (flagging active responders entering red weather alert polygons).
-- **Member 3 (Indic NLP & GenAI)**:
-  - Add confidence scoring to Indic language triage, flagging low-confidence alerts for human dispatcher verification.
-  - Implement multi-lingual transliteration support (e.g., Devanagari to Latin and vice-versa) for Indian landmark recognition.
-- **Member 4 (Drone CV)**:
-  - Connect drone camera RTSP/HLS live feed playback with bounding box hazard overlays directly in the dashboard.
-  - Integrate DGCA Digital Sky airspace boundary geo-fence verification (warning operators of Yellow/Red zone clearances).
-- **Member 5 (Geospatial)**:
-  - Dynamic Priority Re-scoring: Increase incident priority automatically if multiple 112 calls or drone hazard detections occur within 15 minutes.
-  - Implement shortest safe path computation (avoiding flooded roads and blocked zones using OpenStreetMap Overpass API).
-- **Member 6 (GIS Map UI)**:
-  - Build Dispatcher Action Center: 1-click team allocation, dispatch queue, responder location tracking pins.
-  - Add map layer filters: Toggle Weather Radar, 112 Density Heatmap, Drone Inspection Zones, Active Responders.
-- **Member 7 (Role Dashboards)**:
-  - Build **Logistician / IRS General Staff Dashboard**: High-level resource utilization gauges (ambulances, fire tenders, rescue boats, food packets).
-  - Add dispatch acknowledgment modal and audio-visual sirens for high-priority incoming alerts.
-- **Member 8 (Real-Time & Sync)**:
-  - Implement **Incident-Scoped Real-Time Chat (FR8)**: Responders assigned to an incident can exchange text, quick status chips, and situational photos.
-  - Implement read receipts, offline message queuing, and priority broadcast alerts.
-- **Member 9 (Compliance & Summarizer)**:
-  - Implement **GenAI Auto-Summarizer (FR9)**: Generates concise 3-sentence operational summaries (`Situation`, `Casualties/Risks`, `Action Taken`) updated live as new alerts attach to an incident.
-- **Member 10 (DevOps & QA)**:
-  - Deploy staging environment on MeitY-empaneled cloud infrastructure (e.g., NIC / AWS Asia-Pacific Mumbai / Azure India Central).
-  - Conduct security audit for OWASP Top 10 API vulnerabilities and RBAC leakage.
-
----
-
-### Phase 4: Offline-First Mesh Resiliency, Auditing & Performance Optimization (Weeks 7 - 8)
-*Goal: Guarantee field survival under telecom blackout, audit readiness, and sub-10s GenAI performance.*
-
-- **Member 1 (Architect)**:
-  - Implement data conflict resolution strategies (CRDTs / Last-Write-Wins) for synchronizing field data after offline reconnects.
-  - Complete disaster event archiving and state compaction pipelines.
-- **Member 2 (Gov/Telecom)**:
-  - Implement **DDMA/NDMA Official Audit Export Module (FR11)**: Generate standardized post-incident disaster reports in PDF, GeoJSON, and CSV formats conforming to NDMA guidelines.
-- **Member 3 (Indic NLP & GenAI)**:
-  - Fine-tune and benchmark the GenAI triage pipeline to ensure **under 10-second processing time (NFR1)** under continuous batch ingestion.
-- **Member 4 (Drone CV)**:
-  - Optimize computer vision inference pipeline using TensorRT / ONNX Runtime to support edge inference on low-power drone base stations (Jetson Nano/Orin).
-- **Member 5 (Geospatial)**:
-  - Benchmark and index PostGIS database with GiST and spatial partition tables for sub-50ms query response on 100,000+ spatial points.
-- **Member 6 (GIS Map UI)**:
-  - Implement **Offline Map Caching (NFR5)**: Progressive Web App (PWA) with Service Worker caching of vector map tiles (MBTiles) for targeted district zones.
-- **Member 7 (Role Dashboards)**:
-  - Enable offline caching in Medic & Firefighter dashboards using IndexedDB; allow responders to log field vitals/status while disconnected.
-- **Member 8 (Real-Time & Sync)**:
-  - Implement local P2P/mesh sync fallback (WebRTC DataChannels / Wi-Fi Direct simulation) allowing nearby field devices to exchange chat & triage data when cellular towers fail.
-- **Member 9 (Compliance & Summarizer)**:
-  - Build tamper-evident incident audit trail ledger (recording every dispatcher decision, timestamp, and AI triage confidence score).
-  - Implement DPDP Act 2023 data retention and anonymization routines for closed incident logs.
-- **Member 10 (DevOps & QA)**:
-  - Execute **10x Load Spike Stress Tests (NFR3)** using k6 / Locust, simulating sudden disaster surges (10,000 requests/sec).
-  - Verify **99.9% High Availability (NFR2)** with automated failover and health check probes.
-
----
-
-### Phase 5: Integration Drills, Field Acceptance & Project Delivery (Weeks 9 - 10)
-*Goal: Simulated multi-agency disaster drills, bug bashes, final documentation, and project handover.*
-
-- **Member 1 (Architect)**: Oversee end-to-end integration test drills, conduct code reviews, and deliver final technical architecture documentation.
-- **Member 2 (Gov/Telecom)**: Validate ERSS 112 mock telemetry and SACHET CAP feeds against realistic mock cyclone/flood disaster scenarios.
-- **Member 3 (Indic NLP & GenAI)**: Validate triage accuracy on 500+ multi-dialect test samples (including mixed code Hinglish) with >92% F1-score.
-- **Member 4 (Drone CV)**: Validate false-positive rejection rates during heavy simulated smoke/rain conditions.
-- **Member 5 (Geospatial)**: Verify cluster deduplication accuracy across 1,000 concurrent mock distress points within a 5km radius.
-- **Member 6 (GIS Map UI)**: Polish UX micro-interactions, responsive mobile/tablet breakpoints, and visual contrast for bright outdoor field usage.
-- **Member 7 (Role Dashboards)**: Complete accessibility (WCAG 2.1 AA) and rapid-click ergonomic testing for stressed field workers with gloves.
-- **Member 8 (Real-Time & Sync)**: Conduct simulated telecom blackout drill: verify offline queueing, local sync, and smooth reconnection to central server.
-- **Member 9 (Compliance & Summarizer)**: Generate comprehensive executive incident briefing sample reports and verify 100% PII redaction compliance.
-- **Member 10 (DevOps & QA)**: Finalize production deployment manifests (Kubernetes Helm charts / Terraform), automated backup policies, and disaster recovery runbooks.
+The original 5-phase theoretical concept allocation (Kafka, drone edge CV, Indic-BERT, 10-member allocation) has been archived for reference in [`docs/archive/original-roadmap.md`](docs/archive/original-roadmap.md).
 
 ---
 
@@ -356,7 +210,22 @@ for s in $(find backend/db/seeds -name '*.sql' | sort -V); do psql "$DATABASE_UR
 ```
 *Note: the backend applies pending migrations (and reference seeds) itself on startup; it refuses to start outside `APP_ENV=development` if required settings are missing.*
 
-### 4. Launch the Entire Platform (Local Docker)
+### 4. Running the Applications
+
+#### Option A: Local Development (without Docker)
+Run the backend and frontend in separate terminals:
+
+```bash
+# Terminal 1 - FastAPI Backend (runs migrations and starts API server on :8000)
+cd backend
+uvicorn main:app --reload --port 8000
+
+# Terminal 2 - Next.js Frontend (starts web client on :3000)
+cd frontend
+npm run dev
+```
+
+#### Option B: Containerized Platform (Docker Compose)
 Since the project is containerized, you can launch the Next.js frontend, FastAPI backend, Python AI workers, and the local PostgreSQL/PostGIS database with a single command:
 
 ```bash
@@ -411,7 +280,7 @@ The repository separates verification (CI) from publication & deployment (CD):
 We welcome contributions from all 10 team members! To keep our codebase clean and organized, please follow these guidelines:
 
 1. **How to Decide What to Work On:**
-   - Cross-reference the **Team Roster** and **Phase-wise Roadmap** above.
+   - Cross-reference the **Team Roster** and **Sprint Roadmap** above.
    - Find an unassigned GitHub Issue matching your phase/role and assign it to yourself.
 2. **Branching Strategy:**
    - Never commit directly to `main`. 
