@@ -4,7 +4,9 @@ import Link from "next/link";
 
 import { StatusBadge } from "@/components/badges";
 import { BarList } from "@/components/charts";
+import { ScenarioWalkthrough } from "@/components/dm/ScenarioWalkthrough";
 import { Button, Card, EmptyState, ErrorState, PageHeader, Skeleton, cx } from "@/components/ui";
+import { useStaff } from "./shell";
 import { useQuery } from "@/lib/api";
 import { formatDateTime, formatNumber, label, scenarioLabel, timeAgo } from "@/lib/format";
 import type { Dashboard } from "@/lib/types";
@@ -99,6 +101,8 @@ function DashboardBody({ d }: { d: Dashboard }) {
         <Stat label="Open aid needs" value={d.aid.open_needs} href="/dm/aid" />
       </section>
 
+      <YourFocus d={d} />
+
       <div className="grid gap-6 lg:grid-cols-3">
         <Card title="Verification queue" subtitle="Oldest unverified reports first, by reported urgency" className="lg:col-span-2"
           actions={<Link href="/dm/incidents?status=SUBMITTED&status=NEEDS_INFORMATION" className="text-sm text-info hover:underline">View all</Link>}
@@ -180,6 +184,38 @@ function DashboardBody({ d }: { d: Dashboard }) {
           />
         </Card>
       </div>
+    </div>
+  );
+}
+
+/** Queues that matter for the permissions this account holds. The backend still enforces each action. */
+function YourFocus({ d }: { d: Dashboard }) {
+  const { can } = useStaff();
+  const items = [
+    can("DISPATCH") && { text: "Dispatches awaiting acknowledgement", value: d.dispatches.awaiting_ack, href: "/dm/dispatches" },
+    can("MODERATOR") && { text: "Evidence awaiting moderation", value: d.moderation.pending, href: "/dm/moderation" },
+    can("CLOSURE") && { text: "Verified incidents still active", value: d.incidents.verified_active, href: "/dm/incidents?status=VERIFIED&status=DISPATCHED" },
+    can("PUBLISHER") && { text: "Safety content and public updates", value: null, href: "/dm/updates" },
+    can("SUPERVISOR") && { text: "Staff accounts", value: null, href: "/dm/staff" },
+  ].filter(Boolean) as { text: string; value: number | null; href: string }[];
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card title="Your focus" subtitle="Based on your permissions">
+        {items.length === 0 ? (
+          <EmptyState title="Your account has the standard officer permissions.">Verification is the main queue for you.</EmptyState>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {items.map((i) => (
+              <li key={i.text} className="flex justify-between gap-3">
+                <Link href={i.href} className="text-info hover:underline">{i.text}</Link>
+                {i.value !== null && <span className="tabular-nums font-medium">{formatNumber(i.value)}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      <ScenarioWalkthrough />
     </div>
   );
 }
