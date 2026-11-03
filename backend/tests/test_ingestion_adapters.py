@@ -75,6 +75,33 @@ def test_cap_parser_preserves_urgency_certainty_and_language():
     assert result[0]["longitude"] == 73.2
 
 
+def test_cap_parser_checks_all_language_blocks_areas_and_polygons(monkeypatch):
+    xml = """<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+      <identifier>cap-multi-area-1</identifier>
+      <info><event>Flooding</event><severity>Severe</severity>
+        <urgency>Immediate</urgency><certainty>Observed</certainty><language>hi-IN</language>
+        <area><areaDesc>Jaipur, Rajasthan</areaDesc><circle>26.91,75.78 25</circle></area>
+      </info>
+      <info><event>Flooding</event><severity>Severe</severity>
+        <urgency>Immediate</urgency><certainty>Observed</certainty><language>en-US</language>
+        <area><areaDesc>Rajasthan</areaDesc>
+          <polygon>26.0,75.0 26.0,76.0 27.0,76.0 26.0,75.0</polygon>
+          <polygon>23.0,72.4 23.0,72.6 23.2,72.6 23.0,72.4</polygon>
+        </area>
+        <area><areaDesc>Kutch, Gujarat</area><circle>23.1,70.1 5</circle></area>
+      </info>
+    </alert>"""
+    monkeypatch.setattr("app.services.ingest.sachet.is_in_gujarat", lambda lat, lon: 20 <= lat <= 25 and 68 <= lon <= 75)
+
+    result = parse_cap_xml(xml)
+
+    assert len(result) == 1
+    assert result[0]["language"] == "en-US"
+    assert result[0]["area_text"] == "Rajasthan; Kutch, Gujarat"
+    assert result[0]["latitude"] == 23.0
+    assert result[0]["longitude"] == 72.4
+
+
 def test_sachet_fetch_uses_etag_cache_for_not_modified(monkeypatch):
     url = "https://sachet.ndma.gov.in/cap_public_website/FetchXMLFile?identifier=fixture-test"
     _HTTP_CACHE.pop(url, None)

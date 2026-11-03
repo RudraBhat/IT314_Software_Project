@@ -33,6 +33,13 @@ def _find_child(node: ET.Element, local_name: str) -> ET.Element | None:
     return None
 
 
+def _find_children(node: ET.Element, local_name: str) -> list[ET.Element]:
+    return [
+        child for child in node
+        if (child.tag.split("}")[-1] if "}" in child.tag else child.tag).lower() == local_name.lower()
+    ]
+
+
 def _find_child_text(node: ET.Element, local_name: str) -> str:
     child = _find_child(node, local_name)
     return child.text.strip() if (child is not None and child.text) else ""
@@ -126,54 +133,93 @@ def parse_cap_xml(xml_content: str, source_name: str = "SACHET") -> list[dict[st
         if not source_uid:
             continue
 
-        info = _find_child(alert, "info")
-        if info is None:
+        info_blocks = _find_children(alert, "info")
+        if not info_blocks:
             continue
+
+        relevant_infos: list[tuple[ET.Element, str, float | None, float | None]] = []
+        for info in info_blocks:
+            area_descriptions: list[str] = []
+            area_matches_gujarat = False
+            area_location: tuple[float | None, float | None] = (None, None)
+
+            for area in _find_children(info, "area"):
+                area_desc = _find_child_text(area, "areaDesc")
+                if area_desc:
+                    area_descriptions.append(area_desc)
+                    area_matches_gujarat |= "gujarat" in area_desc.casefold()
+
+                geometries = [
+                    ("circle", node.text or "") for node in _find_children(area, "circle")
+                ] + [
+                    ("polygon", node.text or "") for node in _find_children(area, "polygon")
+                ]
+                for shape, coordinates in geometries:
+                    lat, lon = parse_cap_coordinates(
+                        coordinates if shape == "circle" else "",
+                        coordinates if shape == "polygon" else "",
+                    )
+                    if lat is None or lon is None:
+                        continue
+
+                    shape_matches_gujarat = False
+                    matched_location = (lat, lon)
+                    if shape == "polygon":
+                        # CAP polygons are ordered coordinate pairs; checking their points and
+                        # centroid handles both polygons wholly inside Gujarat and those that
+                        # cross its boundary without relying on the alert's free-text area name.
+                        for point in coordinates.split():
+                            parts = point.split(",")
+                            if len(parts) < 2:
+                                continue
+                            try:
+                                point_lat, point_lon = float(parts[0]), float(parts[1])
+                                if is_in_gujarat(point_lat, point_lon):
+                                    shape_matches_gujarat = True
+                                    matched_location = (point_lat, point_lon)
+                                    break
+                            except ValueError:
+                                continue
+                        if not shape_matches_gujarat:
+                            shape_matches_gujarat = is_in_gujarat(lat, lon)
+                    else:
+                        shape_matches_gujarat = is_in_gujarat(lat, lon)
+
+                    if shape_matches_gujarat:
+                        area_matches_gujarat = True
+                        if area_location == (None, None):
+                            area_location = matched_location
+
+            if area_matches_gujarat:
+                relevant_infos.append((
+                    info,
+                    "; ".join(dict.fromkeys(area_descriptions)),
+                    area_location[0],
+                    area_location[1],
+                ))
+
+        if not relevant_infos:
+            logger.debug("Skipping out-of-state alert: %s", source_uid)
+            continue
+
+        # CAP permits multiple language-specific <info> blocks. Keep one row per alert ID,
+        # preferring English when it is relevant to Gujarat and otherwise using the first
+        # relevant block so its language stays attached to the stored text.
+        info, area_desc, lat, lon = next(
+            (candidate for candidate in relevant_infos
+             if _find_child_text(candidate[0], "language").casefold().startswith("en")),
+            relevant_infos[0],
+        )
 
         event_text = _find_child_text(info, "event")
         severity_text = _find_child_text(info, "severity")
         urgency_text = _find_child_text(info, "urgency")
         certainty_text = _find_child_text(info, "certainty")
-        language_text = _find_child_text(info, "language")
+        language_text = _find_child_text(info, "language") or "en-US"
         effective_text = _find_child_text(info, "effective")
         expires_text = _find_child_text(info, "expires")
         headline = _find_child_text(info, "headline")
         description = _find_child_text(info, "description")
-
-        area = _find_child(info, "area")
-        area_desc = ""
-        circle_text = ""
-        polygon_text = ""
-        if area is not None:
-            area_desc = _find_child_text(area, "areaDesc")
-            circle_text = _find_child_text(area, "circle")
-            polygon_text = _find_child_text(area, "polygon")
-
-        lat, lon = parse_cap_coordinates(circle_text, polygon_text)
-
-        # Geofence check: areaDesc mentions Gujarat OR centroid passes is_in_gujarat
-        in_gujarat = False
-        if "gujarat" in area_desc.lower():
-            in_gujarat = True
-        elif polygon_text:
-            for point in polygon_text.split():
-                parts = point.split(",")
-                if len(parts) < 2:
-                    continue
-                try:
-                    if is_in_gujarat(float(parts[0]), float(parts[1])):
-                        in_gujarat = True
-                        break
-                except ValueError:
-                    continue
-            if not in_gujarat and lat is not None and lon is not None:
-                in_gujarat = is_in_gujarat(lat, lon)
-        elif lat is not None and lon is not None:
-            in_gujarat = is_in_gujarat(lat, lon)
-
-        if not in_gujarat:
-            logger.debug("Skipping out-of-state alert: %s (%s)", source_uid, area_desc)
-            continue
 
         alerts.append({
             "source": source_name,
