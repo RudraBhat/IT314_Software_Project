@@ -1,264 +1,174 @@
-"""Public donation campaigns and donation order processing."""
+"""Donations (docs/api_contracts.md section 6). Owner: Shlok.
+
+Create an order (PENDING), then verify the gateway signature to CONFIRM and issue a receipt.
+The sandbox endpoint exists only for the mock gateway outside production so the UI and tests
+can complete a payment without a real provider.
+"""
 
 import uuid
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, Header
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app import audit, db
-from app.auth import Principal, load_principal
+from app.auth import MaybeUser
+from app.config import get_settings
 from app.errors import ApiError, conflict, not_found
-from app.payments import get_gateway
-from app.security import ACCESS, decode_token
+from app.ratelimit import rate_limit
+from app.services.payments import get_gateway
 
-router = APIRouter(prefix="/api/v1", tags=["donations"])
-
-_bearer = HTTPBearer(auto_error=False)
+router = APIRouter(prefix="/api/v1/donations", tags=["donations"])
 
 
-def _optional_principal(
-    request: Request,
-    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-) -> Principal | None:
-    """Extract authenticated Principal if a valid bearer token is present.
-
-    Invalid or missing tokens are treated as unauthenticated guest requests (no 401).
-    """
-    if creds is None or creds.scheme.lower() != "bearer":
-        return None
-    claims = decode_token(creds.credentials, ACCESS)
-    if claims is None:
-        return None
-    try:
-        user_id = uuid.UUID(claims["sub"])
-        token_version = int(claims["tv"])
-    except (ValueError, KeyError):
-        return None
-    ip = request.client.host if request.client else None
-    return load_principal(user_id, token_version, claims.get("mfa") is True, ip)
-
-
-OptionalUser = Annotated[Principal | None, Depends(_optional_principal)]
-
-
-class PublicCampaignResponse(BaseModel):
-    campaign_id: uuid.UUID
-    title: str
-    purpose: str
-    scenario: str | None
-    target_amount: Decimal | None
-    currency: str
-    status: str
-
-
-class DonationCreateRequest(BaseModel):
+class DonationCreate(BaseModel):
     campaign_id: uuid.UUID
     amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
-    currency: str = Field(default="INR", max_length=3)
+    currency: str = Field(default="INR", pattern="^INR$")
     guest_name: str | None = Field(default=None, max_length=150)
     guest_email: str | None = Field(default=None, max_length=254)
     is_anonymous: bool = False
 
 
-class DonationResponse(BaseModel):
-    donation_id: uuid.UUID
-    gateway_name: str
-    gateway_order_id: str
-    amount: Decimal
-    currency: str
-    status: str
-    is_sandbox: bool
+class DonationVerify(BaseModel):
+    gateway_payment_id: str = Field(min_length=5, max_length=100)
+    signature: str = Field(min_length=10, max_length=200)
 
 
-@router.get("/public/campaigns", response_model=list[PublicCampaignResponse])
-def list_public_campaigns():
-    """Retrieve all active disaster relief donation campaigns (Contract Section 1.2)."""
-    with db.transaction() as conn:
-        rows = conn.execute(
-            """
-            SELECT campaign_id, title, purpose, lower(scenario::text) AS scenario,
-                   target_amount, rtrim(currency) AS currency, status
-            FROM donation_campaigns
-            WHERE status = 'ACTIVE'
-            ORDER BY created_at DESC
-            """
-        ).fetchall()
-    return rows
+def _order_body(row: dict) -> dict:
+    return {
+        "donation_id": row["donation_id"],
+        "gateway_name": row["gateway_name"],
+        "gateway_order_id": row["gateway_order_id"],
+        "amount": row["amount"],
+        "currency": row["currency"].strip(),
+        "status": row["status"],
+        "is_sandbox": True,
+    }
 
 
-@router.post("/donations", status_code=201, response_model=DonationResponse)
-def create_donation_order(
-    body: DonationCreateRequest,
-    request: Request,
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=100)],
-    principal: OptionalUser,
+def _load_for_caller(conn, donation_id: uuid.UUID, user) -> dict:
+    row = conn.execute("SELECT * FROM donations WHERE donation_id = %s FOR UPDATE", (donation_id,)).fetchone()
+    # A donation tied to an account is visible only to that account; guest donations to whoever holds the id.
+    if row is None or (row["donor_id"] is not None and (user is None or row["donor_id"] != user.user_id)):
+        raise not_found("Donation")
+    return row
+
+
+@router.post("", status_code=201, dependencies=[rate_limit("donation", 30, 3600)])
+def create_donation(
+    body: DonationCreate,
+    user: MaybeUser,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=100)] = None,
 ):
-    """Initiate a monetary donation order against an active campaign (Contract Section 6.1)."""
-    clean_idempotency = idempotency_key.strip()
-    req_currency = body.currency.strip().upper()
-
-    if req_currency != "INR":
-        raise ApiError(422, "UNSUPPORTED_CURRENCY", "Only INR currency is currently supported")
-
+    if not idempotency_key:
+        raise ApiError(422, "IDEMPOTENCY_KEY_REQUIRED", "The Idempotency-Key header is required")
+    if user is None and not (body.guest_email or body.is_anonymous):
+        raise ApiError(422, "VALIDATION_FAILED", "Guests must provide guest_email, or donate anonymously")
     gateway = get_gateway()
-    ip = request.client.host if request.client else None
-
     with db.transaction() as conn:
-        # 1. Idempotency replay check (fast path)
-        existing = conn.execute(
-            """
-            SELECT donation_id, gateway_name, gateway_order_id, amount,
-                   rtrim(currency) AS currency, status
-            FROM donations
-            WHERE idempotency_key = %s
-            """,
-            (clean_idempotency,),
-        ).fetchone()
+        existing = conn.execute("SELECT * FROM donations WHERE idempotency_key = %s", (idempotency_key,)).fetchone()
         if existing:
-            return {
-                "donation_id": existing["donation_id"],
-                "gateway_name": existing["gateway_name"] or gateway.name,
-                "gateway_order_id": existing["gateway_order_id"],
-                "amount": existing["amount"],
-                "currency": existing["currency"],
-                "status": existing["status"],
-                "is_sandbox": gateway.is_sandbox,
-            }
-
-        # 2. Campaign validation
+            same = (
+                existing["campaign_id"] == body.campaign_id
+                and existing["amount"] == body.amount
+                and existing["donor_id"] == (user.user_id if user else None)
+            )
+            if not same:
+                raise conflict("IDEMPOTENCY_CONFLICT", "Idempotency-Key was already used for a different donation")
+            return JSONResponse(status_code=200, content=jsonable_encoder(_order_body(existing)))
         campaign = conn.execute(
-            """
-            SELECT campaign_id, status, rtrim(currency) AS currency
-            FROM donation_campaigns
-            WHERE campaign_id = %s
-            """,
-            (body.campaign_id,),
+            "SELECT status FROM donation_campaigns WHERE campaign_id = %s", (body.campaign_id,)
         ).fetchone()
         if campaign is None:
             raise not_found("Campaign")
-
         if campaign["status"] != "ACTIVE":
-            raise conflict(
-                "CAMPAIGN_NOT_ACTIVE",
-                f"Campaign is not active (current status: {campaign['status']})",
-                {"campaign_id": str(body.campaign_id), "status": campaign["status"]},
-            )
-
-        if campaign["currency"] != req_currency:
-            raise ApiError(
-                422,
-                "CURRENCY_MISMATCH",
-                f"Campaign currency is {campaign['currency']}, got {req_currency}",
-            )
-
-        # 3. Donor identity & schema constraints
-        donor_id = principal.user_id if principal else None
-
-        if donor_id is not None:
-            # CHECK (donor_id IS NULL OR (guest_name IS NULL AND guest_email IS NULL))
-            guest_name = None
-            guest_email = None
-        else:
-            # CHECK (donor_id IS NOT NULL OR is_anonymous = TRUE OR guest_email IS NOT NULL)
-            clean_email = body.guest_email.strip().lower() if body.guest_email else None
-            clean_name = body.guest_name.strip() if body.guest_name else None
-
-            if not body.is_anonymous and not clean_email:
-                raise ApiError(
-                    422,
-                    "GUEST_EMAIL_REQUIRED",
-                    "Guest donors must provide an email address unless donating anonymously",
-                )
-
-            # If anonymous, guest_name must be NULL
-            guest_name = None if body.is_anonymous else clean_name
-            guest_email = clean_email
-
-        # 4. Generate order with payment gateway
-        order = gateway.create_order(
-            amount=body.amount,
-            currency=req_currency,
-            reference=f"camp_{body.campaign_id}",
-        )
-
-        # 5. Insert donation (status PENDING; receipt_no and receipt_issued_at remain NULL)
-        # Uses ON CONFLICT DO NOTHING to guard against concurrent idempotency races
+            raise conflict("CAMPAIGN_NOT_ACTIVE", "This campaign is not accepting donations")
+        donation_id = uuid.uuid4()
+        order_id = gateway.create_order(str(donation_id), str(body.amount), body.currency)
         row = conn.execute(
             """
-            INSERT INTO donations (
-                campaign_id, donor_id, amount, currency, status,
-                is_anonymous, guest_name, guest_email,
-                gateway_name, gateway_order_id, idempotency_key
-            )
-            VALUES (%s, %s, %s, %s, 'PENDING', %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (idempotency_key) DO NOTHING
-            RETURNING donation_id, gateway_name, gateway_order_id, amount,
-                      rtrim(currency) AS currency, status
+            INSERT INTO donations (donation_id, campaign_id, donor_id, amount, currency, is_anonymous,
+                                   guest_name, guest_email, gateway_name, gateway_order_id, idempotency_key)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
             """,
             (
-                body.campaign_id,
-                donor_id,
-                body.amount,
-                req_currency,
-                body.is_anonymous,
-                guest_name,
-                guest_email,
-                gateway.name,
-                order.order_id,
-                clean_idempotency,
+                donation_id, body.campaign_id, user.user_id if user else None, body.amount, body.currency,
+                body.is_anonymous, None if user else body.guest_name, None if user else body.guest_email,
+                gateway.name, order_id, idempotency_key,
             ),
         ).fetchone()
-
-        if row is None:
-            # Race condition conflict: another concurrent transaction committed with this key
-            existing = conn.execute(
-                """
-                SELECT donation_id, gateway_name, gateway_order_id, amount,
-                       rtrim(currency) AS currency, status
-                FROM donations
-                WHERE idempotency_key = %s
-                """,
-                (clean_idempotency,),
-            ).fetchone()
-            if existing:
-                return {
-                    "donation_id": existing["donation_id"],
-                    "gateway_name": existing["gateway_name"] or gateway.name,
-                    "gateway_order_id": existing["gateway_order_id"],
-                    "amount": existing["amount"],
-                    "currency": existing["currency"],
-                    "status": existing["status"],
-                    "is_sandbox": gateway.is_sandbox,
-                }
-            raise conflict("CONCURRENT_DONATION_CONFLICT", "Conflict creating donation order with this idempotency key")
-
-        # 6. Audit trail record within the same transaction
         audit.record(
-            conn,
-            actor=principal,
-            action="DONATION_ORDER_CREATED",
-            entity_type="donation",
-            entity_id=row["donation_id"],
-            after={
-                "campaign_id": str(body.campaign_id),
-                "amount": str(body.amount),
-                "currency": req_currency,
-                "gateway_order_id": order.order_id,
-                "is_anonymous": body.is_anonymous,
-                "donor_id": str(donor_id) if donor_id else None,
-            },
-            ip=ip,
+            conn, actor=user, action="DONATION_CREATED", entity_type="donation", entity_id=donation_id,
+            after={"amount": str(body.amount), "campaign_id": str(body.campaign_id), "gateway": gateway.name},
+            ip=user.ip if user else None,
         )
+        return _order_body(row)
 
-        return {
-            "donation_id": row["donation_id"],
-            "gateway_name": row["gateway_name"],
-            "gateway_order_id": row["gateway_order_id"],
-            "amount": row["amount"],
-            "currency": row["currency"],
-            "status": row["status"],
-            "is_sandbox": gateway.is_sandbox,
-        }
+
+@router.post("/{donation_id}/sandbox-payment")
+def sandbox_payment(donation_id: uuid.UUID, user: MaybeUser):
+    """Sandbox only: act as the gateway and return a payment id plus a valid signature."""
+    settings = get_settings()
+    if settings.payment_gateway != "mock" or settings.app_env == "production":
+        raise not_found("Endpoint")
+    gateway = get_gateway()
+    with db.transaction() as conn:
+        row = _load_for_caller(conn, donation_id, user)
+        if row["status"] != "PENDING":
+            raise conflict("DONATION_NOT_PENDING", f"Donation is {row['status']}")
+    payment_id = gateway.new_payment_id()
+    return {"gateway_payment_id": payment_id, "signature": gateway.sign(row["gateway_order_id"], payment_id)}
+
+
+@router.post("/{donation_id}/verify")
+def verify_donation(donation_id: uuid.UUID, body: DonationVerify, user: MaybeUser):
+    gateway = get_gateway()
+    with db.transaction() as conn:
+        row = _load_for_caller(conn, donation_id, user)
+        if row["status"] == "CONFIRMED":
+            if row["gateway_payment_id"] != body.gateway_payment_id:
+                raise conflict("ALREADY_CONFIRMED", "This donation was confirmed with a different payment")
+            return _confirmed_body(row)
+        if row["status"] != "PENDING":
+            raise conflict("DONATION_NOT_PENDING", f"Donation is {row['status']}")
+        if not gateway.verify(row["gateway_order_id"], body.gateway_payment_id, body.signature):
+            audit.record(
+                conn, actor=user, action="DONATION_SIGNATURE_REJECTED", entity_type="donation",
+                entity_id=donation_id, result="FAILURE", rationale="Gateway signature did not match",
+                ip=user.ip if user else None,
+            )
+            # commit the audit row, then fail the request
+            error = ApiError(400, "INVALID_SIGNATURE", "The payment signature is not valid")
+        else:
+            error = None
+            row = conn.execute(
+                """
+                UPDATE donations
+                SET status = 'CONFIRMED', gateway_payment_id = %s, gateway_txn_ref = %s,
+                    confirmed_at = now(), verified_at = now(),
+                    receipt_no = 'REC-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('receipt_seq')::text, 6, '0'),
+                    receipt_issued_at = now()
+                WHERE donation_id = %s RETURNING *
+                """,
+                (body.gateway_payment_id, body.gateway_payment_id, donation_id),
+            ).fetchone()
+            audit.record(
+                conn, actor=user, action="DONATION_CONFIRMED", entity_type="donation", entity_id=donation_id,
+                after={"receipt_no": row["receipt_no"]}, ip=user.ip if user else None,
+            )
+    if error:
+        raise error
+    return _confirmed_body(row)
+
+
+def _confirmed_body(row: dict) -> dict:
+    return {
+        "donation_id": row["donation_id"],
+        "status": row["status"],
+        "receipt_no": row["receipt_no"],
+        "receipt_issued_at": row["receipt_issued_at"],
+    }

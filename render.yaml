@@ -8,17 +8,29 @@ services:
     region: ohio
     autoDeploy: false
 
-    healthCheckPath: /health
+    healthCheckPath: /api/v1/health   # also reports database reachability
     envVars:
+      - key: APP_ENV
+        value: production
       - key: DATABASE_URL
-        sync: false
-      - key: REDIS_URL
-        sync: false
-      - key: RABBITMQ_URL
         sync: false
       - key: JWT_SECRET
         sync: false
-      - key: OPENAI_API_KEY
+      - key: MFA_ENCRYPTION_KEY
         sync: false
-      - key: HUGGINGFACE_API_KEY
+      - key: INGEST_TOKEN
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false          # e.g. https://your-app.vercel.app
+      - key: AI_TRIAGE_URL
+        sync: false
+      - key: AI_TRIAGE_TOKEN
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: PAYMENT_GATEWAY
+        value: mock
+      - key: MOCK_GATEWAY_SECRET
+        sync: false
+      - key: SACHET_FEED_URL
         sync: false

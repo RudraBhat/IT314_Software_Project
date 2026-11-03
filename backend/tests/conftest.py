@@ -42,6 +42,7 @@ os.environ["DATABASE_URL"] = TEST_DB_URL or ""
 os.environ["JWT_SECRET"] = "test-only-secret-" + "x" * 32
 os.environ["MFA_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
 os.environ["DISPATCH_ACK_TIMEOUT_MINUTES"] = "15"
+os.environ["RATE_LIMIT_ENABLED"] = "false"  # rate limiting has its own test
 os.environ.pop("AI_TRIAGE_URL", None)
 
 
@@ -49,7 +50,7 @@ def _db_available() -> bool:
     if not TEST_DB_URL:
         return False
     try:
-        with psycopg.connect(TEST_DB_URL, connect_timeout=3):
+        with psycopg.connect(TEST_DB_URL, connect_timeout=15):
             return True
     except psycopg.OperationalError:
         return False
@@ -69,7 +70,7 @@ def _ensure_schema() -> None:
                 if m.name != "01_schema.sql":
                     conn.execute(m.read_text(encoding="utf-8"))
         # Apply all seeds in ascending version order
-        for s in sorted((SQL_DIR / "seeds").glob("*.sql")):
+        for s in sorted((SQL_DIR / "seeds").glob("*/*.sql"), key=lambda f: f.name):
             conn.execute(s.read_text(encoding="utf-8"))
 
 
@@ -264,7 +265,7 @@ class Factory:
         return {**user, "headers": self.token(user, mfa=False)}
 
     def field_team_user(self, resource_id=None, callsign: str = "Bravo-1", is_leader: bool = True, password: str = "field-team-pass") -> dict:
-        user = self.user("FIELD_TEAM", password=password, mfa=False)
+        user = self.user("FIELD_TEAM", password=password, mfa=True)
         if not resource_id:
             res = self.resource(type_="TEAM")
             resource_id = res["resource_id"]
@@ -276,7 +277,7 @@ class Factory:
             """,
             (user["user_id"], resource_id, callsign, is_leader),
         )
-        return {**user, "headers": self.token(user, mfa=False), "resource_id": resource_id}
+        return {**user, "headers": self.token(user, mfa=True), "resource_id": resource_id}
 
 
 @pytest.fixture

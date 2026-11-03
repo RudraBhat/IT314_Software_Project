@@ -8,7 +8,7 @@ import { SESSION_COOKIE } from "@/lib/session";
  * Real authorisation happens in the /dm layout (via /api/v1/me) and in the backend.
  */
 export function proxy(request: NextRequest) {
-  if (!request.cookies.has(SESSION_COOKIE) && !request.cookies.has("drch_session")) {
+  if (!request.cookies.has(SESSION_COOKIE)) {
     const login = new URL("/login", request.url);
     login.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(login);
@@ -17,5 +17,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dm/:path*", "/report/:path*", "/report", "/my-reports/:path*", "/my-reports"],
+  matcher: ["/dm/:path*", "/citizen/:path*", "/report/:path*", "/report", "/my-reports/:path*", "/my-reports"],
 };

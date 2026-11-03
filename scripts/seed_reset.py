@@ -110,7 +110,7 @@ def resolve_seed_files(custom_spec: str | None = None) -> list[Path]:
                 sys.exit(f"ERROR: Specified seed file not found: {p}")
         return files
 
-    return sorted(SEEDS_DIR.glob("*.sql"), key=lambda p: p.name)
+    return sorted(SEEDS_DIR.glob("*/*.sql"), key=lambda p: p.name)  # reference/ + demo/ (dev and test only)
 
 
 def clear_dynamic_data(conn):

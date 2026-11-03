@@ -35,6 +35,8 @@ class BoundarySource:
 def get_registered_sources() -> list[BoundarySource]:
     """Return all configured administrative boundary sources."""
     settings = get_settings()
+    if not settings.geojson_gujarat_districts_url:
+        return []
     return [
         BoundarySource(
             key="gujarat_districts",
@@ -58,7 +60,7 @@ def _check_upstream_headers(
         - If 200 OK: returns (True, new_etag, new_last_modified, content)
     """
     headers = {
-        "User-Agent": "ResQ-EmergencyGIS-SpatialSync/1.0",
+        "User-Agent": "DRCH-EmergencyGIS-SpatialSync/1.0",
         "Accept": "application/geo+json, application/json, text/plain",
     }
     if etag:

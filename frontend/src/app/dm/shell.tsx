@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
+import { AlertsDrawer } from "@/components/dm/AlertsDrawer";
 import { ToastProvider, cx } from "@/components/ui";
 
 export type StaffUser = { name: string; email: string; permissions: string[] };
@@ -19,6 +20,7 @@ export function useStaff() {
 const NAV: { href: string; label: string; icon: string; permission?: string }[] = [
   { href: "/dm", label: "Dashboard", icon: "▦" },
   { href: "/dm/incidents", label: "Incidents", icon: "⚑" },
+  { href: "/dm/signals", label: "Signals", icon: "⚡" },
   { href: "/", label: "Live map", icon: "◎" },
   { href: "/dm/dispatches", label: "Dispatches", icon: "➜" },
   { href: "/dm/resources", label: "Resources", icon: "▣" },
@@ -42,6 +44,7 @@ const PERMISSION_LABEL: Record<string, string> = {
 export function DmShell({ user, signOut, children }: { user: StaffUser; signOut: () => Promise<void>; children: ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const isActive = (href: string) => (href === "/dm" || href === "/" ? pathname === href : pathname.startsWith(href));
   const items = NAV.filter((n) => !n.permission || user.permissions.includes(n.permission));
 
@@ -90,6 +93,9 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
                   {user.permissions.length ? user.permissions.map((p) => PERMISSION_LABEL[p] ?? p).join(" · ") : "Disaster Management"}
                 </p>
               </div>
+              <button onClick={() => setAlertsOpen(true)} className="rounded-full bg-white/10 px-3 py-1.5 text-xs transition hover:bg-white/20">
+                <span aria-hidden>🔔</span> Alerts
+              </button>
               <form action={signOut}>
                 <button className="rounded-full bg-white/10 px-3 py-1.5 text-xs transition hover:bg-white/20">Sign out</button>
               </form>
@@ -111,6 +117,7 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
               <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
             </div>
           </div>
+          <AlertsDrawer open={alertsOpen} onClose={() => setAlertsOpen(false)} />
         </div>
       </ToastProvider>
     </UserContext.Provider>

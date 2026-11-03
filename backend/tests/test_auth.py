@@ -35,6 +35,22 @@ def test_staff_login_requires_mfa_then_issues_token(client, make):
     assert "password_hash" not in str(me) and "mfa_secret" not in str(me)
 
 
+def test_field_team_login_requires_mfa_then_issues_token(client, make):
+    user = make.field_team_user()
+    first = _login(client, user["email"], user["password"])
+    assert first.status_code == 200
+    assert first.json()["mfa_required"] is True
+    assert "access_token" not in first.json()
+
+    code = pyotp.TOTP(user["totp_secret"]).now()
+    ok = client.post("/api/v1/auth/mfa/verify", json={"mfa_token": first.json()["mfa_token"], "code": code})
+    assert ok.status_code == 200
+    token = ok.json()["access_token"]
+    me = client.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"}).json()
+    assert me["role"] == "FIELD_TEAM"
+    assert me["mfa_verified"] is True
+
+
 def test_wrong_password_and_unknown_email_look_identical(client, make):
     user = make.user()
     a = _login(client, user["email"], "nope")

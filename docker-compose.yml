@@ -24,34 +24,6 @@ services:
       retries: 10
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    container_name: drch_redis
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: drch_rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
-    ports:
-      - "5672:5672"
-      - "15672:15672" # Admin UI
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   # ------------------------------------------------------------------------------
   # Application Services
   # ------------------------------------------------------------------------------
@@ -65,10 +37,7 @@ services:
     environment:
       - NODE_ENV=development
       - API_URL=http://backend:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
+    # No bind mount: the image runs the standalone production build. For hot reload run `npm run dev` in ./frontend.
     depends_on:
       backend:
         condition: service_healthy
@@ -82,19 +51,16 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-postgis:5432/${POSTGRES_DB:-drch_db}
-      - REDIS_URL=redis://redis:6379/0
-      - DEMO_MODE=${DEMO_MODE:-false}
-      - JWT_SECRET=${JWT_SECRET:-insecure_default_jwt_secret_at_least_32_chars_long}
+      - APP_ENV=development
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env (see .env.example)}
       - AI_TRIAGE_URL=${AI_TRIAGE_URL:-http://ai-workers:8001/triage}
+      - AI_TRIAGE_TOKEN=${AI_TRIAGE_TOKEN:-}
+      - MOCK_GATEWAY_SECRET=${MOCK_GATEWAY_SECRET:-dev-only-mock-gateway-secret-0123456789}
       - GIT_SHA=${GIT_SHA:-dev}
     volumes:
       - ./backend:/app
     depends_on:
       postgres-postgis:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
         condition: service_healthy
 
   ai-workers:
@@ -105,16 +71,7 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-postgis:5432/${POSTGRES_DB:-drch_db}
-    volumes:
-      - ./ai-workers:/app
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - AI_TRIAGE_TOKEN=${AI_TRIAGE_TOKEN:-}
 
 volumes:
   pgdata:

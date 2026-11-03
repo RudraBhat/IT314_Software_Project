@@ -2,22 +2,16 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { isInGujarat, clampToGujarat, GUJARAT_CENTER } from "@/lib/geo";
-import { createReport } from "@/services/citizenApi";
+import { isInGujarat, GUJARAT_CENTER } from "@/lib/geo";
+import { createReport, fetchPublicIncidents, type PublicIncident, type Scenario } from "@/services/citizenApi";
+import { findNearbyIncidents } from "@/services/duplicateDetection";
+import { URGENT_NEEDS, preTriage } from "@/services/preTriage";
 
 const SCENARIOS = [
   { id: "urban_flooding", label: "Urban Flooding", icon: "🌊", desc: "Waterlogging, rising flood water, stranded residents" },
   { id: "cyclone", label: "Cyclone / Storm", icon: "🌀", desc: "High winds, structural damage, coastal surges" },
   { id: "industrial_fire", label: "Fire Emergency", icon: "🔥", desc: "Building, chemical, or industrial fires" },
-  { id: "earthquake", label: "Earthquake", icon: "🏚️", desc: "Structural collapse, tremors, trapped victims" },
 ];
-
-const SCENARIO_TO_CATEGORY: Record<string, string> = {
-  urban_flooding: "Flood / Urban Flood",
-  cyclone: "Cyclone / Coastal Flooding",
-  industrial_fire: "Major Urban / Building Fire",
-  earthquake: "Earthquake / Structural Collapse",
-};
 
 const URGENCIES = [
   { id: "LOW", label: "Low", color: "border-slate-600 text-slate-300" },
@@ -36,7 +30,10 @@ export default function ReportIncidentPage() {
   const [longitude, setLongitude] = useState(GUJARAT_CENTER[1]);
   const [addressText, setAddressText] = useState("");
   const [landmark, setLandmark] = useState("");
-  const [locationSource, setLocationSource] = useState<"GPS" | "MAP_PIN" | "ADDRESS">("MAP_PIN");
+  const [locationSource, setLocationSource] = useState<"GPS" | "MAP_PIN" | "MANUAL">("MAP_PIN");
+
+  const [needs, setNeeds] = useState<string[]>([]);
+  const [publicIncidents, setPublicIncidents] = useState<PublicIncident[]>([]);
 
   // Idempotency key per form session (initialized lazily)
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => {
@@ -60,6 +57,13 @@ export default function ReportIncidentPage() {
   // Validation
   const validLocation = isInGujarat(latitude, longitude);
 
+  // Advisory hints: verified incidents already reported nearby, and an instant rule-based urgency hint.
+  useEffect(() => {
+    fetchPublicIncidents().then((res) => res.data && setPublicIncidents(res.data));
+  }, []);
+  const nearby = validLocation ? findNearbyIncidents(latitude, longitude, scenario as Scenario, publicIncidents) : [];
+  const hint = preTriage(scenario as Scenario, description, peopleAffected, needs);
+
   // GPS Geolocation Handler
   const handleUseGPS = () => {
     if (!navigator.geolocation) {
@@ -72,12 +76,11 @@ export default function ReportIncidentPage() {
         const rawLat = pos.coords.latitude;
         const rawLon = pos.coords.longitude;
         if (!isInGujarat(rawLat, rawLon)) {
-          const [clampedLat, clampedLon] = clampToGujarat(rawLat, rawLon);
-          setLatitude(clampedLat);
-          setLongitude(clampedLon);
+          // Never move the reporter: a report from the wrong place would send responders to the wrong place.
           setErrorMessage(
-            `Your detected GPS location (${rawLat.toFixed(4)}, ${rawLon.toFixed(4)}) is outside Gujarat. Coordinates were adjusted to the nearest Gujarat border.`
+            `Your detected location (${rawLat.toFixed(4)}, ${rawLon.toFixed(4)}) is outside Gujarat. Pick the incident location on the map or search for an address in Gujarat.`
           );
+          return;
         } else {
           setLatitude(Number(rawLat.toFixed(5)));
           setLongitude(Number(rawLon.toFixed(5)));
@@ -142,7 +145,7 @@ export default function ReportIncidentPage() {
     setLatitude(lat);
     setLongitude(lon);
     setAddressText(result.display_name);
-    setLocationSource("ADDRESS");
+    setLocationSource("MANUAL");
     setSearchResults([]);
     setSearchQuery("");
   };
@@ -164,26 +167,18 @@ export default function ReportIncidentPage() {
     setIsSubmitting(true);
 
     try {
-      const resolvedCategory = SCENARIO_TO_CATEGORY[scenario] || "Flood / Urban Flood";
       const payload = {
-        scenario,
-        description: description.trim(),
-        reported_urgency: urgency,
+        scenario: scenario as Scenario,
+        description: needs.length ? `${description.trim()}
+
+Urgent needs: ${needs.join(", ")}` : description.trim(),
+        reported_urgency: urgency as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
         people_affected: Number(peopleAffected),
         location_source: locationSource,
         latitude,
         longitude,
         address_text: addressText.trim() || undefined,
         landmark: landmark.trim() || undefined,
-        // Stand-in compatible fields
-        category: resolvedCategory,
-        location_name: addressText || landmark || "Gujarat Incident Location",
-        lat: latitude,
-        lon: longitude,
-        affected_people_count: Number(peopleAffected),
-        urgent_needs: [urgency],
-        reporter_name: "Citizen Reporter",
-        reporter_phone: "",
       };
 
       const res = await createReport(payload, { idempotencyKey });
@@ -194,10 +189,13 @@ export default function ReportIncidentPage() {
         return;
       }
 
-      const refNumber = res.data?.incident_ref || res.data?.id || `INC-GUJ-${Date.now().toString().slice(-6)}`;
-      const status = res.data?.status || res.data?.verification_status || "SUBMITTED";
-
-      setSuccessResult({ reference: refNumber, status });
+      const refNumber = res.data?.incident_ref;
+      if (!refNumber) {
+        // Never invent a reference number: without one the report was not confirmed by the server.
+        setErrorMessage("The server did not confirm your report. Please try again.");
+        return;
+      }
+      setSuccessResult({ reference: refNumber, status: res.data?.status || "SUBMITTED" });
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Failed to submit report. Please try again.");
     } finally {
@@ -313,7 +311,7 @@ export default function ReportIncidentPage() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setScenario(item.id)}
+                        onClick={() => { setScenario(item.id); setNeeds([]); }}
                         className={`p-3.5 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer ${
                           isSelected
                             ? "bg-sky-950/40 border-sky-500 shadow-md shadow-sky-500/10"
@@ -400,6 +398,54 @@ export default function ReportIncidentPage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-sky-500 transition resize-none"
                 />
               </div>
+
+              {/* Urgent needs checklist */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                  Urgent needs (optional)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {URGENT_NEEDS[scenario as Scenario].map((need) => (
+                    <label key={need} className={`px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition ${needs.includes(need) ? "border-sky-500 bg-sky-950/40 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"}`}>
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={needs.includes(need)}
+                        onChange={() => setNeeds(needs.includes(need) ? needs.filter((n) => n !== need) : [...needs, need])}
+                      />
+                      {need}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {hint.level && (
+                <div className="p-4 bg-amber-950/40 border border-amber-700/50 rounded-xl text-xs text-amber-100" role="status">
+                  <div className="font-semibold">
+                    Automated hint: this may be {hint.level === "CRITICAL" ? "a life-threatening situation" : "a serious situation"}
+                  </div>
+                  <ul className="mt-1 list-disc pl-4 text-amber-200/90">
+                    {hint.reasons.map((r) => <li key={r}>{r}</li>)}
+                  </ul>
+                  <div className="mt-1 text-amber-300/80">
+                    This is advisory only. Choose the urgency yourself; a dispatcher reviews every report. If someone is in immediate danger, call 112.
+                  </div>
+                </div>
+              )}
+
+              {nearby.length > 0 && (
+                <div className="p-4 bg-sky-950/40 border border-sky-700/50 rounded-xl text-xs text-sky-100" role="status">
+                  <div className="font-semibold">Similar incidents are already on the public map nearby</div>
+                  <ul className="mt-1 text-sky-200/90">
+                    {nearby.map((n) => (
+                      <li key={n.incident.id}>
+                        {n.incident.id} · {n.incident.title} · about {n.distanceMeters < 1000 ? `${n.distanceMeters} m` : `${(n.distanceMeters / 1000).toFixed(1)} km`} away
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-1 text-sky-300/80">You can still submit. Extra reports help dispatchers confirm what is happening.</div>
+                </div>
+              )}
 
               {/* Location Picker Section */}
               <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-5 space-y-4">
