@@ -88,10 +88,13 @@ def test_cap_parser_checks_all_language_blocks_areas_and_polygons(monkeypatch):
           <polygon>26.0,75.0 26.0,76.0 27.0,76.0 26.0,75.0</polygon>
           <polygon>23.0,72.4 23.0,72.6 23.2,72.6 23.0,72.4</polygon>
         </area>
-        <area><areaDesc>Kutch, Gujarat</area><circle>23.1,70.1 5</circle></area>
+        <area><areaDesc>Kutch, Gujarat</areaDesc><circle>23.1,70.1 5</circle></area>
       </info>
     </alert>"""
-    monkeypatch.setattr("app.services.ingest.sachet.is_in_gujarat", lambda lat, lon: 20 <= lat <= 25 and 68 <= lon <= 75)
+    monkeypatch.setattr(
+        "app.services.ingest.sachet.is_in_gujarat",
+        lambda lat, lon: 20 <= lat <= 25 and 68 <= lon <= 75,
+    )
 
     result = parse_cap_xml(xml)
 
