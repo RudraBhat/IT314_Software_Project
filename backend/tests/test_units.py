@@ -10,7 +10,7 @@ from app.services.ai_provider import UnavailableProvider, apply_guardrails
 
 def test_root_and_health(client):
     assert client.get("/").status_code == 200
-    assert client.get("/health").json() == {"status": "healthy", "service": "drch-backend"}
+    assert client.get("/health").json() == {"status": "healthy", "service": "resq-backend"}
 
 
 def test_password_hashing_is_argon2id_and_verifies():
@@ -215,7 +215,7 @@ def test_api_v1_health_returns_version(client, monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "healthy"
-    assert data["service"] == "drch-backend"
+    assert data["service"] == "resq-backend"
     assert data["version"] == "test_commit_sha_1234567890"
 
 

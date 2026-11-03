@@ -216,7 +216,7 @@ def reset_seeds(custom_seed_files: str | None = None, force: bool = False) -> di
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Safely reset DRCH database seeds.")
+    parser = argparse.ArgumentParser(description="Safely reset ResQ database seeds.")
     parser.add_argument("--seed-files", help="Custom seed SQL files (space or comma separated)")
     parser.add_argument("--force", action="store_true", help="Override safety guard for external/cloud DBs")
     args = parser.parse_args()

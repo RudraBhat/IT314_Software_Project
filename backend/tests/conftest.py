@@ -69,8 +69,12 @@ def _ensure_schema() -> None:
             for m in sorted((SQL_DIR / "migrations").glob("*.sql")):
                 if m.name != "01_schema.sql":
                     conn.execute(m.read_text(encoding="utf-8"))
-        # Apply all seeds in ascending version order
-        for s in sorted((SQL_DIR / "seeds").glob("*/*.sql"), key=lambda f: f.name):
+        # Apply reference and demo seeds in ascending version order (optional/ is excluded)
+        seeds = sorted(
+            [*(SQL_DIR / "seeds").glob("reference/*.sql"), *(SQL_DIR / "seeds").glob("demo/*.sql")],
+            key=lambda f: f.name,
+        )
+        for s in seeds:
             conn.execute(s.read_text(encoding="utf-8"))
 
 
@@ -123,7 +127,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
 
     req_db_on = os.getenv("REQUIRE_DB_TESTS") == "1"
 
-    terminalreporter.write_sep("=", "DRCH SUITE EXECUTION SUMMARY", bold=True)
+    terminalreporter.write_sep("=", "RESQ SUITE EXECUTION SUMMARY", bold=True)
     terminalreporter.write_line(f"Executed Tests: {total_ran} (Passed: {passed}, Failed: {failed})")
     terminalreporter.write_line(f"Skipped Tests:  {skipped}")
     terminalreporter.write_line(f"  DB-backed Tests: Passed: {db_passed}, Failed: {db_failed}, Skipped: {db_skipped}")

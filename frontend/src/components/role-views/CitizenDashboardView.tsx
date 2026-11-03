@@ -409,7 +409,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
               </span>
             </div>
             <div className="text-[10px] text-sky-200/80 leading-tight mt-0.5 hidden sm:block">
-              Disaster Response Coordination Hub • Emergency Services (112)
+              ResQ • Emergency Services (112)
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DRCH core-loop smoke test - STRICT: any unexpected response fails the run (no "Notice:" fallbacks).
+"""ResQ core-loop smoke test - STRICT: any unexpected response fails the run (no "Notice:" fallbacks).
 
   1. /health and /api/v1/health respond; database is "ok"
   2. Citizen registers (contract password policy) and gets a session
@@ -108,6 +108,6 @@ def run(base_url: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the DRCH core-loop smoke test")
+    parser = argparse.ArgumentParser(description="Run the ResQ core-loop smoke test")
     parser.add_argument("--base-url", default=BASE_URL)
     run(parser.parse_args().base_url)

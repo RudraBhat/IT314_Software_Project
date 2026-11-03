@@ -6,7 +6,7 @@ import { currentUser } from "@/lib/session";
 
 import { DmShell } from "./shell";
 
-export const metadata: Metadata = { title: "Operations · DRCH" };
+export const metadata: Metadata = { title: "Operations · ResQ" };
 
 export default async function DmLayout({ children }: LayoutProps<"/dm">) {
   const user = await currentUser();

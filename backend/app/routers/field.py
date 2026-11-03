@@ -40,17 +40,6 @@ logger = logging.getLogger("drch.field")
 
 router = APIRouter(prefix="/api/v1/field", tags=["field-operations"])
 
-_ASSIGNMENT_SELECT = """
-SELECT d.dispatch_id, d.dispatch_ref, d.status, d.priority,
-       i.incident_id, i.incident_ref, lower(i.scenario::text) AS scenario,
-       i.district, i.address_text, i.landmark,
-       ST_Y(i.geom::geometry) AS latitude, ST_X(i.geom::geometry) AS longitude,
-       d.instructions, d.created_at AS dispatched_at, d.acknowledged_at,
-       (d.status = 'REQUESTED' AND d.created_at < now() - make_interval(mins => %(timeout)s)) AS overdue
-FROM dispatch_orders d
-JOIN incidents i ON i.incident_id = d.incident_id
-"""
-
 
 def _timeout() -> int:
     return get_settings().dispatch_ack_timeout_minutes
@@ -174,25 +163,31 @@ def get_field_assignments(
     if not get_settings().database_url:
         return []
 
-    active_condition = "AND ra.released_at IS NULL AND d.status IN ('REQUESTED', 'ACKNOWLEDGED', 'DISPATCHED')" if active else ""
-
-    query_str = f"""
-    {_ASSIGNMENT_SELECT}
+    query = sql.SQL("""
+    SELECT d.dispatch_id, d.dispatch_ref, d.status, d.priority,
+           i.incident_id, i.incident_ref, lower(i.scenario::text) AS scenario,
+           i.district, i.address_text, i.landmark,
+           ST_Y(i.geom::geometry) AS latitude, ST_X(i.geom::geometry) AS longitude,
+           d.instructions, d.created_at AS dispatched_at, d.acknowledged_at,
+           (d.status = 'REQUESTED' AND d.created_at < now() - make_interval(mins => %(timeout)s)) AS overdue
+    FROM dispatch_orders d
+    JOIN incidents i ON i.incident_id = d.incident_id
     WHERE EXISTS (
         SELECT 1 FROM resource_assignments ra
         WHERE ra.dispatch_id = d.dispatch_id
           AND ra.resource_id = %(team_id)s
-          {active_condition}
+          AND (NOT %(active_only)s OR (ra.released_at IS NULL AND d.status IN ('REQUESTED', 'ACKNOWLEDGED', 'DISPATCHED')))
     )
     ORDER BY (d.status = 'REQUESTED') DESC, d.created_at DESC
-    """
+    """)
     params: dict[str, Any] = {
         "team_id": principal.team_resource_id,
         "timeout": _timeout(),
+        "active_only": active,
     }
 
     with db.transaction() as conn:
-        rows = conn.execute(sql.SQL(query_str), params).fetchall()
+        rows = conn.execute(query, params).fetchall()
 
     return [
         FieldAssignmentResponse(

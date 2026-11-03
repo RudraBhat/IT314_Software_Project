@@ -1,8 +1,8 @@
-# DRCH Deployment & Migration Runbook: Audit v2 Upgrade
+# ResQ Deployment & Migration Runbook: Audit v2 Upgrade
 
 > [!IMPORTANT]
 > **OPERATIONAL RUNBOOK ONLY — DO NOT EXECUTE AUTOMATICALLY IN TESTING/CI.**
-> This runbook is intended for operations and deployment engineers upgrading staging and production DRCH environments from legacy/Sprint 2 builds to the tested `fix/audit-v2` architecture.
+> This runbook is intended for operations and deployment engineers upgrading staging and production ResQ environments from legacy/Sprint 2 builds to the tested `fix/audit-v2` architecture.
 
 ---
 

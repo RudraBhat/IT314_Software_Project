@@ -1,4 +1,4 @@
-# DRCH Backend Test Suite Reference
+# ResQ Backend Test Suite Reference
 
 Comprehensive guide to executing backend unit and integration tests, configuring database guards, starting the local PostGIS test container, and utilizing test fixtures.
 

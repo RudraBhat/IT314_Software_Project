@@ -1,8 +1,8 @@
-# Disaster Response Coordination Hub (DRCH) — Architecture Reference
+# ResQ — Architecture Reference
 
 ## 1. System Overview
 
-The **Disaster Response Coordination Hub (DRCH)** is an operational incident coordination platform built specifically for the State of Gujarat. The system coordinates three distinct user groups:
+The **ResQ** platform is an operational incident coordination platform built specifically for the State of Gujarat. The system coordinates three distinct user groups:
 1. **Citizens:** Submit geolocated disaster reports with media attachments, receive safety bulletins, track report status, and locate relief shelters.
 2. **Disaster Management (DM) Staff & Dispatchers:** Triage and verify incoming citizen reports, inspect AI suggestions, monitor district operational heatmaps, and dispatch response teams and equipment with concurrency-safe resource locking.
 3. **Field Teams & Responders:** Receive assignments, acknowledge dispatches, log progress timestamps (`EN_ROUTE`, `ON_SCENE`, `COMPLETED`), and provide ground situation updates.

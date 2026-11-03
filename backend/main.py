@@ -139,7 +139,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="DRCH API Gateway & Workers",
+    title="ResQ API Gateway & Workers",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -169,12 +169,12 @@ app.add_middleware(
 
 @app.get('/')
 def read_root():
-    return {'message': 'DRCH API Gateway & In-Process AI Worker are running'}
+    return {'message': 'ResQ API Gateway & In-Process AI Worker are running'}
 
 
 @app.get('/health')
 def health_check():
-    return {'status': 'healthy', 'service': 'drch-backend'}
+    return {'status': 'healthy', 'service': 'resq-backend'}
 
 
 @app.get('/api/v1/health')
@@ -191,7 +191,7 @@ def api_health():
             database = "unavailable"
     return {
         'status': 'healthy',
-        'service': 'drch-backend',
+        'service': 'resq-backend',
         'database': database,
         'version': os.getenv("GIT_SHA", "dev"),
     }

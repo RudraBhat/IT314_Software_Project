@@ -9,7 +9,7 @@ staff without any hardcoded credentials:
     python -m app.cli set-permissions --email ops@example.org --permissions DISPATCH
     python -m app.cli reset-mfa --email ops@example.org
 
-The password is read interactively (or from DRCH_STAFF_PASSWORD for automation)
+The password is read interactively (or from RESQ_STAFF_PASSWORD / DRCH_STAFF_PASSWORD for automation)
 and never printed. The TOTP secret is shown once for enrolment in an
 authenticator app and stored encrypted.
 """
@@ -35,7 +35,12 @@ def _parse_permissions(raw: str) -> list[str]:
 
 
 def _read_password() -> str:
-    password = os.getenv("DRCH_STAFF_PASSWORD") or os.getenv("DRCH_FIELD_PASSWORD")
+    password = (
+        os.getenv("RESQ_STAFF_PASSWORD")
+        or os.getenv("DRCH_STAFF_PASSWORD")
+        or os.getenv("RESQ_FIELD_PASSWORD")
+        or os.getenv("DRCH_FIELD_PASSWORD")
+    )
     if not password:
         password = getpass.getpass("Password: ")
         if password != getpass.getpass("Repeat password: "):

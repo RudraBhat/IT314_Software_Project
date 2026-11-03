@@ -60,7 +60,7 @@ def _check_upstream_headers(
         - If 200 OK: returns (True, new_etag, new_last_modified, content)
     """
     headers = {
-        "User-Agent": "DRCH-EmergencyGIS-SpatialSync/1.0",
+        "User-Agent": "ResQ-EmergencyGIS-SpatialSync/1.0",
         "Accept": "application/geo+json, application/json, text/plain",
     }
     if etag:

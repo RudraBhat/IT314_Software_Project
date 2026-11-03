@@ -203,7 +203,7 @@ export default function PublicPortalPage() {
           </div>
           <div>
             <div className="flex items-baseline gap-1.5 leading-tight">
-              <span className="text-xl font-black text-white tracking-tight">DRCH</span>
+              <span className="text-xl font-black text-white tracking-tight">ResQ</span>
               <span className="text-xs font-medium text-sky-200">Gujarat Emergency Portal</span>
             </div>
             <div className="text-[10px] text-sky-200/80">Disaster Response Coordination Hub · NDMA</div>

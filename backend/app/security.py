@@ -109,4 +109,4 @@ def verify_totp(secret: str, code: str) -> bool:
 
 
 def provisioning_uri(secret: str, email: str) -> str:
-    return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name="DRCH")
+    return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name="ResQ")

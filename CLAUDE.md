@@ -1,4 +1,4 @@
-# DRCH — Claude Code Team Instructions
+# ResQ — Claude Code Team Instructions
 
 @AGENTS.md
 
@@ -6,7 +6,7 @@
 - **Architecture Reference:** Read `docs/ARCHITECTURE.md` before making architectural or cross-module changes.
 - **API Contracts:** Refer to `docs/api_contracts.md` for existing REST contracts and standardized error formats.
 - **Environment Variables:** Refer to `docs/env-variables.md` for supported configuration variables.
-- **Target Platform:** Disaster Response Coordination Hub (DRCH) for Gujarat (FastAPI + Neon PostgreSQL PostGIS + Next.js 14).
+- **Target Platform:** ResQ Disaster Response Coordination Hub for Gujarat (FastAPI + Neon PostgreSQL PostGIS + Next.js 14).
 
 ## 2. Working Workflow
 1. **Analyze:** Understand the user request and scope the smallest viable change.

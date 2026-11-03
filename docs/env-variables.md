@@ -35,8 +35,10 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `SACHET_FEED_URL` | no | empty | CAP alert XML feed URL for SACHET/NDMA automated ingestion. Empty = adapter disabled. |
 | `GIT_SHA` | no | `dev` | Commit id shown by `/api/v1/health` (CD smoke test). |
 | `RATE_LIMIT_ENABLED` | no | `true` | Set `false` only in automated tests. |
-| `DRCH_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff`. |
-| `DRCH_FIELD_PASSWORD` (S) | no | - | Non-interactive password for the field-team provisioning command in `python -m app.cli`; `DRCH_STAFF_PASSWORD` is used first when both are set. |
+| `RESQ_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff`. |
+| `RESQ_FIELD_PASSWORD` (S) | no | - | Non-interactive password for the field-team provisioning command in `python -m app.cli`. |
+| `DRCH_STAFF_PASSWORD` (S) | no | - | Backward-compatible alias for `RESQ_STAFF_PASSWORD`. |
+| `DRCH_FIELD_PASSWORD` (S) | no | - | Backward-compatible alias for `RESQ_FIELD_PASSWORD`. |
 | `RAZORPAY_KEY_ID` | no | - | Razorpay key id for the (not yet wired) Razorpay adapter; a `rzp_live` prefix marks live mode. |
 | `RAZORPAY_KEY_SECRET` (S) | no | - | Razorpay key secret used to verify payment signatures. |
 | `RAZORPAY_WEBHOOK_SECRET` (S) | no | - | Razorpay webhook signing secret. |

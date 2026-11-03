@@ -182,10 +182,10 @@ export default function DonatePage() {
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2 group">
               <span className="flex size-8 items-center justify-center rounded-lg bg-red-600 text-white font-bold text-sm shadow-xs group-hover:bg-red-700 transition">
-                DR
+                RQ
               </span>
               <span className="text-base font-bold tracking-tight text-slate-900">
-                DRCH Disaster Relief Fund
+                ResQ Disaster Relief Fund
               </span>
             </Link>
           </div>

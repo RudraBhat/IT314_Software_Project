@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Gujarat Disaster Management Platform (DRCH) - Core Loop Smoke Test Wrapper
+# Gujarat Disaster Management Platform (ResQ) - Core Loop Smoke Test Wrapper
 # Thin wrapper around python scripts/smoke.py (N11)
 # ==============================================================================
 set -euo pipefail

@@ -1,10 +1,10 @@
-# Gujarat Disaster Management Platform (DRCH)
+# ResQ — Gujarat Disaster Response Coordination Hub
 
-Disaster Response Coordination Hub — an operational incident coordination
-platform built for the State of Gujarat. The system connects three groups of
-users: citizens who report emergencies, disaster management staff who triage
-and dispatch resources, and field teams who receive assignments and report
-progress in the field.
+ResQ is an operational disaster response coordination platform built for the
+State of Gujarat. The system connects three groups of users: citizens who
+report emergencies, disaster management staff who triage and dispatch
+resources, and field teams who receive assignments and report progress in the
+field.
 
 ---
 

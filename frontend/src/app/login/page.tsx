@@ -52,7 +52,7 @@ export default function LoginPage() {
           </div>
           <div>
             <div className="flex items-baseline gap-1.5 leading-tight">
-              <span className="text-xl font-extrabold text-white">DRCH</span>
+              <span className="text-xl font-extrabold text-white">ResQ</span>
               <span className="text-xs font-light text-sky-200">GeoPlatform</span>
             </div>
             <div className="text-[9px] text-sky-200/80">NDMA Disaster Response Coordination Hub</div>
@@ -67,7 +67,7 @@ export default function LoginPage() {
       </main>
 
       <footer className="text-center py-4 text-xs text-slate-500">
-        Disaster Response Coordination Hub (DRCH) · Government of Gujarat
+        ResQ · Disaster Response Coordination Hub · Government of Gujarat
       </footer>
     </div>
   );

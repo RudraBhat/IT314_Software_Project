@@ -21,7 +21,7 @@ function ErrorBox({ message }: { message: string }) {
 
 /**
  * Administrator (Command & Dispatch) sign-in. Unlike the demo flows, this authenticates
- * against the DRCH backend: password, then the staff member's authenticator code (DM-FR-01).
+ * against the ResQ backend: password, then the staff member's authenticator code (DM-FR-01).
  */
 export function StaffSignIn({ next }: { next?: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(authenticate, { step: "password" });

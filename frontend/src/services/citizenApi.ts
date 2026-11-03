@@ -1,5 +1,5 @@
 /**
- * DRCH citizen API client (talks to the Next.js BFF at /api/citizen/* and the public API).
+ * ResQ citizen API client (talks to the Next.js BFF at /api/citizen/* and the public API).
  *
  * Security: never sends identity headers; the BFF attaches the verified session token server-side.
  * There is NO offline/demo fallback here: when the backend fails the caller receives `error` and

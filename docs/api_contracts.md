@@ -1,4 +1,4 @@
-# 📑 Disaster Response Coordination Hub (DRCH) - API Contracts Specification
+# 📑 ResQ — API Contracts Specification
 
 **Lead & Integration Architect:** Siddh (@Siddhcreator-1706)  
 **Standard Error Format:** Standardized according to SRS s.15.7 and `app.errors`:

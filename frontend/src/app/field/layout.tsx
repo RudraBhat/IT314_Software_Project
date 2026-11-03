@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { signOut } from "@/app/login/actions";
 import { currentUser } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Field Operations · DRCH" };
+export const metadata: Metadata = { title: "Field Operations · ResQ" };
 
 export default async function FieldLayout({ children }: { children: ReactNode }) {
   const user = await currentUser();
@@ -37,7 +37,7 @@ export default async function FieldLayout({ children }: { children: ReactNode })
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-500">Field Responder</span>
                 <span className="text-xs text-muted">| {user.full_name}</span>
               </div>
-              <h1 className="text-base font-semibold leading-none sm:text-lg">DRCH Field Ops</h1>
+              <h1 className="text-base font-semibold leading-none sm:text-lg">ResQ Field Ops</h1>
             </div>
           </div>
           <form action={signOut}>
