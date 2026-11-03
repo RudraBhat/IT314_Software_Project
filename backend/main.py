@@ -89,6 +89,23 @@ async def spatial_boundary_monthly_worker():
         logger.info("Spatial boundary worker stopped gracefully.")
 
 
+async def ingestion_background_worker():
+    """Poll configured alert and replay sources on the configured interval."""
+    interval = get_settings().ingest_interval_seconds
+    logger.info("Starting ingestion scheduler (interval=%s seconds)", interval)
+    try:
+        while True:
+            if get_settings().database_url:
+                try:
+                    from app.services.ingestion import run_ingestion
+                    await asyncio.to_thread(run_ingestion, "ALL")
+                except Exception:
+                    logger.exception("Ingestion scheduler cycle failed; will retry")
+            await asyncio.sleep(interval)
+    except asyncio.CancelledError:
+        logger.info("Ingestion scheduler stopped gracefully.")
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Application Lifespan (startup / shutdown)
 # ═══════════════════════════════════════════════════════════════════
@@ -121,16 +138,22 @@ async def lifespan(app: FastAPI):
     # Startup: spawn worker tasks in background
     worker_task = asyncio.create_task(ai_workers_background_consumer())
     spatial_task = asyncio.create_task(spatial_boundary_monthly_worker())
+    ingestion_task = asyncio.create_task(ingestion_background_worker())
     yield
     # Shutdown: cancel worker tasks
     worker_task.cancel()
     spatial_task.cancel()
+    ingestion_task.cancel()
     try:
         await worker_task
     except asyncio.CancelledError:
         pass
     try:
         await spatial_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await ingestion_task
     except asyncio.CancelledError:
         pass
     db.close_pool()

@@ -120,6 +120,10 @@ Health check endpoints:
 | **Tanishq** | Frontend & Backend | Frontend Lead (Public & Dispatch)| Public Gujarat interactive map, Dispatcher workspace console, recommendations UI. |
 | **Dhruv** | Frontend & Backend | QA & Test Lead | DB test fixtures, smoke test suite (`scripts/smoke.py`), ran-and-skipped guard, scenario tests. |
 
+### Ingestion sources
+
+The backend polls the configured SACHET CAP feed and USGS GeoJSON feed every 10 minutes. It also replays team-authored social-style samples into the dispatcher signal queue; replay items are sanitised and clearly marked simulated. Only unexpired alerts from official sources are returned by the public alerts API. Ingested signals never become incidents or public alerts without a human dispatcher workflow. See [the source-access memo](docs/ingestion-sources.md) for access, caching, attribution and deployment checks.
+
 ---
 
 ## 📅 3-Sprint Implementation Plan

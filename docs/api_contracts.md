@@ -229,8 +229,8 @@ Until an enterprise transactional email provider is connected, public password r
 ### 4.1 Ingestion Trigger Endpoint
 * **Path:** `POST /api/v1/internal/ingest/run`
 * **Auth:** Header `X-Ingest-Token` or `Authorization: Bearer <INGEST_TOKEN>`
-* **Query Parameters:** `source` *(optional string: `USGS`, `SACHET`, `ALL`)*
-* **Response (200 OK):**
+* **Query Parameters:** `source` *(optional string: `USGS`, `SACHET`, `REPLAY`, `ALL`)*
+* **Response (200 OK):** a single run for a named source; an array of per-source runs for `ALL`.
 ```json
 {
   "run_id": "e2f0980c-61cb-4bc1-90a8-bcf6b45a6c02",
@@ -240,6 +240,8 @@ Until an enterprise transactional email provider is connected, public password r
   "status": "SUCCESS"
 }
 ```
+
+The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm/ingestion/poll` starts an immediate poll for staff with `DISPATCH` or `SUPERVISOR`; `GET /api/v1/dm/ingestion/health` returns each source's latest run, 24-hour counts and latest error. Both require an MFA-verified staff session. `REPLAY` rows are always marked simulated; the public alerts API returns only unexpired SACHET, USGS, GDACS or IMD alerts and includes the source and fallback flag.
 
 ### 4.2 Raw Signals Queue (DM Workspace)
 * **Path:** `GET /api/v1/dm/signals`

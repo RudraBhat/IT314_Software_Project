@@ -57,6 +57,9 @@ class PublicAlert(BaseModel):
     source: str
     event_type: str
     severity: str
+    urgency: str | None = None
+    certainty: str | None = None
+    language: str | None = None
     area_text: str | None
     is_fallback: bool
     effective_at: datetime | None
@@ -136,10 +139,12 @@ def list_public_alerts():
     with db.transaction() as conn:
         rows = conn.execute(
             """
-            SELECT alert_id::text AS alert_id, source, event_type, severity, area_text, is_fallback,
+            SELECT alert_id::text AS alert_id, source, event_type, severity, urgency, certainty, language,
+                   area_text, is_fallback,
                    effective_at, expires_at
             FROM external_alerts
-            WHERE expires_at IS NULL OR expires_at > now()
+            WHERE source IN ('SACHET', 'USGS', 'GDACS', 'IMD')
+              AND (expires_at IS NULL OR expires_at > now())
             ORDER BY effective_at DESC NULLS LAST LIMIT 200
             """
         ).fetchall()

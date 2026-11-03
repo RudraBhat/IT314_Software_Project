@@ -34,3 +34,7 @@ services:
         sync: false
       - key: SACHET_FEED_URL
         sync: false
+      - key: USGS_FEED_URL
+        value: https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=2.5&minlatitude=20.0&maxlatitude=24.7&minlongitude=68.1&maxlongitude=74.6&orderby=time
+      - key: INGEST_INTERVAL_SECONDS
+        value: "600"

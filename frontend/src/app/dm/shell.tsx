@@ -17,10 +17,11 @@ export function useStaff() {
   return { ...user, can: (permission: string) => user.permissions.includes(permission) };
 }
 
-const NAV: { href: string; label: string; icon: string; permission?: string }[] = [
+const NAV: { href: string; label: string; icon: string; permission?: string | string[] }[] = [
   { href: "/dm", label: "Dashboard", icon: "▦" },
   { href: "/dm/incidents", label: "Incidents", icon: "⚑" },
   { href: "/dm/signals", label: "Signals", icon: "⚡" },
+  { href: "/dm/ingestion", label: "Ingestion health", icon: "◷", permission: ["DISPATCH", "SUPERVISOR"] },
   { href: "/", label: "Live map", icon: "◎" },
   { href: "/dm/dispatches", label: "Dispatches", icon: "➜" },
   { href: "/dm/resources", label: "Resources", icon: "▣" },
@@ -46,7 +47,9 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
   const [open, setOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const isActive = (href: string) => (href === "/dm" || href === "/" ? pathname === href : pathname.startsWith(href));
-  const items = NAV.filter((n) => !n.permission || user.permissions.includes(n.permission));
+  const items = NAV.filter((n) => !n.permission || (Array.isArray(n.permission)
+    ? n.permission.some((permission) => user.permissions.includes(permission))
+    : user.permissions.includes(n.permission)));
 
   const nav = (
     <nav aria-label="Workspace" className="space-y-0.5">
