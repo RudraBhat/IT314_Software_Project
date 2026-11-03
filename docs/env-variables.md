@@ -37,6 +37,9 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `RATE_LIMIT_ENABLED` | no | `true` | Set `false` only in automated tests. |
 | `DRCH_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff`. |
 | `DRCH_FIELD_PASSWORD` (S) | no | - | Non-interactive password for the field-team provisioning command in `python -m app.cli`; `DRCH_STAFF_PASSWORD` is used first when both are set. |
+| `RAZORPAY_KEY_ID` | no | - | Razorpay key id for the (not yet wired) Razorpay adapter; a `rzp_live` prefix marks live mode. |
+| `RAZORPAY_KEY_SECRET` (S) | no | - | Razorpay key secret used to verify payment signatures. |
+| `RAZORPAY_WEBHOOK_SECRET` (S) | no | - | Razorpay webhook signing secret. |
 
 ## Frontend (Next.js)
 

@@ -56,6 +56,9 @@ class Settings:
     app_env: str
     git_sha: str
     payment_gateway: str
+    razorpay_key_id: str | None = None
+    razorpay_key_secret: str | None = None
+    razorpay_webhook_secret: str | None = None
     sachet_feed_url: str = ""
 
     def require(self, name: str) -> str:
@@ -95,6 +98,9 @@ def get_settings() -> Settings:
         app_env=app_env,
         git_sha=os.getenv("GIT_SHA", "dev"),
         payment_gateway=os.getenv("PAYMENT_GATEWAY", "mock").lower(),
+        razorpay_key_id=os.getenv("RAZORPAY_KEY_ID") or None,
+        razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET") or None,
+        razorpay_webhook_secret=os.getenv("RAZORPAY_WEBHOOK_SECRET") or None,
         sachet_feed_url=os.getenv("SACHET_FEED_URL", "").strip(),
     )
 
