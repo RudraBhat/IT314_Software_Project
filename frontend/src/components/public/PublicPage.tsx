@@ -14,6 +14,7 @@ export function PublicPage({ title, intro, children }: { title: string; intro: s
             <Link href="/" className="hover:underline">Map</Link>
             <Link href="/about" className="hover:underline">About</Link>
             <Link href="/how-to" className="hover:underline">How to use</Link>
+            <Link href="/safety" className="hover:underline">Safety</Link>
           </nav>
         </div>
       </header>

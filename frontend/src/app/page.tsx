@@ -266,6 +266,14 @@ export default function PublicPortalPage() {
           </Link>
 
           <Link
+            href="/safety"
+            className="hidden md:flex px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold items-center gap-1.5 transition"
+          >
+            <span>🛟</span>
+            <span>Safety</span>
+          </Link>
+
+          <Link
             href="/donate"
             className="hidden sm:flex px-3 py-1.5 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white text-xs font-semibold items-center gap-1.5 transition"
           >

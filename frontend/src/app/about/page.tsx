@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PublicPage, Section } from "@/components/public/PublicPage";
 
@@ -40,6 +41,12 @@ export default function AboutPage() {
         </ul>
         <p className="text-slate-500">
           This portal does not replace emergency services. In immediate danger, call 112.
+        </p>
+      </Section>
+      <Section title="Safety guidance">
+        <p>
+          Read the <Link className="text-sky-700 underline" href="/safety">safety guidance</Link> for cyclone, flood,
+          earthquake and fire, with the source for each.
         </p>
       </Section>
       <Section title="Map data">
