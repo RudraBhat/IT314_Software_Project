@@ -55,7 +55,7 @@ export function AiPanel({ incident, reload }: { incident: IncidentDetail; reload
   return (
     <Card
       title={<span className="flex items-center gap-2">AI triage <AiBadge /></span>}
-      subtitle="Suggestions only. A person makes every decision."
+      subtitle="AI suggestion, not verified. A person makes every decision."
       actions={
         incident.allowed_actions.ai_triage && (
           <Button size="sm" busy={busy === "ai"} onClick={() => run("ai", requestTriage)}>
@@ -74,6 +74,7 @@ export function AiPanel({ incident, reload }: { incident: IncidentDetail; reload
         {recs.data?.items.map((r) => (
           <li key={r.recommendation_id} className="rounded-lg border border-ai/25 bg-ai-soft/40 p-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="neutral">Not verified</Badge>
               <Badge tone={r.status === "GENERATED" ? "ai" : r.status === "LOW_CONFIDENCE" ? "medium" : "neutral"}>{statusText[r.status]}</Badge>
               {r.out_of_scope && <Badge tone="critical">Out of scope</Badge>}
               <span className="text-xs text-muted">{r.model_name} · {formatDateTime(r.created_at)}</span>
