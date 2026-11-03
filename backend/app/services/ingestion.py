@@ -131,9 +131,41 @@ def _store_alerts(items: list[dict[str, Any]]) -> int:
 
 
 def _store_signals(items: list[dict[str, Any]], settings=None) -> int:
+    settings = settings or get_settings()
     stored = 0
+    prelabels: dict[tuple[str, str, str], tuple[str | None, float | None]] = {}
     for item in items:
-        label, confidence = _prelabel(item["content_text"], settings)
+        source = item["source"]
+        source_uid = item["source_uid"]
+        content_text = item["content_text"]
+        cache_key = (source, source_uid, content_text)
+
+        if cache_key in prelabels:
+            label, confidence = prelabels[cache_key]
+        else:
+            label = confidence = None
+            if settings.ai_triage_url:
+                with db.transaction() as conn:
+                    existing = conn.execute(
+                        """
+                        SELECT content_text, ai_label, ai_confidence
+                        FROM source_signals
+                        WHERE source = %s AND source_uid = %s
+                        """,
+                        (source, source_uid),
+                    ).fetchone()
+                if (
+                    existing
+                    and existing["content_text"] == content_text
+                    and existing["ai_label"] is not None
+                    and existing["ai_confidence"] is not None
+                ):
+                    label = str(existing["ai_label"])
+                    confidence = float(existing["ai_confidence"])
+                else:
+                    label, confidence = _prelabel(content_text, settings)
+            prelabels[cache_key] = (label, confidence)
+
         with db.transaction() as conn:
             conn.execute(
                 """
@@ -153,8 +185,16 @@ def _store_signals(items: list[dict[str, Any]], settings=None) -> int:
                     latitude = EXCLUDED.latitude,
                     longitude = EXCLUDED.longitude,
                     geom = EXCLUDED.geom,
-                    ai_label = COALESCE(EXCLUDED.ai_label, source_signals.ai_label),
-                    ai_confidence = COALESCE(EXCLUDED.ai_confidence, source_signals.ai_confidence),
+                    ai_label = CASE
+                        WHEN source_signals.content_text IS DISTINCT FROM EXCLUDED.content_text
+                        THEN EXCLUDED.ai_label
+                        ELSE COALESCE(EXCLUDED.ai_label, source_signals.ai_label)
+                    END,
+                    ai_confidence = CASE
+                        WHEN source_signals.content_text IS DISTINCT FROM EXCLUDED.content_text
+                        THEN EXCLUDED.ai_confidence
+                        ELSE COALESCE(EXCLUDED.ai_confidence, source_signals.ai_confidence)
+                    END,
                     raw_payload = EXCLUDED.raw_payload,
                     updated_at = now()
                 """,
