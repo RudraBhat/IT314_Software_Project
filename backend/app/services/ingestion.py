@@ -207,7 +207,7 @@ def _run_adapter(adapter: Adapter, settings=None) -> IngestRunResult:
                     (result.items_fetched, result.items_stored, run_id),
                 )
         return result
-    except Exception as exc:  # one feed failure must not stop other sources
+    except Exception as exc:  # noqa: BLE001 - isolate one feed failure from other sources
         safe_message = _safe_error_message(exc)
         logger.error("Ingestion failed for source %s: %s", adapter.name, safe_message)
         if has_db:

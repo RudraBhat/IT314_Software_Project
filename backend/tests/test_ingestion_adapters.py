@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.services.ingest import signals, usgs
-from app.services.ingest.sachet import SachetAdapter, _HTTP_CACHE, parse_cap_xml
+from app.services.ingest.sachet import _HTTP_CACHE, SachetAdapter, parse_cap_xml
 
 
 def test_signal_text_is_stripped_bounded_and_language_detected():
