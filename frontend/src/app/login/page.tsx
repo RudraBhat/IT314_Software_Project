@@ -1,74 +1,52 @@
 "use client";
 
-import React, { Suspense } from "react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+
+import { AuthShell } from "@/components/auth/AuthShell";
+
 import { StaffSignIn } from "./staff-sign-in";
 
 function LoginCard() {
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? undefined;
-
+  const next = useSearchParams().get("next") ?? undefined;
   return (
-    <div className="bg-[#0b1324] border border-slate-700/80 rounded-2xl shadow-2xl max-w-md w-full p-6 md:p-8 space-y-6">
-      <div className="text-center space-y-1">
-        <div className="w-14 h-14 rounded-full bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-3xl mx-auto mb-3">
-          🔐
-        </div>
-        <h1 className="text-2xl font-extrabold text-white tracking-tight">
-          Sign In
-        </h1>
-        <p className="text-xs text-slate-400">
-          Disaster Management Staff, Responders, and Registered Citizens
+    <div className="space-y-6 rounded-2xl bg-white p-6 shadow-lg sm:p-8">
+      <div className="text-center">
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Sign in</h1>
+        <p className="mt-1 text-base font-medium text-slate-700">साइन इन · સાઇન ઇન</p>
+        <p className="mt-3 text-base text-slate-600">
+          For citizens, field teams and dispatch staff. Use the email and password you registered with.
         </p>
       </div>
 
       <StaffSignIn next={next} />
 
-      <div className="text-center pt-2 border-t border-slate-800 text-xs text-slate-400 space-y-2">
-        <div>
-          Citizen without an account?{" "}
-          <Link href="/signup" className="text-sky-400 hover:text-sky-300 font-semibold underline">
-            Register here
-          </Link>
-        </div>
-        <div>
-          <Link href="/" className="text-slate-400 hover:text-slate-300">
-            ← Return to Public Map
-          </Link>
-        </div>
+      <div className="space-y-3 border-t border-slate-200 pt-5 text-center">
+        <p className="text-base text-slate-700">New here? Citizens can create a free account.</p>
+        <Link
+          href="/signup"
+          className="flex min-h-14 w-full items-center justify-center rounded-xl border-2 border-sky-700 px-2 text-center text-lg font-bold text-sky-800 hover:bg-sky-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-300"
+        >
+          Create account · खाता बनाएं · ખાતું બનાવો
+        </Link>
       </div>
+
+      <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-600">
+        Can&apos;t sign in right now? You can still view the{" "}
+        <Link href="/" className="font-semibold text-sky-800 underline">live public map</Link> and read the{" "}
+        <Link href="/safety" className="font-semibold text-sky-800 underline">safety guidance</Link> without an account.
+      </p>
     </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen w-screen bg-[#070d18] text-white flex flex-col justify-between overflow-x-hidden font-sans">
-      <header className="h-14 bg-[#0c4a75] border-b border-[#093554] px-6 flex items-center justify-between shadow-md">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-sky-400/20 border border-white flex items-center justify-center text-lg">
-            🛡️
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5 leading-tight">
-              <span className="text-xl font-extrabold text-white">ResQ</span>
-              <span className="text-xs font-light text-sky-200">GeoPlatform</span>
-            </div>
-            <div className="text-[9px] text-sky-200/80">NDMA Disaster Response Coordination Hub</div>
-          </div>
-        </Link>
-      </header>
-
-      <main className="flex-1 flex items-center justify-center p-4 py-8">
-        <Suspense fallback={<div className="text-slate-400 text-sm">Loading sign-in...</div>}>
-          <LoginCard />
-        </Suspense>
-      </main>
-
-      <footer className="text-center py-4 text-xs text-slate-500">
-        ResQ · Disaster Response Coordination Hub · Government of Gujarat
-      </footer>
-    </div>
+    <AuthShell>
+      <Suspense fallback={<p className="text-center text-base text-slate-600">Loading…</p>}>
+        <LoginCard />
+      </Suspense>
+    </AuthShell>
   );
 }
