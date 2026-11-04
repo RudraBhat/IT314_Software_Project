@@ -11,14 +11,16 @@ The backend enforces this; the frontend only shows the UI to supervisors.
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field, field_validator
 
 from app import audit, db, security
 from app.auth import DM_ROLE, PERMISSIONS, Supervisor
+from app.config import get_settings
 from app.errors import ApiError
+from app.services import email as email_service
 
 router = APIRouter()
 
@@ -31,7 +33,7 @@ MIN_PASSWORD_LENGTH = 12
 class CreateStaffRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     full_name: str = Field(min_length=2, max_length=120)
-    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=1024)
+    password: str | None = Field(default=None, min_length=MIN_PASSWORD_LENGTH, max_length=1024)
     phone: str | None = Field(default=None, max_length=30)
     designation: str | None = Field(default=None, max_length=120)
     permissions: list[str] = Field(default_factory=list)
@@ -110,44 +112,92 @@ def create_staff(body: CreateStaffRequest, principal: Supervisor):
         if conn.execute("SELECT 1 FROM users WHERE email = %s::citext", (body.email,)).fetchone():
             raise ApiError(409, "EMAIL_TAKEN", f"An account with email {body.email} already exists")
 
-        password_hash = security.hash_password(body.password)
+        if body.password:
+            # Backwards compatibility: Direct provisioning with password
+            password_hash = security.hash_password(body.password)
+            user_id = conn.execute(
+                """
+                INSERT INTO users (role_id, email, full_name, phone, designation, status)
+                SELECT role_id, %s, %s, %s, %s, 'ACTIVE' FROM roles WHERE code = %s
+                RETURNING user_id
+                """,
+                (body.email, body.full_name, body.phone, body.designation, DM_ROLE),
+            ).fetchone()["user_id"]
+
+            conn.execute(
+                "INSERT INTO user_auth (user_id, password_hash) VALUES (%s, %s)",
+                (user_id, password_hash),
+            )
+            _set_permissions(conn, user_id, body.permissions)
+            mfa = _enrol_mfa(conn, user_id, body.email)
+
+            audit.record(
+                conn,
+                actor=principal,
+                action="STAFF_PROVISIONED",
+                entity_type="user",
+                entity_id=user_id,
+                rationale=f"Provisioned via DM workspace by {principal.email if principal else 'system'}",
+                after={"role": DM_ROLE, "permissions": body.permissions},
+            )
+
+            return {
+                "user_id": str(user_id),
+                "email": body.email,
+                "full_name": body.full_name,
+                "permissions": body.permissions,
+                "mfa_secret": mfa["mfa_secret"],
+                "mfa_uri": mfa["mfa_uri"],
+                "message": (
+                    "Account created. Share the MFA secret with the new staff member to enrol "
+                    "in their authenticator app. It will not be shown again."
+                ),
+            }
+
+        # Secure Email Invitation Workflow (password omitted)
+        token = security.generate_secure_token(32)
+        token_hash = security.hash_token(token)
+        expires_at = datetime.now(UTC) + timedelta(hours=get_settings().invitation_token_hours)
+
         user_id = conn.execute(
             """
             INSERT INTO users (role_id, email, full_name, phone, designation, status)
-            SELECT role_id, %s, %s, %s, %s, 'ACTIVE' FROM roles WHERE code = %s
+            SELECT role_id, %s, %s, %s, %s, 'PENDING_SETUP' FROM roles WHERE code = %s
             RETURNING user_id
             """,
             (body.email, body.full_name, body.phone, body.designation, DM_ROLE),
         ).fetchone()["user_id"]
 
         conn.execute(
-            "INSERT INTO user_auth (user_id, password_hash) VALUES (%s, %s)",
-            (user_id, password_hash),
+            """
+            INSERT INTO user_auth (
+                user_id, password_hash, mfa_enabled, mfa_secret,
+                invitation_token_hash, invitation_expires_at, invited_by
+            )
+            VALUES (%s, NULL, FALSE, NULL, %s, %s, %s)
+            """,
+            (user_id, token_hash, expires_at, principal.user_id if principal else None),
         )
         _set_permissions(conn, user_id, body.permissions)
-        mfa = _enrol_mfa(conn, user_id, body.email)
 
         audit.record(
             conn,
             actor=principal,
-            action="STAFF_PROVISIONED",
+            action="ACCOUNT_INVITED",
             entity_type="user",
             entity_id=user_id,
-            rationale=f"Provisioned via DM workspace by {principal.email}",
+            rationale=f"Staff invited via DM workspace by {principal.email if principal else 'system'}",
             after={"role": DM_ROLE, "permissions": body.permissions},
         )
 
+    email_service.send_invitation_email(body.email, body.full_name, "Disaster Management Staff", token)
     return {
         "user_id": str(user_id),
         "email": body.email,
         "full_name": body.full_name,
         "permissions": body.permissions,
-        "mfa_secret": mfa["mfa_secret"],
-        "mfa_uri": mfa["mfa_uri"],
-        "message": (
-            "Account created. Share the MFA secret with the new staff member to enrol "
-            "in their authenticator app. It will not be shown again."
-        ),
+        "status": "PENDING_SETUP",
+        "message": "Invitation email dispatched to staff member.",
     }
 
 

@@ -23,6 +23,15 @@ function LoginCard() {
       <StaffSignIn next={next} />
 
       <div className="space-y-3 border-t border-slate-200 pt-5 text-center">
+        <div className="flex justify-center gap-4 text-sm text-slate-600">
+          <Link href="/forgot-password" className="font-semibold text-sky-800 underline hover:text-sky-900">
+            Forgot password?
+          </Link>
+          <span>•</span>
+          <Link href="/setup-account" className="font-semibold text-sky-800 underline hover:text-sky-900">
+            Staff invitation setup
+          </Link>
+        </div>
         <p className="text-base text-slate-700">New here? Citizens can create a free account.</p>
         <Link
           href="/signup"

@@ -56,6 +56,16 @@ class Settings:
     app_env: str
     git_sha: str
     payment_gateway: str
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    email_from: str = "no-reply@drch.gujarat.gov.in"
+    frontend_url: str = "http://localhost:3000"
+    invitation_token_hours: int = 48
+    password_reset_token_minutes: int = 15
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
     razorpay_key_id: str | None = None
     razorpay_key_secret: str | None = None
     razorpay_webhook_secret: str | None = None
@@ -101,6 +111,16 @@ def get_settings() -> Settings:
         app_env=app_env,
         git_sha=os.getenv("GIT_SHA", "dev"),
         payment_gateway=os.getenv("PAYMENT_GATEWAY", "mock").lower(),
+        smtp_host=os.getenv("SMTP_HOST") or None,
+        smtp_port=_int("SMTP_PORT", 587),
+        smtp_username=os.getenv("SMTP_USERNAME") or None,
+        smtp_password=os.getenv("SMTP_PASSWORD") or None,
+        email_from=os.getenv("EMAIL_FROM", "no-reply@drch.gujarat.gov.in"),
+        frontend_url=os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/"),
+        invitation_token_hours=_int("INVITATION_TOKEN_HOURS", 48),
+        password_reset_token_minutes=_int("PASSWORD_RESET_TOKEN_MINUTES", 15),
+        google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
+        google_client_secret=os.getenv("GOOGLE_CLIENT_SECRET") or None,
         razorpay_key_id=os.getenv("RAZORPAY_KEY_ID") or None,
         razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET") or None,
         razorpay_webhook_secret=os.getenv("RAZORPAY_WEBHOOK_SECRET") or None,
