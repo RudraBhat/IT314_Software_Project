@@ -2,43 +2,47 @@
 
 import { useActionState, useState } from "react";
 
+import { ErrorBox, Spinner, authButton, authInput, authLabel } from "@/components/auth/AuthShell";
+
 import { authenticate, type LoginState } from "./actions";
 
-// Same field and button styling as the rest of the ResQ login card.
-const inputClass =
-  "w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500";
-const buttonClass =
-  "w-full bg-sky-600 hover:bg-sky-500 disabled:opacity-60 disabled:cursor-wait text-white font-bold py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-sky-600/30 cursor-pointer flex items-center justify-center gap-2";
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div role="alert" className="p-3 bg-red-950/80 border border-red-700/60 rounded-xl text-red-200 text-xs flex items-center gap-2">
-      <span aria-hidden>⚠️</span>
-      <span>{message}</span>
-    </div>
-  );
+/** Turn a terse server message into something a stressed person can act on. */
+function friendly(message: string): { message: string; hint?: string } {
+  const m = message.toLowerCase();
+  if (m.includes("unreachable") || m.includes("network") || m.includes("fetch")) {
+    return { message: "We could not reach the service.", hint: "Check your internet connection and try again in a moment." };
+  }
+  if (m.includes("locked") || m.includes("too many")) {
+    return { message, hint: "Wait a few minutes before trying again, or ask your team lead for help." };
+  }
+  if (m.includes("sign-in failed") || m.includes("invalid") || m.includes("incorrect")) {
+    return { message: "That email or password is not correct.", hint: "Check for spaces or capital letters. Use “Show” to see what you typed." };
+  }
+  return { message };
 }
 
 /**
- * Administrator (Command & Dispatch) sign-in. Unlike the demo flows, this authenticates
- * against the ResQ backend: password, then the staff member's authenticator code (DM-FR-01).
+ * Sign-in for every account type. The backend decides whether a second step (authenticator
+ * code) is needed: citizens never see it, staff always do.
  */
 export function StaffSignIn({ next }: { next?: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(authenticate, { step: "password" });
   const [showPassword, setShowPassword] = useState(false);
+  const err = state.error ? friendly(state.error) : null;
 
   if (state.step === "mfa") {
     return (
-      <form action={action} className="space-y-4">
+      <form action={action} className="space-y-5">
         <input type="hidden" name="intent" value="mfa" />
         <input type="hidden" name="next" value={next ?? ""} />
-        <div className="p-3 bg-sky-950/60 border border-sky-700/50 rounded-xl text-sky-100 text-xs">
-          🔐 Enter the 6-digit code from the authenticator app for <strong>{state.email}</strong>.
+        <div className="rounded-xl border-2 border-sky-200 bg-sky-50 p-4 text-base text-sky-950">
+          <p className="font-semibold">One more step</p>
+          <p className="mt-1">
+            Open your authenticator app and enter the 6-digit code for <strong className="break-all">{state.email}</strong>.
+          </p>
         </div>
         <div>
-          <label htmlFor="staff-code" className="block text-xs font-semibold text-slate-300 mb-1">
-            Verification code
-          </label>
+          <label htmlFor="staff-code" className={authLabel}>6-digit code · 6 अंकों का कोड · 6 અંકનો કોડ</label>
           <input
             id="staff-code"
             name="code"
@@ -48,46 +52,58 @@ export function StaffSignIn({ next }: { next?: string }) {
             maxLength={6}
             required
             autoFocus
-            placeholder="123456"
-            className={`${inputClass} font-mono tracking-[0.4em]`}
+            placeholder="000000"
+            className={`${authInput} text-center font-mono text-3xl tracking-[0.5em]`}
           />
+          <p className="mt-2 text-sm text-slate-600">The code changes every 30 seconds. If it fails, wait for the next one.</p>
         </div>
-        {state.error && <ErrorBox message={state.error} />}
-        <button type="submit" className={buttonClass} disabled={pending}>
-          <span>{pending ? "Verifying…" : "Verify & Open Workspace"}</span>
-          <span aria-hidden>→</span>
+        {err && <ErrorBox message={err.message} hint={err.hint} />}
+        <button type="submit" className={authButton} disabled={pending}>
+          {pending ? (
+            <>
+              <Spinner /> Verifying…
+            </>
+          ) : (
+            "Verify and continue →"
+          )}
         </button>
+        <a href="/login" className="block text-center text-base font-semibold text-sky-800 underline">
+          Use a different account
+        </a>
       </form>
     );
   }
 
   return (
-    <form action={action} className="space-y-4">
+    <form action={action} className="space-y-5">
       <input type="hidden" name="intent" value="password" />
+      <input type="hidden" name="next" value={next ?? ""} />
       <div>
-        <label htmlFor="staff-email" className="block text-xs font-semibold text-slate-300 mb-1">
-          Staff Email Address
-        </label>
+        <label htmlFor="staff-email" className={authLabel}>Email · ईमेल · ઇમેઇલ</label>
         <input
           id="staff-email"
           name="email"
           type="email"
+          inputMode="email"
           autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
+          autoFocus
           defaultValue={state.email}
-          placeholder="commander@resq.gov.in"
-          className={inputClass}
+          placeholder="name@example.com"
+          className={authInput}
         />
       </div>
       <div>
-        <div className="flex items-center justify-between mb-1">
-          <label htmlFor="staff-password" className="text-xs font-semibold text-slate-300">
-            Password
-          </label>
+        <div className="mb-1.5 flex items-center justify-between">
+          <label htmlFor="staff-password" className="text-base font-semibold text-slate-800">Password · पासवर्ड · પાસવર્ડ</label>
           <button
             type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="text-[11px] text-sky-400 hover:text-sky-300 cursor-pointer"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-pressed={showPassword}
+            className="min-h-11 cursor-pointer rounded-lg px-3 text-base font-semibold text-sky-800 hover:bg-sky-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-300"
           >
             {showPassword ? "Hide" : "Show"}
           </button>
@@ -98,18 +114,21 @@ export function StaffSignIn({ next }: { next?: string }) {
           type={showPassword ? "text" : "password"}
           autoComplete="current-password"
           required
-          placeholder="Enter your staff password"
-          className={inputClass}
+          placeholder="Your password"
+          className={authInput}
         />
       </div>
-      {state.error && <ErrorBox message={state.error} />}
-      <button type="submit" className={buttonClass} disabled={pending}>
-        <span>{pending ? "Checking…" : "Sign In as Administrator"}</span>
-        <span aria-hidden>→</span>
+      {err && <ErrorBox message={err.message} hint={err.hint} />}
+      <button type="submit" className={authButton} disabled={pending}>
+        {pending ? (
+          <>
+            <Spinner /> Signing in…
+          </>
+        ) : (
+          "Sign in →"
+        )}
       </button>
-      <p className="text-[10.5px] text-slate-500 text-center">
-        Staff accounts are issued by Application Management. Multi-factor authentication is required.
-      </p>
+      <p className="text-center text-sm text-slate-600">Dispatch and field staff will be asked for an authenticator code next.</p>
     </form>
   );
 }
