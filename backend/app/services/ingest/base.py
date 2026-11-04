@@ -8,12 +8,13 @@ class Adapter(ABC):
     """Abstract base class for ingestion adapters."""
 
     name: str
+    kind: str = "alert"
 
     @abstractmethod
     def fetch(self) -> list[dict[str, Any]]:
         """Fetch and return alerts as standard dictionaries.
 
-        Expected keys per alert:
+        For alert adapters, expected keys include:
           - source_uid (str): Unique external alert ID
           - event_type (str): CYCLONE | URBAN_FLOODING | INDUSTRIAL_FIRE | OTHER
           - severity (str): CRITICAL | HIGH | MEDIUM | LOW
@@ -23,6 +24,9 @@ class Adapter(ABC):
           - effective_at (datetime | None): Alert start time
           - expires_at (datetime | None): Alert expiration time
           - raw_payload (dict | None): Raw metadata for audit and display
+
+        Signal adapters return source, source_uid, content_text, language,
+        location_text, latitude, longitude, is_simulated, and raw_payload.
         """
         ...
 

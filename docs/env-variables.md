@@ -15,7 +15,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `DATABASE_URL` (S) | **yes** | - | PostgreSQL 16 + PostGIS URI (Neon in staging/production). |
 | `JWT_SECRET` (S) | **required\*** | - | HS256 signing key, 32+ chars, no placeholder words. |
 | `MFA_ENCRYPTION_KEY` (S) | **required\*** | - | Fernet key encrypting staff TOTP secrets. Outside development it must be set (it is otherwise derived from `JWT_SECRET`, so rotating the JWT secret would lock out all staff). |
-| `INGEST_TOKEN` (S) | **required\*** | - | Bearer token for `POST /api/v1/internal/ingest/run`. |
+| `INGEST_TOKEN` (S) | **required\*** | - | Bearer token for `POST /api/v1/internal/ingest/run`; the DM poll action uses staff authentication instead. |
 | `CORS_ALLOWED_ORIGINS` | **required\*** | `http://localhost:3000,http://127.0.0.1:3000` in development, empty otherwise | Comma-separated browser origins allowed to call the API. |
 | `ACCESS_TOKEN_MINUTES` | no | `60` | Access-token lifetime. |
 | `MFA_TOKEN_MINUTES` | no | `5` | MFA challenge lifetime. |
@@ -32,7 +32,10 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `GEOJSON_GUJARAT_DISTRICTS_URL` | no | empty | GeoJSON FeatureCollection of Gujarat districts. Empty = sync disabled (packaged state polygon + PostGIS data are used). |
 | `PAYMENT_GATEWAY` | no | `mock` | Only `mock` is implemented. |
 | `MOCK_GATEWAY_SECRET` (S) | when donations are used | - | HMAC key for the sandbox gateway. |
-| `SACHET_FEED_URL` | no | empty | CAP alert XML feed URL for SACHET/NDMA automated ingestion. Empty = adapter disabled. |
+| `SACHET_FEED_URL` | no | empty | SACHET RSS feed URL; the adapter fetches linked CAP XML and honors ETags. Empty = adapter disabled. |
+| `USGS_FEED_URL` | no | Gujarat GeoJSON query | USGS earthquake GeoJSON feed; results are checked against the Gujarat boundary before storage. |
+| `SOCIAL_REPLAY_FILE` | no | packaged JSONL replay | Path to the team-authored, sanitised social replay fixture. Replay records are always marked simulated. |
+| `INGEST_INTERVAL_SECONDS` | no | `600` | In-process adapter polling interval. Use a shorter value only for local scheduler checks. |
 | `GIT_SHA` | no | `dev` | Commit id shown by `/api/v1/health` (CD smoke test). |
 | `RATE_LIMIT_ENABLED` | no | `true` | Set `false` only in automated tests. |
 | `RESQ_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff`. |

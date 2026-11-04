@@ -18,10 +18,11 @@ import defusedxml.ElementTree as ET
 import httpx
 
 from app.config import get_settings
-from app.geo import is_in_gujarat
+from app.geo import circle_intersects_gujarat, is_in_gujarat
 from app.services.ingest.base import Adapter
 
 logger = logging.getLogger("drch.ingest.sachet")
+_HTTP_CACHE: dict[str, tuple[str | None, str]] = {}
 
 
 def _find_child(node: ET.Element, local_name: str) -> ET.Element | None:
@@ -30,6 +31,13 @@ def _find_child(node: ET.Element, local_name: str) -> ET.Element | None:
         if tag_name.lower() == local_name.lower():
             return child
     return None
+
+
+def _find_children(node: ET.Element, local_name: str) -> list[ET.Element]:
+    return [
+        child for child in node
+        if (child.tag.split("}")[-1] if "}" in child.tag else child.tag).lower() == local_name.lower()
+    ]
 
 
 def _find_child_text(node: ET.Element, local_name: str) -> str:
@@ -52,6 +60,8 @@ def _parse_iso_datetime(value: str) -> datetime | None:
 def map_cap_event(event_text: str) -> str:
     """Map CAP event text to DRCH scenario taxonomy."""
     ev = event_text.lower()
+    if any(k in ev for k in ("earthquake", "seismic", "tremor")):
+        return "EARTHQUAKE"
     if any(k in ev for k in ("cyclone", "storm", "hurricane", "typhoon")):
         return "CYCLONE"
     if any(k in ev for k in ("flood", "inundation", "heavy rain", "waterlogging", "rain")):
@@ -78,7 +88,8 @@ def map_cap_severity(severity_text: str) -> str:
 def parse_cap_coordinates(circle_text: str, polygon_text: str) -> tuple[float | None, float | None]:
     """Extract centroid (latitude, longitude) from circle or polygon elements."""
     if circle_text:
-        parts = [p.strip() for p in circle_text.split(",") if p.strip()]
+        point = circle_text.strip().split()[0]
+        parts = [p.strip() for p in point.split(",") if p.strip()]
         if len(parts) >= 2:
             try:
                 return round(float(parts[0]), 6), round(float(parts[1]), 6)
@@ -122,44 +133,113 @@ def parse_cap_xml(xml_content: str, source_name: str = "SACHET") -> list[dict[st
         if not source_uid:
             continue
 
-        info = _find_child(alert, "info")
-        if info is None:
+        info_blocks = _find_children(alert, "info")
+        if not info_blocks:
             continue
+
+        relevant_infos: list[tuple[ET.Element, str, float | None, float | None]] = []
+        for info in info_blocks:
+            area_descriptions: list[str] = []
+            area_matches_gujarat = False
+            area_location: tuple[float | None, float | None] = (None, None)
+
+            for area in _find_children(info, "area"):
+                area_desc = _find_child_text(area, "areaDesc")
+                if area_desc:
+                    area_descriptions.append(area_desc)
+                    area_matches_gujarat |= "gujarat" in area_desc.casefold()
+
+                geometries = [
+                    ("circle", node.text or "") for node in _find_children(area, "circle")
+                ] + [
+                    ("polygon", node.text or "") for node in _find_children(area, "polygon")
+                ]
+                for shape, coordinates in geometries:
+                    lat, lon = parse_cap_coordinates(
+                        coordinates if shape == "circle" else "",
+                        coordinates if shape == "polygon" else "",
+                    )
+                    if lat is None or lon is None:
+                        continue
+
+                    shape_matches_gujarat = False
+                    matched_location = (lat, lon)
+                    if shape == "polygon":
+                        # CAP polygons are ordered coordinate pairs; checking their points and
+                        # centroid handles both polygons wholly inside Gujarat and those that
+                        # cross its boundary without relying on the alert's free-text area name.
+                        for point in coordinates.split():
+                            parts = point.split(",")
+                            if len(parts) < 2:
+                                continue
+                            try:
+                                point_lat, point_lon = float(parts[0]), float(parts[1])
+                                if is_in_gujarat(point_lat, point_lon):
+                                    shape_matches_gujarat = True
+                                    matched_location = (point_lat, point_lon)
+                                    break
+                            except ValueError:
+                                continue
+                        if not shape_matches_gujarat:
+                            shape_matches_gujarat = is_in_gujarat(lat, lon)
+                    else:
+                        circle_parts = coordinates.strip().split(maxsplit=1)
+                        if len(circle_parts) > 1:
+                            try:
+                                radius_km = float(circle_parts[1])
+                            except ValueError:
+                                shape_matches_gujarat = is_in_gujarat(lat, lon)
+                            else:
+                                shape_matches_gujarat = circle_intersects_gujarat(
+                                    lat, lon, radius_km
+                                )
+                        else:
+                            shape_matches_gujarat = is_in_gujarat(lat, lon)
+
+                    if shape_matches_gujarat:
+                        area_matches_gujarat = True
+                        if area_location == (None, None):
+                            area_location = matched_location
+
+            if area_matches_gujarat:
+                relevant_infos.append((
+                    info,
+                    "; ".join(dict.fromkeys(area_descriptions)),
+                    area_location[0],
+                    area_location[1],
+                ))
+
+        if not relevant_infos:
+            logger.debug("Skipping out-of-state alert: %s", source_uid)
+            continue
+
+        # CAP permits multiple language-specific <info> blocks. Keep one row per alert ID,
+        # preferring English when it is relevant to Gujarat and otherwise using the first
+        # relevant block so its language stays attached to the stored text.
+        info, area_desc, lat, lon = next(
+            (candidate for candidate in relevant_infos
+             if _find_child_text(candidate[0], "language").casefold().startswith("en")),
+            relevant_infos[0],
+        )
 
         event_text = _find_child_text(info, "event")
         severity_text = _find_child_text(info, "severity")
+        urgency_text = _find_child_text(info, "urgency")
+        certainty_text = _find_child_text(info, "certainty")
+        language_text = _find_child_text(info, "language") or "en-US"
         effective_text = _find_child_text(info, "effective")
         expires_text = _find_child_text(info, "expires")
         headline = _find_child_text(info, "headline")
         description = _find_child_text(info, "description")
-
-        area = _find_child(info, "area")
-        area_desc = ""
-        circle_text = ""
-        polygon_text = ""
-        if area is not None:
-            area_desc = _find_child_text(area, "areaDesc")
-            circle_text = _find_child_text(area, "circle")
-            polygon_text = _find_child_text(area, "polygon")
-
-        lat, lon = parse_cap_coordinates(circle_text, polygon_text)
-
-        # Geofence check: areaDesc mentions Gujarat OR centroid passes is_in_gujarat
-        in_gujarat = False
-        if "gujarat" in area_desc.lower():
-            in_gujarat = True
-        elif lat is not None and lon is not None:
-            in_gujarat = is_in_gujarat(lat, lon)
-
-        if not in_gujarat:
-            logger.debug("Skipping out-of-state alert: %s (%s)", source_uid, area_desc)
-            continue
 
         alerts.append({
             "source": source_name,
             "source_uid": source_uid,
             "event_type": map_cap_event(event_text),
             "severity": map_cap_severity(severity_text),
+            "urgency": urgency_text.upper() or None,
+            "certainty": certainty_text.upper() or None,
+            "language": language_text[:10] or None,
             "area_text": area_desc or headline or "Gujarat",
             "latitude": lat,
             "longitude": lon,
@@ -169,6 +249,9 @@ def parse_cap_xml(xml_content: str, source_name: str = "SACHET") -> list[dict[st
                 "identifier": source_uid,
                 "event": event_text,
                 "severity": severity_text,
+                "urgency": urgency_text,
+                "certainty": certainty_text,
+                "language": language_text,
                 "headline": headline,
                 "description": description,
                 "area_desc": area_desc,
@@ -185,6 +268,46 @@ class SachetAdapter(Adapter):
 
     def __init__(self, feed_url: str | None = None) -> None:
         self.feed_url = feed_url
+
+    @staticmethod
+    def _get_http_text(url: str) -> str:
+        """Fetch XML while honoring SACHET's required ETag/304 cache protocol."""
+        cached = _HTTP_CACHE.get(url)
+        headers = {"If-None-Match": cached[0]} if cached and cached[0] else {}
+        with httpx.Client(timeout=15.0, follow_redirects=False) as client:
+            response = client.get(url, headers=headers)
+        if response.status_code == 304:
+            if not cached:
+                raise RuntimeError("SACHET returned 304 without a local cached response")
+            return cached[1]
+        response.raise_for_status()
+        content = response.text
+        if len(content) > 5_000_000:
+            raise ValueError("SACHET XML response exceeded the 5 MB limit")
+        _HTTP_CACHE[url] = (response.headers.get("ETag"), content)
+        return content
+
+    @staticmethod
+    def _feed_links(xml_text: str) -> list[str]:
+        root = ET.fromstring(xml_text)
+        root_name = root.tag.split("}")[-1].lower()
+        if root_name not in {"rss", "feed", "rdf"}:
+            return []
+        links: list[str] = []
+        for node in root.iter():
+            if (node.tag.split("}")[-1].lower()) not in {"item", "entry"}:
+                continue
+            for child in node:
+                if child.tag.split("}")[-1].lower() != "link":
+                    continue
+                link = (child.attrib.get("href") or child.text or "").strip()
+                if link:
+                    parsed = urlparse(link)
+                    if parsed.scheme != "https" or parsed.hostname != "sachet.ndma.gov.in":
+                        logger.warning("Ignoring non-SACHET CAP link from RSS feed")
+                        continue
+                    links.append(link)
+        return list(dict.fromkeys(links))
 
     def fetch(self) -> list[dict[str, Any]]:
         url = (self.feed_url or get_settings().sachet_feed_url).strip()
@@ -213,9 +336,13 @@ class SachetAdapter(Adapter):
                 raise FileNotFoundError(f"Fixture feed file not found: {url}")
             xml_text = file_path.read_text(encoding="utf-8")
         else:
-            with httpx.Client(timeout=15.0) as client:
-                resp = client.get(url)
-                resp.raise_for_status()
-                xml_text = resp.text
+            xml_text = self._get_http_text(url)
 
-        return parse_cap_xml(xml_text, source_name=self.name)
+        alerts = parse_cap_xml(xml_text, source_name=self.name)
+        if alerts:
+            return alerts
+        links = self._feed_links(xml_text)
+        fetched: list[dict[str, Any]] = []
+        for link in links:
+            fetched.extend(parse_cap_xml(self._get_http_text(link), source_name=self.name))
+        return fetched

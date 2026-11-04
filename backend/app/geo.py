@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -245,6 +246,53 @@ def _pip_polygon(latitude: float, longitude: float) -> bool:
             inside = not inside
         j = i
     return inside
+
+
+def circle_intersects_gujarat(latitude: float, longitude: float, radius_km: float) -> bool:
+    """Return whether a CAP-style radius circle intersects the cached Gujarat polygon."""
+    if (
+        not math.isfinite(latitude)
+        or not math.isfinite(longitude)
+        or not math.isfinite(radius_km)
+        or not -90 <= latitude <= 90
+        or not -180 <= longitude <= 180
+        or radius_km < 0
+    ):
+        return False
+    if _pip_polygon(latitude, longitude):
+        return True
+
+    polygon = _GEO_CACHE.get("polygon") or _GUJARAT_POLYGON
+    if len(polygon) < 2:
+        return False
+
+    earth_radius_km = 6371.0088
+    center_lat_rad = math.radians(latitude)
+    longitude_scale = math.cos(center_lat_rad)
+    projected: list[tuple[float, float]] = []
+    for vertex_lon, vertex_lat in polygon:
+        delta_lon = (vertex_lon - longitude + 180) % 360 - 180
+        projected.append((
+            earth_radius_km * math.radians(delta_lon) * longitude_scale,
+            earth_radius_km * math.radians(vertex_lat - latitude),
+        ))
+
+    for index, (start_x, start_y) in enumerate(projected):
+        end_x, end_y = projected[(index + 1) % len(projected)]
+        segment_x, segment_y = end_x - start_x, end_y - start_y
+        segment_length_sq = segment_x * segment_x + segment_y * segment_y
+        if segment_length_sq:
+            fraction = max(
+                0.0,
+                min(1.0, -(start_x * segment_x + start_y * segment_y) / segment_length_sq),
+            )
+            closest_x = start_x + fraction * segment_x
+            closest_y = start_y + fraction * segment_y
+        else:
+            closest_x, closest_y = start_x, start_y
+        if math.hypot(closest_x, closest_y) <= radius_km:
+            return True
+    return False
 
 
 def _nearest_district(latitude: float, longitude: float) -> str | None:

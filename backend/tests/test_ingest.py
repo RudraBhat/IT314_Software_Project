@@ -152,6 +152,17 @@ def test_cli_load_fallback_alerts(monkeypatch, sql):
         assert f["is_fallback"] is True
 
 
+@pytest.mark.db
+def test_public_alerts_hides_unofficial_sources(client, sql):
+    sql.execute(
+        """INSERT INTO external_alerts (source, source_uid, event_type, severity, area_text, expires_at)
+           VALUES ('UNKNOWN_SOCIAL', 'test-unofficial-alert', 'OTHER', 'LOW', 'Test only', now() + interval '1 day')
+           ON CONFLICT (source, source_uid) DO NOTHING"""
+    )
+    sources = {row["source"] for row in client.get("/api/v1/public/alerts").json()}
+    assert "UNKNOWN_SOCIAL" not in sources
+
+
 def argparse_dummy():
     class Dummy:
         pass

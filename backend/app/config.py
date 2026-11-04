@@ -60,6 +60,9 @@ class Settings:
     razorpay_key_secret: str | None = None
     razorpay_webhook_secret: str | None = None
     sachet_feed_url: str = ""
+    usgs_feed_url: str = ""
+    social_replay_file: str = ""
+    ingest_interval_seconds: int = 600
 
     def require(self, name: str) -> str:
         value = getattr(self, name)
@@ -102,6 +105,12 @@ def get_settings() -> Settings:
         razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET") or None,
         razorpay_webhook_secret=os.getenv("RAZORPAY_WEBHOOK_SECRET") or None,
         sachet_feed_url=os.getenv("SACHET_FEED_URL", "").strip(),
+        usgs_feed_url=os.getenv(
+            "USGS_FEED_URL",
+            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=2.5&minlatitude=20.0&maxlatitude=24.7&minlongitude=68.1&maxlongitude=74.6&orderby=time",
+        ).strip(),
+        social_replay_file=os.getenv("SOCIAL_REPLAY_FILE", "").strip(),
+        ingest_interval_seconds=max(1, _int("INGEST_INTERVAL_SECONDS", 600)),
     )
 
 
