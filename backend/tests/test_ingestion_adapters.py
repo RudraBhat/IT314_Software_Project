@@ -105,6 +105,46 @@ def test_cap_parser_checks_all_language_blocks_areas_and_polygons(monkeypatch):
     assert result[0]["longitude"] == 72.4
 
 
+def test_cap_parser_includes_circle_overlapping_gujarat_without_center_inside(monkeypatch):
+    from app.geo import _GEO_CACHE
+
+    monkeypatch.setitem(
+        _GEO_CACHE,
+        "polygon",
+        [(68.0, 20.0), (75.0, 20.0), (75.0, 25.0), (68.0, 25.0), (68.0, 20.0)],
+    )
+    xml = """<alert>
+      <identifier>cap-overlapping-circle</identifier>
+      <info><event>Heavy Rain</event><severity>Severe</severity>
+        <area><areaDesc>Border region</areaDesc><circle>19.9,72.5 12</circle></area>
+      </info>
+    </alert>"""
+
+    result = parse_cap_xml(xml)
+
+    assert len(result) == 1
+    assert result[0]["latitude"] == 19.9
+    assert result[0]["longitude"] == 72.5
+
+
+def test_cap_parser_skips_circle_that_does_not_reach_gujarat(monkeypatch):
+    from app.geo import _GEO_CACHE
+
+    monkeypatch.setitem(
+        _GEO_CACHE,
+        "polygon",
+        [(68.0, 20.0), (75.0, 20.0), (75.0, 25.0), (68.0, 25.0), (68.0, 20.0)],
+    )
+    xml = """<alert>
+      <identifier>cap-non-overlapping-circle</identifier>
+      <info><event>Heavy Rain</event><severity>Severe</severity>
+        <area><areaDesc>Border region</areaDesc><circle>19.8,72.5 10</circle></area>
+      </info>
+    </alert>"""
+
+    assert parse_cap_xml(xml) == []
+
+
 def test_sachet_fetch_uses_etag_cache_for_not_modified(monkeypatch):
     url = "https://sachet.ndma.gov.in/cap_public_website/FetchXMLFile?identifier=fixture-test"
     _HTTP_CACHE.pop(url, None)

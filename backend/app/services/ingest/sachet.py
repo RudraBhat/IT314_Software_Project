@@ -18,7 +18,7 @@ import defusedxml.ElementTree as ET
 import httpx
 
 from app.config import get_settings
-from app.geo import is_in_gujarat
+from app.geo import circle_intersects_gujarat, is_in_gujarat
 from app.services.ingest.base import Adapter
 
 logger = logging.getLogger("drch.ingest.sachet")
@@ -183,7 +183,18 @@ def parse_cap_xml(xml_content: str, source_name: str = "SACHET") -> list[dict[st
                         if not shape_matches_gujarat:
                             shape_matches_gujarat = is_in_gujarat(lat, lon)
                     else:
-                        shape_matches_gujarat = is_in_gujarat(lat, lon)
+                        circle_parts = coordinates.strip().split(maxsplit=1)
+                        if len(circle_parts) > 1:
+                            try:
+                                radius_km = float(circle_parts[1])
+                            except ValueError:
+                                shape_matches_gujarat = is_in_gujarat(lat, lon)
+                            else:
+                                shape_matches_gujarat = circle_intersects_gujarat(
+                                    lat, lon, radius_km
+                                )
+                        else:
+                            shape_matches_gujarat = is_in_gujarat(lat, lon)
 
                     if shape_matches_gujarat:
                         area_matches_gujarat = True
