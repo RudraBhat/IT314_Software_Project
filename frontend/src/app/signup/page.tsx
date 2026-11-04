@@ -10,7 +10,7 @@ import { register } from "../login/actions";
 const RULES: { label: string; ok: (p: string) => boolean }[] = [
   { label: "At least 8 characters", ok: (p) => p.length >= 8 },
   { label: "At least one number", ok: (p) => /\d/.test(p) },
-  { label: "At least one symbol (for example ! @ # ?)", ok: (p) => /[^A-Za-z0-9]/.test(p) },
+  { label: "At least one symbol (for example ! @ # ?)", ok: (p) => /[^\p{L}\p{N}_\s]/u.test(p) },
 ];
 
 export default function SignupPage() {
