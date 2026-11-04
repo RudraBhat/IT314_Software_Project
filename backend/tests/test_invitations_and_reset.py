@@ -13,6 +13,7 @@ Covers:
 import os
 import unittest
 import uuid
+import pyotp
 from datetime import UTC, datetime, timedelta
 
 from starlette.requests import Request
@@ -137,7 +138,7 @@ class TestInvitationsAndReset(unittest.TestCase):
         self.assertIn("setup-account?token=", outbox[0]["text"])
 
     def test_invitation_verify_and_accept_for_field_team(self):
-        """FIELD_TEAM sets their password and is activated directly without MFA."""
+        """FIELD_TEAM sets their password and completes TOTP enrollment before activation."""
         # Invite FIELD_TEAM
         invite_req = auth_router.InviteUserRequest(
             email="responder1@drch.gov.in",
@@ -154,15 +155,26 @@ class TestInvitationsAndReset(unittest.TestCase):
         verification = auth_router.verify_invitation(token=token)
         self.assertTrue(verification["valid"])
         self.assertEqual(verification["email"], "responder1@drch.gov.in")
-        self.assertFalse(verification["requires_mfa"])
+        self.assertTrue(verification["requires_mfa"])
 
         # Accept invitation and set password
         accept_res = auth_router.accept_invitation(
             auth_router.AcceptInvitationRequest(token=token, password="ValidPassword123#"),
             _make_request(),
         )
-        self.assertFalse(accept_res["mfa_required"])
-        self.assertEqual(accept_res["status"], "ACTIVE")
+        self.assertTrue(accept_res["mfa_required"])
+        self.assertIn("mfa_setup_token", accept_res)
+        self.assertIn("mfa_secret", accept_res)
+
+        # Complete TOTP enrollment
+        final_res = auth_router.verify_totp_setup(
+            auth_router.VerifyTotpSetupRequest(
+                mfa_setup_token=accept_res["mfa_setup_token"],
+                code="123456",
+            ),
+            _make_request(),
+        )
+        self.assertFalse(final_res["mfa_required"])
 
         # Re-using the token must be rejected
         with self.assertRaises(ApiError) as ctx:
