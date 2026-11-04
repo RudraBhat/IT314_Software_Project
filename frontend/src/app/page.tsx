@@ -5,6 +5,7 @@ import Link from "next/link";
 import { fetchPublicIncidents, fetchPublicAlerts, PublicIncident, PublicAlert } from "../services/citizenApi";
 import { LiveOperationsLayer } from "../components/dm/LiveOperationsLayer";
 import { signOut } from "./login/actions";
+import { GUJARAT_BOUNDS, GUJARAT_CENTER, GUJARAT_DEFAULT_ZOOM, GUJARAT_DISTRICTS } from "../lib/geo";
 
 interface SessionInfo {
   authenticated: boolean;
@@ -51,6 +52,8 @@ export default function PublicPortalPage() {
   const [coordsText, setCoordsText] = useState("Gujarat, India");
   const [activeBaseLayer, setActiveBaseLayer] = useState<"streets" | "humanitarian">("streets");
   const [showAlertsDrawer, setShowAlertsDrawer] = useState(false);
+  const [districtFilter, setDistrictFilter] = useState<string>("");
+  const visibleIncidents = districtFilter ? incidents.filter((i) => i.district === districtFilter) : incidents;
 
   // 1. Fetch user session
   const checkSession = useCallback(async () => {
@@ -122,9 +125,11 @@ export default function PublicPortalPage() {
         const map = L.map(mapContainerRef.current, {
           zoomControl: false,
           attributionControl: true,
-          minZoom: 4,
+          minZoom: 6,
           maxZoom: 18,
-        }).setView([22.3, 72.0], 7);
+          maxBounds: GUJARAT_BOUNDS,
+          maxBoundsViscosity: 1.0,
+        }).setView(GUJARAT_CENTER, GUJARAT_DEFAULT_ZOOM);
 
         mapRef.current = map;
 
@@ -169,7 +174,7 @@ export default function PublicPortalPage() {
 
     layer.clearLayers();
 
-    incidents.forEach((inc) => {
+    visibleIncidents.forEach((inc) => {
       if (!inc.lat || !inc.lon) return;
 
       const color = SEVERITY_COLORS[inc.severity] ?? "#94a3b8";
@@ -191,7 +196,8 @@ export default function PublicPortalPage() {
         setSelectedIncident(inc);
       });
     });
-  }, [incidents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incidents, districtFilter]);
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-slate-900 font-sans flex flex-col">
@@ -241,6 +247,30 @@ export default function PublicPortalPage() {
           >
             <span>📋</span>
             <span>My Reports</span>
+          </Link>
+
+          <Link
+            href="/about"
+            className="hidden md:flex px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold items-center gap-1.5 transition"
+          >
+            <span>ℹ️</span>
+            <span>About</span>
+          </Link>
+
+          <Link
+            href="/how-to"
+            className="hidden md:flex px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold items-center gap-1.5 transition"
+          >
+            <span>❓</span>
+            <span>How to use</span>
+          </Link>
+
+          <Link
+            href="/safety"
+            className="hidden md:flex px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold items-center gap-1.5 transition"
+          >
+            <span>🛟</span>
+            <span>Safety</span>
           </Link>
 
           <Link
@@ -295,7 +325,7 @@ export default function PublicPortalPage() {
             <span className="font-bold text-sky-300">Live Public Disaster Map</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-0.5">
-            {incidents.length} verified public incidents displayed · Auto-refreshes every 30s
+            {visibleIncidents.length} verified public incidents displayed · Auto-refreshes every 30s
           </div>
           {error && (
             <div className="mt-1.5 text-[11px] text-red-300 bg-red-950/80 px-2 py-1 rounded border border-red-800">
@@ -307,6 +337,34 @@ export default function PublicPortalPage() {
         {/* Coordinates indicator */}
         <div className="absolute bottom-3 left-14 z-[500] bg-slate-900/80 backdrop-blur px-2.5 py-1 rounded-md border border-slate-700/80 text-[10px] text-slate-300 font-mono shadow pointer-events-none">
           {coordsText}
+        </div>
+
+
+        {/* District filter + legend */}
+        <div className="absolute bottom-12 left-3 z-[500] bg-slate-900/90 backdrop-blur border border-slate-700 rounded-xl p-3 text-white shadow-xl pointer-events-auto w-48">
+          <label htmlFor="district-filter" className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">
+            District
+          </label>
+          <select
+            id="district-filter"
+            value={districtFilter}
+            onChange={(e) => setDistrictFilter(e.target.value)}
+            className="w-full rounded-md bg-slate-800 border border-slate-600 text-xs px-2 py-1 mb-3"
+          >
+            <option value="">All Gujarat</option>
+            {GUJARAT_DISTRICTS.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Priority</div>
+          <ul className="space-y-1">
+            {(["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNASSIGNED"] as const).map((k) => (
+              <li key={k} className="flex items-center gap-2 text-[11px]">
+                <span className="w-3 h-3 rounded-full border border-white" style={{ backgroundColor: SEVERITY_COLORS[k] }} />
+                {k.charAt(0) + k.slice(1).toLowerCase()}
+              </li>
+            ))}
+          </ul>
         </div>
 
         {/* Basemap switcher */}
