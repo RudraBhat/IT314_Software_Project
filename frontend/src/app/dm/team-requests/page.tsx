@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { useAction } from "@/components/use-action";
-import { Badge, Button, Card, Dialog, EmptyState, ErrorState, Field, LoadingRows, Textarea } from "@/components/ui";
+import { Badge, Button, Card, Dialog, EmptyState, ErrorState, Field, KeyValue, LoadingRows, Textarea } from "@/components/ui";
 import { api, useQuery } from "@/lib/api";
 import { formatDateTime, label } from "@/lib/format";
 
@@ -22,6 +22,24 @@ type TeamRequest = {
 
 type Decision = { id: string; kind: "APPROVE" | "DECLINE" };
 
+type DispatchDraft = {
+  incident_id: string;
+  incident_ref: string;
+  required_capability: string;
+  suggested_resource_id: string | null;
+  suggested_resource_name: string | null;
+  receiving_agency_id: string | null;
+  priority: string;
+  instructions: string;
+};
+
+type TeamRequestDecisionResponse = {
+  request_id: string;
+  dispatch_draft: DispatchDraft | null;
+};
+
+type ApprovedDraft = { requestId: string; draft: DispatchDraft };
+
 /** Queue of additional-team requests raised by field teams. Needs the DISPATCH permission to decide. */
 export default function TeamRequestsPage() {
   const { can } = useStaff();
@@ -30,15 +48,23 @@ export default function TeamRequestsPage() {
   const { run, busy } = useAction(q.reload);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [rationale, setRationale] = useState("");
+  const [drafts, setDrafts] = useState<ApprovedDraft[]>([]);
 
   async function submit() {
     if (!decision || rationale.trim().length < 3) return;
-    const ok = await run(
+    const result = await run(
       "decision",
-      () => api(`team-requests/${decision.id}/decision`, { method: "POST", body: { action: decision.kind, rationale: rationale.trim() } }),
+      () => api<TeamRequestDecisionResponse>(`team-requests/${decision.id}/decision`, { method: "POST", body: { action: decision.kind, rationale: rationale.trim() } }),
       decision.kind === "APPROVE" ? "Request approved" : "Request declined",
     );
-    if (ok !== undefined) {
+    if (result !== undefined) {
+      const draft = result.dispatch_draft;
+      if (draft) {
+        setDrafts((current) => [
+          ...current.filter((item) => item.requestId !== result.request_id),
+          { requestId: result.request_id, draft },
+        ]);
+      }
       setDecision(null);
       setRationale("");
       q.reload();
@@ -54,6 +80,31 @@ export default function TeamRequestsPage() {
         </div>
         <Button onClick={q.reload} busy={q.loading}>Refresh</Button>
       </header>
+
+      {drafts.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {drafts.map(({ requestId, draft }) => (
+            <Card
+              key={requestId}
+              title={`Dispatch draft · ${draft.incident_ref}`}
+              subtitle="Review the suggested details, then create the dispatch from the incident. Nothing is dispatched until you confirm."
+              actions={<Button size="sm" onClick={() => setDrafts((current) => current.filter((item) => item.requestId !== requestId))}>Dismiss</Button>}
+            >
+              <KeyValue
+                items={[
+                  ["Requested capability", label(draft.required_capability)],
+                  ["Suggested team", draft.suggested_resource_name],
+                  ["Priority", label(draft.priority)],
+                ]}
+              />
+              <p className="mt-4 whitespace-pre-wrap rounded-lg bg-surface-muted p-3 text-sm">{draft.instructions}</p>
+              <Link href={`/dm/incidents/${draft.incident_id}`} className="mt-4 inline-block text-sm font-medium text-info hover:underline">
+                Review incident and create dispatch →
+              </Link>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {q.error && !q.data && <ErrorState message={q.error} onRetry={q.reload} />}
       {q.loading && !q.data && <LoadingRows rows={3} />}
