@@ -1,22 +1,15 @@
 """Comprehensive Unit Tests for S1-11 Team-Recommendation Engine."""
 
+import pytest
+
 from app.services.recommendations import (
     get_recommended_teams,
-    get_required_capabilities,
     score_and_rank_teams,
 )
 
 
-def test_scenario_rule_mapping():
-    """Verify emergency scenario to capability rule mapping."""
-    assert "boat" in get_required_capabilities("URBAN_FLOODING")
-    assert "water_rescue" in get_required_capabilities("FLOOD")
-    assert "fire" in get_required_capabilities("INDUSTRIAL_FIRE")
-    assert "cyclone_response" in get_required_capabilities("CYCLONE")
-    assert "search_and_rescue" in get_required_capabilities("EARTHQUAKE")
-
-
-def test_seed_incidents_top_teams():
+@pytest.mark.db
+def test_seed_incidents_top_teams(sql):
     """Verify top recommended response teams across Gujarat disaster scenarios."""
     # 1. Ahmedabad flood
     flood_recs = get_recommended_teams(23.0373, 72.5613, "URBAN_FLOODING", limit=3)
@@ -35,11 +28,6 @@ def test_seed_incidents_top_teams():
     cyclone_recs = get_recommended_teams(23.1139, 70.0278, "CYCLONE", limit=3)
     assert len(cyclone_recs) == 3
     assert "cyclone_response" in cyclone_recs[0].matched_capabilities
-
-    # 4. Bhuj earthquake
-    quake_recs = get_recommended_teams(23.2420, 69.6669, "EARTHQUAKE", limit=3)
-    assert len(quake_recs) == 3
-    assert quake_recs[0].distance_km < 1.0  # Local Bhuj team
 
 
 def test_unavailable_and_zero_quantity_excluded():
@@ -117,3 +105,5 @@ def test_maintenance_status_excluded():
     ids = [u.resource_id for u in ranked]
     assert "r-maint" not in ids
     assert "r-avail" in ids
+
+

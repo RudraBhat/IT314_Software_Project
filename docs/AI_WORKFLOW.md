@@ -1,6 +1,6 @@
-# DRCH AI Development Workflow Guide
+# ResQ AI Development Workflow Guide
 
-This document describes the AI-assisted software engineering environment for the **Disaster Response Coordination Hub (DRCH)**. The repository supports three completely independent modes of operation:
+This document describes the AI-assisted software engineering environment for **ResQ** (Disaster Response Coordination Hub). The repository supports three completely independent modes of operation:
 
 - **Mode A: Google Antigravity Only** (Standalone IDE / Agent)
 - **Mode B: Claude Code Only** (Terminal CLI / Claude Pro)

@@ -110,7 +110,8 @@ def resolve_seed_files(custom_spec: str | None = None) -> list[Path]:
                 sys.exit(f"ERROR: Specified seed file not found: {p}")
         return files
 
-    return sorted(SEEDS_DIR.glob("*.sql"), key=lambda p: p.name)
+    # reference/ + demo/ only (dev and test); seeds/optional/ is loaded by hand, as in app/migrate.py.
+    return sorted([*SEEDS_DIR.glob("reference/*.sql"), *SEEDS_DIR.glob("demo/*.sql")], key=lambda p: p.name)
 
 
 def clear_dynamic_data(conn):
@@ -215,7 +216,7 @@ def reset_seeds(custom_seed_files: str | None = None, force: bool = False) -> di
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Safely reset DRCH database seeds.")
+    parser = argparse.ArgumentParser(description="Safely reset ResQ database seeds.")
     parser.add_argument("--seed-files", help="Custom seed SQL files (space or comma separated)")
     parser.add_argument("--force", action="store_true", help="Override safety guard for external/cloud DBs")
     args = parser.parse_args()

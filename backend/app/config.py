@@ -37,8 +37,8 @@ class Settings:
     database_url: str | None
     jwt_secret: str | None
     mfa_encryption_key: str | None
-    demo_mode: bool
     ai_triage_url: str | None
+    ai_triage_token: str | None
     access_token_minutes: int
     mfa_token_minutes: int
     login_max_attempts: int
@@ -50,21 +50,29 @@ class Settings:
     boundary_sync_interval_hours: int
     boundary_sync_check_interval_seconds: int
     geojson_gujarat_districts_url: str
+    cors_allowed_origins: list[str]
     ingest_token: str | None
     mock_gateway_secret: str | None
     app_env: str
     git_sha: str
     payment_gateway: str
-    smtp_host: str | None
-    smtp_port: int
-    smtp_username: str | None
-    smtp_password: str | None
-    email_from: str
-    frontend_url: str
-    invitation_token_hours: int
-    password_reset_token_minutes: int
-    google_client_id: str | None
-    google_client_secret: str | None
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    email_from: str = "no-reply@drch.gujarat.gov.in"
+    frontend_url: str = "http://localhost:3000"
+    invitation_token_hours: int = 48
+    password_reset_token_minutes: int = 15
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    razorpay_key_id: str | None = None
+    razorpay_key_secret: str | None = None
+    razorpay_webhook_secret: str | None = None
+    sachet_feed_url: str = ""
+    usgs_feed_url: str = ""
+    social_replay_file: str = ""
+    ingest_interval_seconds: int = 600
 
     def require(self, name: str) -> str:
         value = getattr(self, name)
@@ -75,17 +83,14 @@ class Settings:
 @lru_cache
 def get_settings() -> Settings:
     database_url = os.getenv("DATABASE_URL")
-    demo_mode = os.getenv("DEMO_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+    app_env = os.getenv("APP_ENV", "development").lower()
+    cors_default = "http://localhost:3000,http://127.0.0.1:3000" if app_env == "development" else ""
     return Settings(
         database_url=database_url,
-        jwt_secret=os.getenv("JWT_SECRET") or (
-            "drch_demo_only_jwt_secret_change_before_deployment_32chars"
-            if demo_mode and not database_url
-            else None
-        ),
+        jwt_secret=os.getenv("JWT_SECRET") or None,
         mfa_encryption_key=os.getenv("MFA_ENCRYPTION_KEY"),
-        demo_mode=demo_mode,
         ai_triage_url=os.getenv("AI_TRIAGE_URL") or None,
+        ai_triage_token=os.getenv("AI_TRIAGE_TOKEN") or None,
         access_token_minutes=_int("ACCESS_TOKEN_MINUTES", 60),
         mfa_token_minutes=_int("MFA_TOKEN_MINUTES", 5),
         login_max_attempts=_int("LOGIN_MAX_ATTEMPTS", 5),
@@ -96,13 +101,14 @@ def get_settings() -> Settings:
         boundary_sync_enabled=_bool("BOUNDARY_SYNC_ENABLED", True),
         boundary_sync_interval_hours=_int("BOUNDARY_SYNC_INTERVAL_HOURS", 720),  # Monthly (30 days = 720h)
         boundary_sync_check_interval_seconds=_int("BOUNDARY_SYNC_CHECK_INTERVAL_SECONDS", 86400),
-        geojson_gujarat_districts_url=os.getenv(
-            "GEOJSON_GUJARAT_DISTRICTS_URL",
-            "https://raw.githubusercontent.com/datameet/maps/master/Districts/Gujarat.geojson",
-        ),
+        # Empty = boundary sync disabled; the packaged polygon + PostGIS data are used instead.
+        geojson_gujarat_districts_url=os.getenv("GEOJSON_GUJARAT_DISTRICTS_URL", "").strip(),
+        cors_allowed_origins=[
+            o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", cors_default).split(",") if o.strip()
+        ],
         ingest_token=os.getenv("INGEST_TOKEN"),
         mock_gateway_secret=os.getenv("MOCK_GATEWAY_SECRET"),
-        app_env=os.getenv("APP_ENV", "development").lower(),
+        app_env=app_env,
         git_sha=os.getenv("GIT_SHA", "dev"),
         payment_gateway=os.getenv("PAYMENT_GATEWAY", "mock").lower(),
         smtp_host=os.getenv("SMTP_HOST") or None,
@@ -115,4 +121,33 @@ def get_settings() -> Settings:
         password_reset_token_minutes=_int("PASSWORD_RESET_TOKEN_MINUTES", 15),
         google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
         google_client_secret=os.getenv("GOOGLE_CLIENT_SECRET") or None,
+        razorpay_key_id=os.getenv("RAZORPAY_KEY_ID") or None,
+        razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET") or None,
+        razorpay_webhook_secret=os.getenv("RAZORPAY_WEBHOOK_SECRET") or None,
+        sachet_feed_url=os.getenv("SACHET_FEED_URL", "").strip(),
+        usgs_feed_url=os.getenv(
+            "USGS_FEED_URL",
+            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=2.5&minlatitude=20.0&maxlatitude=24.7&minlongitude=68.1&maxlongitude=74.6&orderby=time",
+        ).strip(),
+        social_replay_file=os.getenv("SOCIAL_REPLAY_FILE", "").strip(),
+        ingest_interval_seconds=max(1, _int("INGEST_INTERVAL_SECONDS", 600)),
     )
+
+
+_PLACEHOLDER_MARKERS = ("change", "insecure", "supersecret", "demo_only", "placeholder", "example", "test-only")
+
+
+def validate_for_environment(settings: Settings) -> list[str]:
+    """Return configuration problems that must stop startup outside development."""
+    if settings.app_env == "development":
+        return []
+    problems = []
+    for name in ("database_url", "jwt_secret", "mfa_encryption_key", "ingest_token"):
+        if not getattr(settings, name):
+            problems.append(f"{name.upper()} is required when APP_ENV={settings.app_env}")
+    secret = settings.jwt_secret or ""
+    if secret and (len(secret) < 32 or any(m in secret.lower() for m in _PLACEHOLDER_MARKERS)):
+        problems.append("JWT_SECRET is too short or looks like a placeholder")
+    if not settings.cors_allowed_origins:
+        problems.append("CORS_ALLOWED_ORIGINS is required (comma-separated list of frontend origins)")
+    return problems

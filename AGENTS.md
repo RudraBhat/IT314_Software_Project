@@ -1,4 +1,4 @@
-# DRCH — Repository Instructions
+# ResQ — Repository Instructions
 
 ## Core Engineering Rules
 - **Inspect First:** Inspect existing code, dependencies, and `docs/ARCHITECTURE.md` before making changes.

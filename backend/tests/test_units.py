@@ -10,7 +10,7 @@ from app.services.ai_provider import UnavailableProvider, apply_guardrails
 
 def test_root_and_health(client):
     assert client.get("/").status_code == 200
-    assert client.get("/health").json() == {"status": "healthy", "service": "drch-backend"}
+    assert client.get("/health").json() == {"status": "healthy", "service": "resq-backend"}
 
 
 def test_password_hashing_is_argon2id_and_verifies():
@@ -215,7 +215,7 @@ def test_api_v1_health_returns_version(client, monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "healthy"
-    assert data["service"] == "drch-backend"
+    assert data["service"] == "resq-backend"
     assert data["version"] == "test_commit_sha_1234567890"
 
 
@@ -245,6 +245,18 @@ def test_internal_ingest_run_accepts_valid_token(client, monkeypatch):
     mock_settings.database_url = None  # DB-free unit test mode
     monkeypatch.setattr("app.routers.internal.get_settings", lambda: mock_settings)
 
+    def fake_run_ingestion(source, _settings):
+        return [{
+            "run_id": "test-ingest-run",
+            "source": source,
+            "items_fetched": 0,
+            "items_stored": 0,
+            "status": "PREVIEW",
+            "message": None,
+        }]
+
+    monkeypatch.setattr("app.routers.internal.run_ingestion", fake_run_ingestion)
+
     # Via Bearer auth
     resp = client.post(
         "/api/v1/internal/ingest/run?source=USGS",
@@ -252,7 +264,7 @@ def test_internal_ingest_run_accepts_valid_token(client, monkeypatch):
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["status"] == "SUCCESS"
+    assert data["status"] == "PREVIEW"
     assert data["source"] == "USGS"
     assert "run_id" in data
 
@@ -262,7 +274,9 @@ def test_internal_ingest_run_accepts_valid_token(client, monkeypatch):
         headers={"X-Ingest-Token": test_token},
     )
     assert resp2.status_code == 200
-    assert resp2.json()["status"] == "SUCCESS"
+    data2 = resp2.json()
+    assert data2[0]["status"] == "PREVIEW"
+    assert data2[0]["source"] == "ALL"
 
 
 def test_dispatch_shared_transitions_invariants():

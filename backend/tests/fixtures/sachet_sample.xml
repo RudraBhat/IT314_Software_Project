@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<alerts xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+  <alert>
+    <identifier>SACHET-GUJ-CYC-2026-001</identifier>
+    <sender>sachet@ndma.gov.in</sender>
+    <sent>2026-11-02T10:00:00+05:30</sent>
+    <status>Actual</status>
+    <msgType>Alert</msgType>
+    <scope>Public</scope>
+    <info>
+      <category>Met</category>
+      <event>Severe Cyclonic Storm</event>
+      <urgency>Immediate</urgency>
+      <severity>Extreme</severity>
+      <certainty>Observed</certainty>
+      <effective>2026-11-02T10:00:00+05:30</effective>
+      <expires>2026-11-05T18:00:00+05:30</expires>
+      <headline>Severe Cyclonic Storm Warning for Saurashtra and Kutch</headline>
+      <description>Severe cyclonic storm likely to make landfall near Saurashtra coast.</description>
+      <area>
+        <areaDesc>Coastal Districts of Saurashtra, Gujarat</areaDesc>
+        <circle>22.30,70.80 50.0</circle>
+      </area>
+    </info>
+  </alert>
+  <alert>
+    <identifier>SACHET-RAJ-FL-2026-002</identifier>
+    <sender>sachet@ndma.gov.in</sender>
+    <sent>2026-11-02T11:00:00+05:30</sent>
+    <status>Actual</status>
+    <msgType>Alert</msgType>
+    <scope>Public</scope>
+    <info>
+      <category>Met</category>
+      <event>Heavy Rainfall and Flooding</event>
+      <urgency>Expected</urgency>
+      <severity>Moderate</severity>
+      <certainty>Likely</certainty>
+      <effective>2026-11-02T11:00:00+05:30</effective>
+      <expires>2026-11-04T12:00:00+05:30</expires>
+      <headline>Flash Flood Warning for Jaipur</headline>
+      <description>Heavy localized inundation reported in Jaipur urban zones.</description>
+      <area>
+        <areaDesc>Jaipur District, Rajasthan</areaDesc>
+        <circle>26.91,75.78 25.0</circle>
+      </area>
+    </info>
+  </alert>
+</alerts>
+

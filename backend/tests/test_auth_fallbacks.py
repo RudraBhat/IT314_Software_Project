@@ -13,7 +13,6 @@ def test_database_error_does_not_grant_a_demo_principal(monkeypatch):
 
     monkeypatch.setenv("DATABASE_URL", "postgresql://unavailable")
     monkeypatch.setenv("JWT_SECRET", "test-secret-" + "x" * 32)
-    monkeypatch.delenv("DEMO_MODE", raising=False)
     get_settings.cache_clear()
 
     @contextmanager
@@ -36,7 +35,6 @@ def test_mfa_database_error_does_not_issue_an_access_token(monkeypatch):
 
     monkeypatch.setenv("DATABASE_URL", "postgresql://unavailable")
     monkeypatch.setenv("JWT_SECRET", "test-secret-" + "x" * 32)
-    monkeypatch.delenv("DEMO_MODE", raising=False)
     get_settings.cache_clear()
 
     @contextmanager
@@ -66,7 +64,6 @@ def test_staff_creation_database_error_is_not_reported_as_success(monkeypatch):
 
     monkeypatch.setenv("DATABASE_URL", "postgresql://unavailable")
     monkeypatch.setenv("JWT_SECRET", "test-secret-" + "x" * 32)
-    monkeypatch.delenv("DEMO_MODE", raising=False)
     get_settings.cache_clear()
 
     @contextmanager
@@ -87,20 +84,10 @@ def test_staff_creation_database_error_is_not_reported_as_success(monkeypatch):
         get_settings.cache_clear()
 
 
-def test_default_jwt_secret_is_available_only_in_database_free_demo_mode(monkeypatch):
+def test_no_default_jwt_secret_exists(monkeypatch):
     from app.config import get_settings
 
-    monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("JWT_SECRET", raising=False)
-    monkeypatch.delenv("DEMO_MODE", raising=False)
-    get_settings.cache_clear()
-    assert get_settings().jwt_secret is None
-
-    monkeypatch.setenv("DEMO_MODE", "true")
-    get_settings.cache_clear()
-    assert get_settings().jwt_secret
-
-    monkeypatch.setenv("DATABASE_URL", "postgresql://configured")
     get_settings.cache_clear()
     assert get_settings().jwt_secret is None
     get_settings.cache_clear()

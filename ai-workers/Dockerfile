@@ -51,5 +51,7 @@ RUN addgroup --system --gid 1001 aiworker && \
 
 USER aiworker
 
+EXPOSE 8001
+
 # Command to execute the worker process
-CMD ["python", "-m", "worker"]
+CMD ["uvicorn", "triage_service:app", "--host", "0.0.0.0", "--port", "8001"]

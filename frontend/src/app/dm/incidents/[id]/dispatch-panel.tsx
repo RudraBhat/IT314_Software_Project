@@ -69,6 +69,17 @@ export function DispatchPanel({ incident, reload }: { incident: IncidentDetail; 
 function CreateDispatch({ incident, onClose, onDone }: { incident: IncidentDetail; onClose: () => void; onDone: () => void }) {
   const agencies = useQuery<{ items: Agency[] }>("agency-contacts");
   const resources = useQuery<Paged<Resource>>("resources", { available_only: true, limit: 100 });
+  const recommendations = useQuery<{
+    recommendations: Array<{
+      resource_id: string;
+      team_name: string;
+      agency: string | null;
+      distance_km: number | null;
+      capability_match: string[];
+      rank: number;
+      reasons: string;
+    }>;
+  }>(`incidents/${incident.incident_id}/team-recommendations`);
   const { run, busy } = useAction();
   const [agencyId, setAgencyId] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -141,6 +152,50 @@ function CreateDispatch({ incident, onClose, onDone }: { incident: IncidentDetai
         <Field label="Operational instructions">
           {(id) => <Textarea id={id} rows={4} value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={4000} />}
         </Field>
+
+        {/* Suggested Teams (AI / Rule Recommendation) */}
+        {recommendations.data?.recommendations && recommendations.data.recommendations.length > 0 && (
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">Suggested teams</span>
+              <span className="text-[11px] text-muted italic">Advisory — you confirm the dispatch</span>
+            </div>
+            <ul className="divide-y divide-border/60 text-xs">
+              {recommendations.data.recommendations.map((rec) => {
+                const resourceAvailable = resources.data?.items.find((r) => r.resource_id === rec.resource_id);
+                const isSelected = Number(lines[rec.resource_id] ?? 0) > 0;
+                return (
+                  <li key={rec.resource_id} className="flex items-center justify-between py-2 gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">{rec.team_name}</span>
+                        {rec.distance_km !== null && (
+                          <span className="text-[10px] font-mono text-muted">{rec.distance_km.toFixed(1)} km</span>
+                        )}
+                        {rec.agency && <span className="text-[10px] text-muted">({rec.agency})</span>}
+                      </div>
+                      <p className="text-[11px] text-muted truncate">{rec.reasons}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isSelected ? "secondary" : "primary"}
+                      onClick={() => {
+                        setLines((l) => ({ ...l, [rec.resource_id]: "1" }));
+                        if (!agencyId && resourceAvailable?.agency_id) {
+                          setAgencyId(resourceAvailable.agency_id);
+                        }
+                      }}
+                      disabled={!resourceAvailable || Number(resourceAvailable.quantity_available) <= 0}
+                    >
+                      {isSelected ? "Selected" : "Add to dispatch"}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         <div>
           <p className="mb-2 text-xs font-medium text-muted">Resources to assign (available now)</p>
           {resources.error && <Notice tone="critical">{resources.error}</Notice>}

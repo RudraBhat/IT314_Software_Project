@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DRCH AI Development Orchestrator CLI.
+"""ResQ AI Development Orchestrator CLI.
 
 Unified entry point for managing the AI-assisted software engineering lifecycle:
 - Mode A: Independent Google Antigravity (Primary Development Agent)
@@ -60,7 +60,7 @@ except ImportError:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="DRCH AI Development Orchestrator (Antigravity Primary + Optional Claude Reviewer)",
+        description="ResQ AI Development Orchestrator (Antigravity Primary + Optional Claude Reviewer)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 

@@ -1,6 +1,6 @@
-# Contributing to ResQ (Fork Workflow Guide)
+# Contributing to DRCH (Fork Workflow Guide)
 
-Thank you for contributing to **ResQ**! This document explains step-by-step how to contribute to the repository using GitHub's **Fork & Pull Request Workflow**.
+Thank you for contributing to **DRCH** (Disaster Response Coordination Hub)! This document explains step-by-step how to contribute to the repository using GitHub's **Fork & Pull Request Workflow**.
 
 Following this standard workflow ensures that your changes stay up-to-date with the main repository, avoid merge conflicts, and pass all Continuous Integration (CI) checks smoothly.
 

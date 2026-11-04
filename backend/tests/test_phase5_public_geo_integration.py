@@ -15,81 +15,8 @@ from app.geo import (
     is_in_gujarat,
     load_boundaries_from_db,
 )
-from app.routers.public import _DEMO_INCIDENTS
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 1. SECURITY & PII TESTS (Public API Hardening)
-# ═══════════════════════════════════════════════════════════════════════════
-
-def test_public_api_never_leaks_unverified_or_rejected(client):
-    """Ensure SUBMITTED, REJECTED, or unverified records are never publicly visible."""
-    resp = client.get("/api/v1/public/incidents")
-    assert resp.status_code == 200
-    incidents = resp.json()
-
-    for inc in incidents:
-        # Strict state machine verification
-        assert inc["status"].upper() in (
-            "VERIFIED",
-            "DISPATCHED",
-            "RESOLVED",
-        ), f"Unverified status leaked: {inc['status']}"
-
-
-def test_public_api_pii_sanitization(client):
-    """Ensure absolutely zero citizen PII or internal notes are exposed."""
-    resp = client.get("/api/v1/public/incidents")
-    assert resp.status_code == 200
-    incidents = resp.json()
-
-    forbidden_pii = {
-        "reporter_id",
-        "reporter_name",
-        "reporter_phone",
-        "reporter_email",
-        "internal_notes",
-        "dispatcher_notes",
-        "description",  # Raw unvetted text withheld from public map
-        "evidence_files",
-    }
-
-    for inc in incidents:
-        keys = set(inc.keys())
-        leaked = keys & forbidden_pii
-        assert not leaked, f"Security Violation: PII leaked in public incident {inc.get('incident_ref')}: {leaked}"
-
-
-def test_public_api_query_filters(client):
-    """Verify district, scenario, and bbox query filtering."""
-    # 1. District filter
-    r_ahmedabad = client.get("/api/v1/public/incidents?district=Ahmedabad")
-    assert r_ahmedabad.status_code == 200
-    for inc in r_ahmedabad.json():
-        assert inc["district"].lower() == "ahmedabad"
-
-    # 2. Scenario filter
-    r_cyclone = client.get("/api/v1/public/incidents?scenario=CYCLONE")
-    assert r_cyclone.status_code == 200
-    for inc in r_cyclone.json():
-        assert inc["scenario"].upper() == "CYCLONE"
-
-    # 3. Bounding box filter (restricted box around Surat)
-    r_bbox = client.get("/api/v1/public/incidents?min_lat=20.0&max_lat=22.0&min_lon=71.0&max_lon=74.0")
-    assert r_bbox.status_code == 200
-    for inc in r_bbox.json():
-        assert inc["district"] == "Surat"
-
-
-def test_public_api_coordinate_rounding():
-    """Verify coordinates are rounded to at most 4 decimal places for privacy."""
-    for inc in _DEMO_INCIDENTS:
-        lat_str = str(inc["latitude"]).split(".")
-        lon_str = str(inc["longitude"]).split(".")
-        if len(lat_str) > 1:
-            assert len(lat_str[1]) <= 4
-        if len(lon_str) > 1:
-            assert len(lon_str[1]) <= 4
-
+# Public API tests live in tests/test_public_api.py (DB-backed, no demo data).
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 2. GUJARAT GEOFENCING TESTS (geo.py Precision)

@@ -8,87 +8,16 @@ from psycopg import Error as PsycopgError
 from app import db
 from app.auth import DMUser
 from app.config import get_settings
+from app.errors import ApiError
 
 router = APIRouter()
-
-
-def _demo_dashboard_data(now: datetime, timeout: int):
-    return {
-        "generated_at": now,
-        "data_fresh_as_of": now,
-        "incidents": {
-            "total": 12,
-            "pending_verification": 3,
-            "needs_information": 1,
-            "verified_active": 6,
-            "critical_open": 2,
-            "high_open": 3,
-            "unprioritised_open": 0,
-        },
-        "by_scenario": [
-            {"scenario": "cyclone", "total": 5, "open": 3},
-            {"scenario": "industrial_fire", "total": 3, "open": 1},
-            {"scenario": "urban_flooding", "total": 4, "open": 2},
-        ],
-        "dispatches": {
-            "active": 4,
-            "awaiting_ack": 1,
-            "overdue": 0,
-            "ack_timeout_minutes": timeout,
-        },
-        "resources": {
-            "by_type": [
-                {"type": "AMBULANCE", "total": 8, "available": 5},
-                {"type": "FIRE_ENGINE", "total": 6, "available": 4},
-                {"type": "RESCUE_BOAT", "total": 4, "available": 2},
-            ],
-            "available": 11,
-            "total": 18,
-        },
-        "moderation": {"pending": 2, "oldest": now.isoformat()},
-        "aid": {"awaiting_verification": 1, "open_needs": 4},
-        "verification_queue": [
-            {
-                "incident_id": "11111111-1111-1111-1111-111111111111",
-                "incident_ref": "INC-2026-001",
-                "scenario": "cyclone",
-                "status": "SUBMITTED",
-                "reported_urgency": "HIGH",
-                "people_affected": 24,
-                "address_text": "Coastal Sector 4, Paradip",
-                "submitted_at": now.isoformat(),
-            },
-            {
-                "incident_id": "22222222-2222-2222-2222-222222222222",
-                "incident_ref": "INC-2026-002",
-                "scenario": "urban_flooding",
-                "status": "NEEDS_INFORMATION",
-                "reported_urgency": "MEDIUM",
-                "people_affected": 8,
-                "address_text": "Riverbank Road, Ward 12",
-                "submitted_at": now.isoformat(),
-            },
-        ],
-        "recent_activity": [
-            {
-                "history_id": 1,
-                "incident_id": "11111111-1111-1111-1111-111111111111",
-                "incident_ref": "INC-2026-001",
-                "changed_at": now.isoformat(),
-                "from_status": "SUBMITTED",
-                "to_status": "VERIFIED",
-                "reason": "Verified by ground team",
-                "changed_by_name": "Incident Commander",
-            }
-        ],
-    }
 
 
 @router.get("/dashboard")
 def dashboard(principal: DMUser):
     timeout = get_settings().dispatch_ack_timeout_minutes
     if not get_settings().database_url:
-        return _demo_dashboard_data(datetime.now(UTC), timeout)
+        raise ApiError(503, "DATABASE_UNAVAILABLE", "Database connection required")
 
     try:
         with db.transaction() as conn:
@@ -187,5 +116,5 @@ def dashboard(principal: DMUser):
             "verification_queue": queue,
             "recent_activity": recent,
         }
-    except PsycopgError:
-        return _demo_dashboard_data(datetime.now(UTC), timeout)
+    except PsycopgError as exc:
+        raise ApiError(503, "DATABASE_ERROR", "Failed to retrieve live dashboard data") from exc

@@ -9,7 +9,7 @@ staff without any hardcoded credentials:
     python -m app.cli set-permissions --email ops@example.org --permissions DISPATCH
     python -m app.cli reset-mfa --email ops@example.org
 
-The password is read interactively (or from DRCH_STAFF_PASSWORD for automation)
+The password is read interactively (or from RESQ_STAFF_PASSWORD / DRCH_STAFF_PASSWORD for automation)
 and never printed. The TOTP secret is shown once for enrolment in an
 authenticator app and stored encrypted.
 """
@@ -18,9 +18,10 @@ import argparse
 import getpass
 import os
 import sys
+import uuid
 
 from app import audit, db, security
-from app.auth import DM_ROLE, PERMISSIONS
+from app.auth import DM_ROLE, FIELD_ROLE, PERMISSIONS
 
 MIN_PASSWORD_LENGTH = 12
 
@@ -34,7 +35,12 @@ def _parse_permissions(raw: str) -> list[str]:
 
 
 def _read_password() -> str:
-    password = os.getenv("DRCH_STAFF_PASSWORD")
+    password = (
+        os.getenv("RESQ_STAFF_PASSWORD")
+        or os.getenv("DRCH_STAFF_PASSWORD")
+        or os.getenv("RESQ_FIELD_PASSWORD")
+        or os.getenv("DRCH_FIELD_PASSWORD")
+    )
     if not password:
         password = getpass.getpass("Password: ")
         if password != getpass.getpass("Repeat password: "):
@@ -139,12 +145,170 @@ def reset_mfa(args) -> None:
         )
 
 
+def create_field(args) -> None:
+    password_hash = security.hash_password(_read_password())
+    with db.transaction() as conn:
+        if conn.execute("SELECT 1 FROM users WHERE email = %s", (args.email,)).fetchone():
+            sys.exit(f"An account with email {args.email} already exists")
+
+        team = None
+        team_input = args.team.strip()
+        try:
+            team_uuid = uuid.UUID(team_input)
+            team = conn.execute(
+                "SELECT resource_id, name, agency_id FROM resources WHERE resource_id = %s AND type = 'TEAM'",
+                (team_uuid,),
+            ).fetchone()
+        except ValueError:
+            team = conn.execute(
+                "SELECT resource_id, name, agency_id FROM resources WHERE type = 'TEAM' AND name ILIKE %s LIMIT 1",
+                (f"%{team_input}%",),
+            ).fetchone()
+
+        if not team:
+            sys.exit(f"Team '{team_input}' not found in resources table with type 'TEAM'")
+
+        user_id = conn.execute(
+            """
+            INSERT INTO users (role_id, email, full_name, phone, designation, status)
+            SELECT role_id, %s, %s, %s, %s, 'ACTIVE' FROM roles WHERE code = %s
+            RETURNING user_id
+            """,
+            (args.email, args.name, args.phone, args.designation or "Field Responder", FIELD_ROLE),
+        ).fetchone()["user_id"]
+
+        conn.execute(
+            "INSERT INTO user_auth (user_id, password_hash) VALUES (%s, %s)",
+            (user_id, password_hash),
+        )
+
+        conn.execute(
+            """
+            INSERT INTO field_team_members (user_id, resource_id, callsign, is_leader)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (user_id, team["resource_id"], args.callsign, bool(args.leader)),
+        )
+        _enrol_mfa(conn, user_id, args.email)
+
+        audit.record(
+            conn,
+            actor=None,
+            action="FIELD_USER_PROVISIONED",
+            entity_type="user",
+            entity_id=user_id,
+            rationale="Provisioned with app.cli create-field",
+            after={
+                "role": FIELD_ROLE,
+                "team_id": str(team["resource_id"]),
+                "team_name": team["name"],
+                "callsign": args.callsign,
+                "is_leader": bool(args.leader),
+            },
+        )
+
+    leader_text = " (Team Leader)" if args.leader else ""
+    callsign_text = f" [Callsign: {args.callsign}]" if args.callsign else ""
+    print(f"Created Field Team account {args.email} for '{team['name']}'{callsign_text}{leader_text}")
+
+
 def verify_audit(args) -> None:
     with db.transaction() as conn:
         valid, _count, msg = audit.verify_audit_chain(conn)
         if not valid:
             sys.exit(f"❌ [AUDIT TAMPERING DETECTED] {msg}")
         print(f"✅ [AUDIT INTEGRITY VERIFIED] {msg}")
+
+
+def purge_demo_data(args) -> None:
+    """Delete simulated incidents (is_simulated = TRUE) left in a database by older seed files."""
+    with db.transaction() as conn:
+        blocked = conn.execute(
+            "SELECT COUNT(*) AS n FROM incidents i WHERE i.is_simulated "
+            "AND EXISTS (SELECT 1 FROM dispatch_orders d WHERE d.incident_id = i.incident_id)"
+        ).fetchone()["n"]
+        if blocked:
+            sys.exit(f"{blocked} simulated incident(s) have dispatch orders; close/reassign them first")
+        removed = conn.execute("DELETE FROM incidents WHERE is_simulated RETURNING incident_id").fetchall()
+        audit.record(
+            conn,
+            actor=None,
+            action="DEMO_DATA_PURGED",
+            entity_type="incident",
+            rationale=f"Removed {len(removed)} simulated incident(s) with app.cli",
+        )
+    print(f"Removed {len(removed)} simulated incident(s)")
+
+
+def load_fallback_alerts(args) -> None:
+    """Insert 3 clearly labelled sample external alerts with is_fallback = TRUE (development only)."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    if settings.app_env != "development":
+        sys.exit(f"load-fallback-alerts is only allowed when APP_ENV=development (current: {settings.app_env})")
+
+    alerts = [
+        (
+            "SACHET",
+            "FALLBACK-CYC-01",
+            "CYCLONE",
+            "CRITICAL",
+            "Coastal Saurashtra and Kutch, Gujarat (Sample Alert)",
+            22.3000,
+            69.6000,
+            '{"headline": "Sample Alert: Very Severe Cyclonic Storm Warning", "is_fallback": true}',
+        ),
+        (
+            "SACHET",
+            "FALLBACK-FLD-02",
+            "URBAN_FLOODING",
+            "HIGH",
+            "Ahmedabad-Gandhinagar Urban Corridor, Gujarat (Sample Alert)",
+            23.0225,
+            72.5714,
+            '{"headline": "Sample Alert: Heavy Rainfall and Inundation Warning", "is_fallback": true}',
+        ),
+        (
+            "SACHET",
+            "FALLBACK-FIRE-03",
+            "INDUSTRIAL_FIRE",
+            "MEDIUM",
+            "Dahej PCPIR Industrial Zone, Bharuch, Gujarat (Sample Alert)",
+            21.7100,
+            72.5800,
+            '{"headline": "Sample Alert: Industrial Chemical Fire Alert", "is_fallback": true}',
+        ),
+    ]
+
+    with db.transaction() as conn:
+        for src, uid, ev, sev, area, lat, lon, payload in alerts:
+            conn.execute(
+                """
+                INSERT INTO external_alerts (
+                    source, source_uid, event_type, severity, area_text,
+                    latitude, longitude, geom, is_fallback, effective_at, expires_at, raw_payload
+                ) VALUES (
+                    %s, %s, %s, %s, %s,
+                    %s, %s,
+                    ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                    TRUE, now(), now() + interval '7 days', %s::jsonb
+                )
+                ON CONFLICT (source, source_uid) DO UPDATE SET
+                    event_type = EXCLUDED.event_type,
+                    severity = EXCLUDED.severity,
+                    area_text = EXCLUDED.area_text,
+                    latitude = EXCLUDED.latitude,
+                    longitude = EXCLUDED.longitude,
+                    geom = EXCLUDED.geom,
+                    is_fallback = TRUE,
+                    effective_at = EXCLUDED.effective_at,
+                    expires_at = EXCLUDED.expires_at,
+                    raw_payload = EXCLUDED.raw_payload
+                """,
+                (src, uid, ev, sev, area, lat, lon, lon, lat, payload),
+            )
+    print("Loaded 3 fallback alerts (is_fallback=TRUE)")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -159,6 +323,16 @@ def main(argv: list[str] | None = None) -> None:
     create.add_argument("--permissions", help=f"Comma-separated: {','.join(PERMISSIONS)}")
     create.set_defaults(func=create_staff)
 
+    create_f = sub.add_parser("create-field", help="Provision a field team responder account")
+    create_f.add_argument("--email", required=True, help="Field responder email address")
+    create_f.add_argument("--name", required=True, help="Full name of responder")
+    create_f.add_argument("--team", required=True, help="Resource UUID or team name matching resources table")
+    create_f.add_argument("--callsign", help="Radio callsign or tactical unit identifier")
+    create_f.add_argument("--leader", action="store_true", help="Mark responder as designated team lead")
+    create_f.add_argument("--phone", help="Emergency contact telephone number")
+    create_f.add_argument("--designation", help="Official field title or unit designation")
+    create_f.set_defaults(func=create_field)
+
     perms = sub.add_parser("set-permissions", help="Replace a staff member's permissions")
     perms.add_argument("--email", required=True)
     perms.add_argument("--permissions", required=True)
@@ -170,6 +344,12 @@ def main(argv: list[str] | None = None) -> None:
 
     v_audit = sub.add_parser("verify-audit", help="Verify cryptographic SHA-256 hash chaining of audit_logs")
     v_audit.set_defaults(func=verify_audit)
+
+    purge = sub.add_parser("purge-demo-data", help="Remove simulated (is_simulated) incidents")
+    purge.set_defaults(func=purge_demo_data)
+
+    fb_alerts = sub.add_parser("load-fallback-alerts", help="Load 3 sample alerts with is_fallback=TRUE (dev only)")
+    fb_alerts.set_defaults(func=load_fallback_alerts)
 
     args = parser.parse_args(argv)
     args.func(args)

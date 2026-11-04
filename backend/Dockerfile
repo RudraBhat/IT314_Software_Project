@@ -62,9 +62,9 @@ USER fastapi
 
 EXPOSE 8000
 
-# Container healthcheck against /health endpoint
+# Container healthcheck against /api/v1/health endpoint
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
 # Run with Gunicorn backed by Uvicorn workers, dynamically binding to $PORT (Render) or 8000
-CMD ["sh", "-c", "exec gunicorn main:app --workers ${WEB_CONCURRENCY:-1} --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000}"]
+CMD ["sh", "-c", "exec gunicorn main:app --workers ${WEB_CONCURRENCY:-1} --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000} --forwarded-allow-ips='*'"]

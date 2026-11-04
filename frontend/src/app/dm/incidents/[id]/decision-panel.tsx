@@ -28,6 +28,9 @@ export function DecisionPanel({ incident, reload }: { incident: IncidentDetail; 
   const deps = incident.open_dependencies;
   const hasDeps = deps.dispatches.length + deps.allocations.length > 0;
   const base = `incidents/${incident.incident_id}`;
+  // A field team reported completion and nothing is still in flight: prompt the dispatcher to confirm resolution.
+  const completed = incident.dispatches.filter((d) => d.status === "COMPLETED");
+  const awaitingResolution = a.resolve && !hasDeps && completed.length > 0;
 
   function open(next: Mode) {
     setText("");
@@ -89,6 +92,15 @@ export function DecisionPanel({ incident, reload }: { incident: IncidentDetail; 
 
   return (
     <Card title="Decisions" subtitle="Every decision is recorded with your name, time and rationale.">
+      {awaitingResolution && (
+        <div className="mb-3">
+          <Notice tone="medium">
+            {completed.length === 1 ? "A field team has" : `${completed.length} field teams have`} reported completion ({completed.map((d) => d.dispatch_ref).join(", ")}).
+            The incident stays open until you confirm resolution.
+          </Notice>
+          <Button className="mt-2 w-full" variant="primary" onClick={() => open("resolve")}>Confirm resolution…</Button>
+        </div>
+      )}
       <div className="grid gap-2">
         {a.verify && <Button variant="primary" onClick={() => open("verify")}>Verify / reject…</Button>}
         {a.request_information && <Button onClick={() => open("info")}>Request information…</Button>}

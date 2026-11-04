@@ -1,4 +1,4 @@
-# DRCH Backend Test Suite Reference
+# ResQ Backend Test Suite Reference
 
 Comprehensive guide to executing backend unit and integration tests, configuring database guards, starting the local PostGIS test container, and utilizing test fixtures.
 
@@ -224,4 +224,19 @@ $env:SMOKE_STAFF_TOTP_SECRET="JBSWY3DPEHPK3PXP"
 
 & "C:\Program Files\Git\bin\bash.exe" ./scripts/smoke.sh
 ```
+
+---
+
+## 8. OpenAPI Automated RBAC Matrix Test (`test_rbac_matrix.py`)
+
+The DRCH backend includes an automated Role-Based Access Control (RBAC) matrix test suite (`backend/tests/test_rbac_matrix.py`) that executes against all registered FastAPI routes:
+
+1. **Route Introspection:** Introspects FastAPI's OpenAPI routing tree to verify every `/api/v1/*` endpoint has an explicit dependency check or role guard.
+2. **Authentication Denial:** Asserts that anonymous requests to protected endpoints receive HTTP 401 `AUTHENTICATION_REQUIRED`.
+3. **Role Segregation:**
+   - Public/Citizen users (`NORMAL_USER`) calling `/api/v1/dm/*` or `/api/v1/field/*` receive HTTP 403 `ROLE_REQUIRED`.
+   - Field responders (`FIELD_TEAM`) calling `/api/v1/dm/*` receive HTTP 403 `ROLE_REQUIRED`.
+   - DM staff (`DISASTER_MGMT`) calling citizen-only endpoints (`/api/v1/me/*`, `/api/v1/incidents`) receive HTTP 403.
+4. **Staff Permission Boundaries:** For each permission-gated DM route (`DISPATCH`, `CLOSURE`, `PUBLISHER`, `MODERATOR`, `SUPERVISOR`), tests systematically verify that staff accounts lacking that specific permission receive HTTP 403 `PERMISSION_DENIED` and an immutable audit log record is created.
+
 

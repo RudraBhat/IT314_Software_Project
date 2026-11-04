@@ -7,6 +7,7 @@ it is validated and bounded here before anything is stored, and it can never
 change an incident by itself.
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -18,6 +19,26 @@ from app.config import get_settings
 SUPPORTED = {"CYCLONE", "INDUSTRIAL_FIRE", "URBAN_FLOODING"}
 PRIORITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
 TIMEOUT_SECONDS = 10
+
+_PII_PATTERNS = (
+    (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "[email removed]"),
+    (re.compile(r"(?<!\w)\+?\d(?:[ -]?\d){8,}(?!\w)"), "[phone removed]"),  # 9+ digits, single space/hyphen
+    (re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b"), "[id number removed]"),  # Aadhaar-style 12 digits
+)
+
+
+def scrub_pii(value: Any) -> Any:
+    """Remove emails, phone numbers and 12-digit ids from text before it leaves the system."""
+    if isinstance(value, str):
+        for pattern, replacement in _PII_PATTERNS:
+            value = pattern.sub(replacement, value)
+        return value
+    if isinstance(value, dict):
+        return {k: scrub_pii(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [scrub_pii(v) for v in value]
+    return value
+
 
 @dataclass
 class TriageOutcome:
@@ -68,7 +89,13 @@ class HttpTriageProvider(TriageProvider):
 
     def triage(self, payload: dict[str, Any]) -> TriageOutcome:
         try:
-            response = httpx.post(self.url, json=payload, timeout=TIMEOUT_SECONDS)
+            token = get_settings().ai_triage_token
+            response = httpx.post(
+                self.url,
+                json=payload,
+                headers={"Authorization": f"Bearer {token}"} if token else None,
+                timeout=TIMEOUT_SECONDS,
+            )
             response.raise_for_status()
             raw = response.json()
         except (httpx.HTTPError, ValueError):
