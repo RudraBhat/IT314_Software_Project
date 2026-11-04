@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app import audit, db, security
 from app.auth import DM_ROLE, PERMISSIONS, Supervisor
+from app.config import get_settings
 from app.errors import ApiError
 from app.services import email as email_service
 
@@ -156,7 +157,7 @@ def create_staff(body: CreateStaffRequest, principal: Supervisor):
         # Secure Email Invitation Workflow (password omitted)
         token = security.generate_secure_token(32)
         token_hash = security.hash_token(token)
-        expires_at = datetime.now(UTC) + timedelta(hours=settings.invitation_token_hours)
+        expires_at = datetime.now(UTC) + timedelta(hours=get_settings().invitation_token_hours)
 
         user_id = conn.execute(
             """

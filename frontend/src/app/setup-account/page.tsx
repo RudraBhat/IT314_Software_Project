@@ -3,7 +3,6 @@
 import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useResQ } from "../../context/ResQContext";
 import {
   acceptInvitation,
   verifyInvitationToken,
@@ -14,12 +13,13 @@ function SetupAccountContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
-  const { login } = useResQ();
 
   // Verification state
-  const [checkingToken, setCheckingToken] = useState(true);
+  const [checkingToken, setCheckingToken] = useState(!!token);
   const [tokenValid, setTokenValid] = useState(false);
-  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(
+    token ? null : "Missing invitation token. Please open the link received in your invitation email.",
+  );
   const [inviteInfo, setInviteInfo] = useState<{
     email?: string;
     full_name?: string;
@@ -49,12 +49,7 @@ function SetupAccountContent() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) {
-      setCheckingToken(false);
-      setTokenValid(false);
-      setTokenError("Missing invitation token. Please open the link received in your invitation email.");
-      return;
-    }
+    if (!token) return;
 
     verifyInvitationToken(token).then((res) => {
       setCheckingToken(false);
@@ -127,7 +122,6 @@ function SetupAccountContent() {
     setIsVerifyingTotp(false);
 
     if (res.success && res.user) {
-      login(res.user);
       setStep("complete");
       setSuccessMsg("Multi-factor authentication verified and account fully activated!");
       setTimeout(() => {

@@ -79,11 +79,8 @@ def _send_raw_email(to_email: str, subject: str, text_content: str, html_content
 
         logger.info("Email dispatched successfully: To=%s | Subject=%s", to_email, subject)
         return True
-    except Exception as e:
-        logger.exception("Failed to dispatch email via SMTP to %s: %s", to_email, e)
-        if settings.app_env in ("development", "test"):
-            # In development/test mode, don't crash flow on external network blip
-            return True
+    except Exception:
+        logger.exception("Failed to dispatch email via SMTP to %s", to_email)
         return False
 
 

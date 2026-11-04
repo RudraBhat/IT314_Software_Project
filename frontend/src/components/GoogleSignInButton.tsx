@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useResQ } from "../context/ResQContext";
 import { backendGoogleLogin } from "../services/authApi";
 
 declare global {
@@ -25,7 +24,6 @@ export function GoogleSignInButton({
   next,
 }: GoogleSignInButtonProps) {
   const router = useRouter();
-  const { login } = useResQ();
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -45,7 +43,7 @@ export function GoogleSignInButton({
             try {
               const res = await backendGoogleLogin(response.credential);
               if (res.success && res.user) {
-                login(res.user);
+                router.refresh();
                 if (onSuccess) {
                   onSuccess();
                 } else if (next && next.startsWith("/") && !next.startsWith("//")) {

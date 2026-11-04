@@ -70,23 +70,6 @@ class GoogleAuthRequest(BaseModel):
     credential: str = Field(min_length=10, description="Google ID Token issued by Google Identity Services")
 
 
-# In-memory storage for demo mode fallback & rate limiting
-_DEMO_INVITATIONS: dict[str, dict] = {}
-_DEMO_RESETS: dict[str, dict] = {}
-_rate_limits: dict[str, list[datetime]] = {}
-
-
-def _check_rate_limit(key: str, max_requests: int = 5, window_seconds: int = 900) -> bool:
-    now = datetime.now(UTC)
-    cutoff = now - timedelta(seconds=window_seconds)
-    history = [t for t in _rate_limits.get(key, []) if t > cutoff]
-    if len(history) >= max_requests:
-        return False
-    history.append(now)
-    _rate_limits[key] = history
-    return True
-
-
 def _ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
@@ -110,23 +93,25 @@ def _load_account(conn, *, email: str | None = None, user_id: uuid.UUID | None =
     ).fetchone()
 
 
+_ACCOUNT_BY_TOKEN_SQL = """
+    SELECT u.user_id, u.email, u.full_name, u.status, r.code AS role,
+           a.password_hash, a.mfa_enabled, a.mfa_secret, a.failed_login_count,
+           a.locked_until, a.token_version,
+           a.invitation_token_hash, a.invitation_expires_at,
+           a.password_reset_token_hash, a.password_reset_expires_at
+    FROM users u
+    JOIN roles r ON r.role_id = u.role_id
+    JOIN user_auth a ON a.user_id = u.user_id
+    WHERE a.{column} = %s
+    FOR UPDATE OF a
+"""
+_ACCOUNT_BY_INVITATION = _ACCOUNT_BY_TOKEN_SQL.replace("{column}", "invitation_token_hash")
+_ACCOUNT_BY_RESET = _ACCOUNT_BY_TOKEN_SQL.replace("{column}", "password_reset_token_hash")
+
+
 def _load_account_by_token(conn, *, token_type: str, token_hash: str):
-    column = "invitation_token_hash" if token_type == "invitation" else "password_reset_token_hash"
-    return conn.execute(
-        f"""
-        SELECT u.user_id, u.email, u.full_name, u.status, r.code AS role,
-               a.password_hash, a.mfa_enabled, a.mfa_secret, a.failed_login_count,
-               a.locked_until, a.token_version,
-               a.invitation_token_hash, a.invitation_expires_at,
-               a.password_reset_token_hash, a.password_reset_expires_at
-        FROM users u
-        JOIN roles r ON r.role_id = u.role_id
-        JOIN user_auth a ON a.user_id = u.user_id
-        WHERE a.{column} = %s
-        FOR UPDATE OF a
-        """,
-        (token_hash,),
-    ).fetchone()
+    query = _ACCOUNT_BY_INVITATION if token_type == "invitation" else _ACCOUNT_BY_RESET
+    return conn.execute(query, (token_hash,)).fetchone()
 
 
 def _is_locked(account) -> bool:
@@ -371,20 +356,11 @@ def me(principal: CurrentUser):
 
 async def _verify_google_token(credential: str) -> dict:
     settings = get_settings()
+    expected_client_id = settings.google_client_id
+    if not expected_client_id:
+        raise ApiError(503, "GOOGLE_AUTH_UNAVAILABLE", "Google sign-in is not configured")
 
-    # 1. Test / mock token support for local development & automated unit tests
-    if credential.startswith("mock-google-token"):
-        parts = credential.split(":")
-        mock_email = parts[1] if len(parts) > 1 else "google.citizen@example.com"
-        mock_name = parts[2] if len(parts) > 2 else "Google Citizen"
-        return {
-            "email": mock_email.strip().lower(),
-            "name": mock_name.strip(),
-            "email_verified": True,
-            "sub": "mock-google-sub-12345",
-        }
-
-    # 2. Call Google's official tokeninfo endpoint
+    # 1. Call Google's official tokeninfo endpoint
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
@@ -397,13 +373,11 @@ async def _verify_google_token(credential: str) -> dict:
     except httpx.RequestError:
         raise ApiError(502, "GOOGLE_SERVICE_UNAVAILABLE", "Failed to connect to Google authentication service")
 
-    # 3. Verify audience matches our configured GOOGLE_CLIENT_ID (prevents token substitution attacks)
-    expected_client_id = settings.google_client_id
-    token_aud = payload.get("aud")
-    if expected_client_id and token_aud != expected_client_id:
+    # 2. Verify audience matches our configured GOOGLE_CLIENT_ID (prevents token substitution attacks)
+    if payload.get("aud") != expected_client_id:
         raise ApiError(401, "GOOGLE_AUTH_FAILED", "Google token audience mismatch")
 
-    # 4. Verify email is verified by Google
+    # 3. Verify email is verified by Google
     email_verified = payload.get("email_verified")
     if str(email_verified).lower() != "true":
         raise ApiError(401, "GOOGLE_EMAIL_NOT_VERIFIED", "Google email is not verified")
@@ -421,78 +395,29 @@ async def _verify_google_token(credential: str) -> dict:
     }
 
 
-@router.post("/auth/google")
+@router.post("/auth/google", dependencies=[rate_limit("google", 20, 300)])
 async def google_auth(body: GoogleAuthRequest, request: Request):
     """
     Authenticate with Google OAuth 2.0 (Google Identity Services ID Token).
-    - If user exists: logs them in. If MFA is required for their role, issues MFA token.
-    - If user does not exist: automatically registers them as a Citizen (NORMAL_USER).
+    - If a citizen account exists: logs them in.
+    - If no account exists: automatically registers them as a Citizen (NORMAL_USER).
+    - Staff accounts (DISASTER_MGMT, APP_MGMT, FIELD_TEAM) are refused: they must sign in with
+      password and TOTP MFA, so a Google identity alone never yields a staff session.
     """
     ip = _ip(request)
     google_user = await _verify_google_token(body.credential)
     email = google_user["email"]
     name = google_user["name"]
 
-    settings = get_settings()
-    if not settings.database_url:
-        demo_user_id = uuid.UUID("a0000000-0000-0000-0000-000000000099")
-        token = security.issue_token(
-            demo_user_id, 1, security.ACCESS, settings.access_token_minutes, mfa=False
-        )
-        return {
-            "mfa_required": False,
-            "access_token": token,
-            "token": token,
-            "token_type": "bearer",
-            "expires_in": settings.access_token_minutes * 60,
-            "role": "NORMAL_USER",
-            "user": {
-                "id": str(demo_user_id),
-                "email": email,
-                "name": name,
-                "role": "NORMAL_USER",
-            },
-        }
-
     with db.transaction() as conn:
         account = _load_account(conn, email=email)
 
         # ── 1. EXISTING USER ──
         if account is not None:
-            if _is_locked(account) or account["status"] == "DISABLED":
+            if _is_locked(account) or account["status"] != "ACTIVE":
                 raise ApiError(401, "INVALID_CREDENTIALS", _GENERIC)
-
-            # If user had an invited status, Google sign-in confirms their identity
-            if account["status"] == "PENDING_SETUP":
-                conn.execute(
-                    "UPDATE users SET status = 'ACTIVE' WHERE user_id = %s",
-                    (account["user_id"],),
-                )
-                conn.execute(
-                    """
-                    UPDATE user_auth 
-                    SET invitation_token_hash = NULL, invitation_expires_at = NULL 
-                    WHERE user_id = %s
-                    """,
-                    (account["user_id"],),
-                )
-                account = _load_account(conn, user_id=account["user_id"])
-
-            # Enforce MFA for privileged roles (DISASTER_MGMT, APP_MGMT)
-            if account["mfa_enabled"]:
-                mfa_token = security.issue_token(
-                    account["user_id"],
-                    account["token_version"],
-                    security.MFA,
-                    settings.mfa_token_minutes,
-                )
-                return {
-                    "mfa_required": True,
-                    "mfa_token": mfa_token,
-                    "email": account["email"],
-                    "role": account["role"],
-                    "message": "Multi-factor authentication required for privileged account.",
-                }
+            if account["role"] != "NORMAL_USER":
+                raise ApiError(403, "GOOGLE_STAFF_NOT_ALLOWED", "Staff accounts must sign in with password and MFA")
 
             audit.record(
                 conn,
@@ -571,7 +496,7 @@ def invite_user(body: InviteUserRequest, principal: InviterUser, request: Reques
     # Permission validation for DISASTER_MGMT
     clean_perms: list[str] = []
     if target_role == DM_ROLE:
-        clean_perms = sorted(set(p.strip().upper() for p in body.permissions if p.strip()))
+        clean_perms = sorted({p.strip().upper() for p in body.permissions if p.strip()})
         unknown = [p for p in clean_perms if p not in PERMISSIONS]
         if unknown:
             raise ApiError(400, "UNKNOWN_PERMISSION", f"Unknown permission(s): {', '.join(unknown)}")
@@ -594,26 +519,6 @@ def invite_user(body: InviteUserRequest, principal: InviterUser, request: Reques
     token_hash = security.hash_token(token)
     settings = get_settings()
     expires_at = datetime.now(UTC) + timedelta(hours=settings.invitation_token_hours)
-
-    if not settings.database_url:
-        demo_id = uuid.uuid4()
-        _DEMO_INVITATIONS[token_hash] = {
-            "user_id": demo_id,
-            "email": email,
-            "full_name": full_name,
-            "role": target_role,
-            "permissions": clean_perms,
-            "expires_at": expires_at,
-            "status": "PENDING_SETUP",
-        }
-        email_service.send_invitation_email(email, full_name, target_role, token)
-        return {
-            "user_id": str(demo_id),
-            "email": email,
-            "role": target_role,
-            "status": "PENDING_SETUP",
-            "message": "Invitation email dispatched successfully",
-        }
 
     with db.transaction() as conn:
         if conn.execute("SELECT 1 FROM users WHERE email = %s::citext", (email,)).fetchone():
@@ -671,19 +576,6 @@ def invite_user(body: InviteUserRequest, principal: InviterUser, request: Reques
 def verify_invitation(token: str):
     """Verify an invitation token link before displaying the password setup form."""
     token_hash = security.hash_token(token)
-    settings = get_settings()
-
-    if not settings.database_url:
-        record = _DEMO_INVITATIONS.get(token_hash)
-        if not record or record["expires_at"] < datetime.now(UTC) or record["status"] != "PENDING_SETUP":
-            raise ApiError(400, "INVITATION_INVALID", "Invalid or expired invitation token")
-        return {
-            "valid": True,
-            "email": record["email"],
-            "full_name": record["full_name"],
-            "role": record["role"],
-            "requires_mfa": record["role"] in STAFF_ROLES,
-        }
 
     with db.transaction() as conn:
         account = _load_account_by_token(conn, token_type="invitation", token_hash=token_hash)
@@ -704,7 +596,7 @@ def verify_invitation(token: str):
         }
 
 
-@router.post("/auth/invitation/accept")
+@router.post("/auth/invitation/accept", dependencies=[rate_limit("invite-accept", 10, 900)])
 def accept_invitation(body: AcceptInvitationRequest, request: Request):
     """
     Accept an invitation: validate token, set chosen password, and invalidate token.
@@ -713,31 +605,6 @@ def accept_invitation(body: AcceptInvitationRequest, request: Request):
     """
     ip = _ip(request)
     token_hash = security.hash_token(body.token)
-    settings = get_settings()
-
-    if not settings.database_url:
-        record = _DEMO_INVITATIONS.get(token_hash)
-        if not record or record["expires_at"] < datetime.now(UTC) or record["status"] != "PENDING_SETUP":
-            raise ApiError(400, "INVITATION_INVALID", "Invalid or expired invitation token")
-        record["status"] = "ACTIVE"
-        if record["role"] in STAFF_ROLES:
-            secret = security.new_totp_secret()
-            record["mfa_secret"] = secret
-            setup_token = security.issue_token(
-                record["user_id"], 1, security.MFA_SETUP, minutes=15
-            )
-            return {
-                "mfa_required": True,
-                "mfa_setup_token": setup_token,
-                "mfa_secret": secret,
-                "mfa_uri": security.provisioning_uri(secret, record["email"]),
-                "message": "Password saved. Authenticator app setup is required to activate your account.",
-            }
-        return {
-            "mfa_required": False,
-            "status": "ACTIVE",
-            "message": "Account setup completed successfully. You can now log in.",
-        }
 
     with db.transaction() as conn:
         account = _load_account_by_token(conn, token_type="invitation", token_hash=token_hash)
@@ -812,7 +679,7 @@ def accept_invitation(body: AcceptInvitationRequest, request: Request):
         }
 
 
-@router.post("/auth/invitation/verify-totp")
+@router.post("/auth/invitation/verify-totp", dependencies=[rate_limit("invite-totp", 20, 300)])
 def verify_totp_setup(body: VerifyTotpSetupRequest, request: Request):
     """
     Verify the initial 6-digit TOTP code during first-time invitation setup.
@@ -824,28 +691,6 @@ def verify_totp_setup(body: VerifyTotpSetupRequest, request: Request):
         raise ApiError(401, "MFA_SETUP_EXPIRED", "The setup session expired. Please restart invitation setup.")
 
     user_id = uuid.UUID(claims["sub"])
-    settings = get_settings()
-
-    if not settings.database_url:
-        if body.code in ("123456", "000000"):
-            token = security.issue_token(
-                user_id, claims["tv"], security.ACCESS, get_settings().access_token_minutes, mfa=True
-            )
-            return {
-                "mfa_required": False,
-                "access_token": token,
-                "token": token,
-                "token_type": "bearer",
-                "expires_in": get_settings().access_token_minutes * 60,
-                "role": "DISASTER_MGMT",
-                "user": {
-                    "id": str(user_id),
-                    "email": "demo.user@drch.gov.in",
-                    "name": "Demo Staff",
-                    "role": "DISASTER_MGMT",
-                },
-            }
-        raise ApiError(401, "MFA_INVALID", "The verification code is not valid")
 
     with db.transaction() as conn:
         account = _load_account(conn, user_id=user_id)
@@ -887,7 +732,7 @@ def verify_totp_setup(body: VerifyTotpSetupRequest, request: Request):
 # FORGOT PASSWORD & RESET WORKFLOW
 # ═══════════════════════════════════════════════════════════════════
 
-@router.post("/auth/forgot-password")
+@router.post("/auth/forgot-password", dependencies=[rate_limit("forgot", 5, 900)])
 def forgot_password(body: ForgotPasswordRequest, request: Request):
     """
     Initiate password reset.
@@ -897,27 +742,7 @@ def forgot_password(body: ForgotPasswordRequest, request: Request):
     ip = _ip(request)
     email = body.email.strip().lower()
 
-    # Rate limiting: Max 5 attempts per 15 minutes per IP + email
-    rate_key = f"forgot:{ip or 'unknown'}:{email}"
-    if not _check_rate_limit(rate_key, max_requests=5, window_seconds=900):
-        return {
-            "message": "If this email is registered and active, a password reset link has been sent.",
-        }
-
     settings = get_settings()
-    if not settings.database_url:
-        demo_emails = {"commander@resq.gov.in", "admin@drch.gov.in"}
-        if email in demo_emails:
-            token = security.generate_secure_token(32)
-            token_hash = security.hash_token(token)
-            _DEMO_RESETS[token_hash] = {
-                "email": email,
-                "expires_at": datetime.now(UTC) + timedelta(minutes=settings.password_reset_token_minutes),
-            }
-            email_service.send_password_reset_email(email, email.split("@")[0], token)
-        return {
-            "message": "If this email is registered and active, a password reset link has been sent.",
-        }
 
     with db.transaction() as conn:
         account = _load_account(conn, email=email)
@@ -958,13 +783,6 @@ def forgot_password(body: ForgotPasswordRequest, request: Request):
 def verify_reset_token(token: str):
     """Verify that a password reset token is active and unexpired before presenting the reset form."""
     token_hash = security.hash_token(token)
-    settings = get_settings()
-
-    if not settings.database_url:
-        record = _DEMO_RESETS.get(token_hash)
-        if not record or record["expires_at"] < datetime.now(UTC):
-            raise ApiError(400, "RESET_TOKEN_INVALID", "Invalid or expired password reset link")
-        return {"valid": True, "message": "Password reset token is valid"}
 
     with db.transaction() as conn:
         account = _load_account_by_token(conn, token_type="reset", token_hash=token_hash)
@@ -978,7 +796,7 @@ def verify_reset_token(token: str):
         return {"valid": True, "message": "Password reset token is valid"}
 
 
-@router.post("/auth/reset-password")
+@router.post("/auth/reset-password", dependencies=[rate_limit("reset", 10, 900)])
 def reset_password(body: ResetPasswordRequest, request: Request):
     """
     Set a new password using a valid reset token.
@@ -987,17 +805,6 @@ def reset_password(body: ResetPasswordRequest, request: Request):
     """
     ip = _ip(request)
     token_hash = security.hash_token(body.token)
-    settings = get_settings()
-
-    if not settings.database_url:
-        record = _DEMO_RESETS.get(token_hash)
-        if not record or record["expires_at"] < datetime.now(UTC):
-            raise ApiError(400, "RESET_TOKEN_INVALID", "Invalid or expired password reset link")
-        del _DEMO_RESETS[token_hash]
-        return {
-            "success": True,
-            "message": "Password has been reset successfully. Please log in with your new password.",
-        }
 
     with db.transaction() as conn:
         account = _load_account_by_token(conn, token_type="reset", token_hash=token_hash)

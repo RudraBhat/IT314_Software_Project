@@ -1,106 +1,112 @@
-"""Tests for Google OAuth 2.0 integration (Google Identity Services)."""
+"""Google Identity Services sign-in: token verification and the citizen-only rule."""
 
-import os
-import unittest
+import uuid
 from unittest.mock import AsyncMock, patch
 
-from fastapi.testclient import TestClient
+import pytest
 
-from app import security
 from app.config import get_settings
-from main import app
+
+CLIENT_ID = "test-google-client-id.apps.googleusercontent.com"
+URL = "/api/v1/auth/google"
 
 
-class TestGoogleAuth(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.client = TestClient(app)
-
-    def setUp(self):
-        # Configure demo mode & clear settings cache
-        self.orig_db = os.environ.get("DATABASE_URL")
-        self.orig_demo = os.environ.get("DEMO_MODE")
-        self.orig_client_id = os.environ.get("GOOGLE_CLIENT_ID")
-
-        os.environ["DEMO_MODE"] = "true"
-        os.environ["GOOGLE_CLIENT_ID"] = "test-google-client-id.apps.googleusercontent.com"
-        get_settings.cache_clear()
-
-    def tearDown(self):
-        if self.orig_db:
-            os.environ["DATABASE_URL"] = self.orig_db
-        else:
-            os.environ.pop("DATABASE_URL", None)
-
-        if self.orig_demo:
-            os.environ["DEMO_MODE"] = self.orig_demo
-        else:
-            os.environ.pop("DEMO_MODE", None)
-
-        if self.orig_client_id:
-            os.environ["GOOGLE_CLIENT_ID"] = self.orig_client_id
-        else:
-            os.environ.pop("GOOGLE_CLIENT_ID", None)
-
-        get_settings.cache_clear()
-
-    def test_mock_google_token_authenticates_citizen(self):
-        """Mock google token should authenticate as a citizen in demo mode."""
-        resp = self.client.post(
-            "/api/v1/auth/google",
-            json={"credential": "mock-google-token:citizen.test@drch.in:Test Citizen"},
-        )
-        self.assertEqual(resp.status_code, 200, resp.text)
-        data = resp.json()
-        self.assertFalse(data["mfa_required"])
-        self.assertIn("access_token", data)
-        self.assertEqual(data["user"]["email"], "citizen.test@drch.in")
-        self.assertEqual(data["user"]["role"], "NORMAL_USER")
-
-    @patch("app.routers.auth.httpx.AsyncClient")
-    def test_google_tokeninfo_verification_audience_mismatch(self, mock_client_cls):
-        """Tokens with mismatched audience must be rejected."""
-        mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.status_code = 200
-        mock_response.json = lambda: {
-            "aud": "wrong-client-id.apps.googleusercontent.com",
-            "email": "victim@example.com",
-            "email_verified": "true",
-            "sub": "12345",
-        }
-        mock_client.get.return_value = mock_response
-        mock_client_cls.return_value.__aenter__.return_value = mock_client
-
-        resp = self.client.post(
-            "/api/v1/auth/google",
-            json={"credential": "real-looking-google-jwt-token-string"},
-        )
-        self.assertEqual(resp.status_code, 401)
-        self.assertEqual(resp.json()["error"]["code"], "GOOGLE_AUTH_FAILED")
-
-    @patch("app.routers.auth.httpx.AsyncClient")
-    def test_google_tokeninfo_unverified_email_rejected(self, mock_client_cls):
-        """Tokens where email_verified is false must be rejected."""
-        mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.status_code = 200
-        mock_response.json = lambda: {
-            "aud": "test-google-client-id.apps.googleusercontent.com",
-            "email": "unverified@example.com",
-            "email_verified": "false",
-            "sub": "12345",
-        }
-        mock_client.get.return_value = mock_response
-        mock_client_cls.return_value.__aenter__.return_value = mock_client
-
-        resp = self.client.post(
-            "/api/v1/auth/google",
-            json={"credential": "real-looking-google-jwt-token-string"},
-        )
-        self.assertEqual(resp.status_code, 401)
-        self.assertEqual(resp.json()["error"]["code"], "GOOGLE_EMAIL_NOT_VERIFIED")
+@pytest.fixture
+def google_configured(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", CLIENT_ID)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
-if __name__ == "__main__":
-    unittest.main()
+def _tokeninfo(payload: dict, status: int = 200):
+    """Patch Google's tokeninfo call to return `payload`."""
+    response = AsyncMock()
+    response.status_code = status
+    response.json = lambda: payload
+    http = AsyncMock()
+    http.get.return_value = response
+    patcher = patch("app.routers.auth.httpx.AsyncClient")
+    cls = patcher.start()
+    cls.return_value.__aenter__.return_value = http
+    return patcher
+
+
+def _post(client, credential="real-looking-google-jwt-token-string"):
+    return client.post(URL, json={"credential": credential})
+
+
+def test_not_configured_is_refused(client, monkeypatch):
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    get_settings.cache_clear()
+    resp = _post(client)
+    assert resp.status_code == 503
+    assert resp.json()["error"]["code"] == "GOOGLE_AUTH_UNAVAILABLE"
+
+
+def test_mock_token_is_not_a_backdoor(client, google_configured):
+    """A hand-made 'mock-google-token:<email>' string must never authenticate anyone."""
+    patcher = _tokeninfo({"error": "invalid_token"}, status=400)
+    try:
+        resp = _post(client, "mock-google-token:admin@example.com:Admin")
+    finally:
+        patcher.stop()
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "GOOGLE_AUTH_FAILED"
+    assert "access_token" not in resp.json()
+
+
+def test_audience_mismatch_is_rejected(client, google_configured):
+    patcher = _tokeninfo({"aud": "someone-elses-app", "email": "v@example.com", "email_verified": "true", "sub": "1"})
+    try:
+        resp = _post(client)
+    finally:
+        patcher.stop()
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "GOOGLE_AUTH_FAILED"
+
+
+def test_missing_audience_is_rejected(client, google_configured):
+    patcher = _tokeninfo({"email": "v@example.com", "email_verified": "true", "sub": "1"})
+    try:
+        resp = _post(client)
+    finally:
+        patcher.stop()
+    assert resp.status_code == 401
+
+
+def test_unverified_email_is_rejected(client, google_configured):
+    patcher = _tokeninfo({"aud": CLIENT_ID, "email": "u@example.com", "email_verified": "false", "sub": "1"})
+    try:
+        resp = _post(client)
+    finally:
+        patcher.stop()
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "GOOGLE_EMAIL_NOT_VERIFIED"
+
+
+def test_new_google_user_becomes_a_citizen(client, sql, google_configured):
+    email = f"google-{uuid.uuid4().hex[:10]}@test.drch"
+    patcher = _tokeninfo({"aud": CLIENT_ID, "email": email, "email_verified": "true", "name": "New Citizen", "sub": "9"})
+    try:
+        resp = _post(client)
+    finally:
+        patcher.stop()
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["access_token"]
+    role = sql.execute(
+        "SELECT r.code FROM users u JOIN roles r ON r.role_id = u.role_id WHERE u.email = %s", (email,)
+    ).fetchone()
+    assert role["code"] == "NORMAL_USER"
+
+
+def test_staff_account_cannot_sign_in_with_google(client, make, google_configured):
+    staff = make.staff("DISPATCH")
+    patcher = _tokeninfo({"aud": CLIENT_ID, "email": staff["email"], "email_verified": "true", "name": "x", "sub": "9"})
+    try:
+        resp = _post(client)
+    finally:
+        patcher.stop()
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "GOOGLE_STAFF_NOT_ALLOWED"
+    assert "access_token" not in resp.json()

@@ -9,6 +9,23 @@ export function getApiBaseUrl(): string {
 
 const API_BASE_URL = getApiBaseUrl();
 
+/**
+ * Hands the access token to the Next.js BFF, which verifies it and stores it in an httpOnly cookie.
+ * The token is never kept in localStorage, where any script on the page could read it.
+ */
+export async function establishSession(token: string): Promise<boolean> {
+  try {
+    const res = await fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export interface AuthApiResponse {
   success: boolean;
   message?: string;
@@ -105,9 +122,7 @@ export async function backendLogin(
     }
 
     const token = data.access_token || data.token;
-    if (token && typeof window !== "undefined") {
-      localStorage.setItem("resq_jwt_token", token);
-    }
+    if (token) await establishSession(token);
 
     const rawRole = data.role || data.user?.role || "NORMAL_USER";
     const mappedRole =
@@ -271,9 +286,7 @@ export async function backendGoogleLogin(
     }
 
     const token = data.access_token || data.token;
-    if (token && typeof window !== "undefined") {
-      localStorage.setItem("resq_jwt_token", token);
-    }
+    if (token) await establishSession(token);
 
     const roleName =
       data.user?.role === "NORMAL_USER"
@@ -506,9 +519,7 @@ export async function verifyTotpSetup(
       };
     }
     const token = data.access_token || data.token;
-    if (token && typeof window !== "undefined") {
-      localStorage.setItem("resq_jwt_token", token);
-    }
+    if (token) await establishSession(token);
     return {
       success: true,
       token,

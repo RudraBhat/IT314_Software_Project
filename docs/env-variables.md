@@ -45,6 +45,15 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `RAZORPAY_KEY_ID` | no | - | Razorpay key id for the (not yet wired) Razorpay adapter; a `rzp_live` prefix marks live mode. |
 | `RAZORPAY_KEY_SECRET` (S) | no | - | Razorpay key secret used to verify payment signatures. |
 | `RAZORPAY_WEBHOOK_SECRET` (S) | no | - | Razorpay webhook signing secret. |
+| `SMTP_HOST` | no | - | SMTP server for invitation and password-reset emails. When unset, emails are only logged and kept in the in-memory outbox (development). |
+| `SMTP_PORT` | no | `587` | SMTP port (`465` uses implicit TLS, anything else uses STARTTLS when offered). |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` (S) | no | - | SMTP credentials. |
+| `EMAIL_FROM` | no | `no-reply@drch.gujarat.gov.in` | Sender address of transactional emails. |
+| `FRONTEND_URL` | no | `http://localhost:3000` | Base URL used to build the setup-account and reset-password links in emails. |
+| `INVITATION_TOKEN_HOURS` | no | `48` | Lifetime of an account-invitation link. |
+| `PASSWORD_RESET_TOKEN_MINUTES` | no | `15` | Lifetime of a password-reset link. |
+| `GOOGLE_CLIENT_ID` | no | - | Google OAuth web client id. `POST /auth/google` returns 503 until it is set; tokens for any other audience are rejected. |
+| `GOOGLE_CLIENT_SECRET` (S) | no | - | Google OAuth client secret (reserved; the ID-token flow does not need it yet). |
 
 ## Frontend (Next.js)
 
@@ -53,6 +62,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `API_URL` | server runtime | falls back to `NEXT_PUBLIC_API_URL`, then `http://localhost:8000` | Backend base URL used by server code (BFF routes, server actions). |
 | `NEXT_PUBLIC_API_URL` | build time | `http://localhost:8000` | Baked into the bundle; only used by `next.config.ts` rewrites. |
 | `NEXT_PUBLIC_PAYMENT_SANDBOX` | no | `false` | When `true`, enables sandbox payment test flow on `/donate`; never set in production. |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | build time | - | Google OAuth web client id for the "Sign in with Google" button (same value as the backend `GOOGLE_CLIENT_ID`). |
 | `NEXT_PUBLIC_DEMO_MODE` | no | `false` | **Development only.** Enables local demo fallbacks; must be unset in staging/production. |
 
 ## AI triage service (`ai-workers/`)

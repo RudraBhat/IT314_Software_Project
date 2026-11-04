@@ -9,9 +9,11 @@ function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
 
-  const [checkingToken, setCheckingToken] = useState(true);
+  const [checkingToken, setCheckingToken] = useState(!!token);
   const [tokenValid, setTokenValid] = useState(false);
-  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(
+    token ? null : "Missing password reset token. Please use the link sent to your email.",
+  );
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,12 +23,7 @@ function ResetPasswordContent() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) {
-      setCheckingToken(false);
-      setTokenValid(false);
-      setTokenError("Missing password reset token. Please use the link sent to your email.");
-      return;
-    }
+    if (!token) return;
 
     verifyResetToken(token).then((res) => {
       setCheckingToken(false);
