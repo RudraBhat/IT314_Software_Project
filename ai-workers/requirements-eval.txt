@@ -1,0 +1,2 @@
+-r requirements-dev.txt
+scikit-learn>=1.4

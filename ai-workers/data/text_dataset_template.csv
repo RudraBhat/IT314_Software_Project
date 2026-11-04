@@ -1,0 +1,5 @@
+text,label,lang,source,synthetic,event_id,notes
+"Water from the river has entered homes in the low-lying area, families are on rooftops",flood,en,team-written,false,tmpl-flood-01,example row; delete before labelling
+"Factory in Dahej: gas leak reported, workers moved out",fire,en,team-written,false,tmpl-fire-01,example row; delete before labelling
+"Heavy winds uprooted trees along the coast, cyclone warning in force",cyclone,en,team-written,false,tmpl-cyclone-01,example row; delete before labelling
+"Just sharing my opinion on the budget, nothing to do with weather",not_disaster,en,team-written,false,tmpl-none-01,example row; delete before labelling
