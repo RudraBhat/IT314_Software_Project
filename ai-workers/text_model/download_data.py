@@ -33,7 +33,8 @@ def fetch(destination: Path) -> None:
 
         url = f"{BASE_URL}/{filename}"
         print(f"Downloading {url}")
-        with urlopen(url, timeout=60) as response:  # noqa: S310 - pinned HTTPS source
+        # The URL uses a fixed HTTPS host/revision and the downloaded bytes are hashed.
+        with urlopen(url, timeout=60) as response:  # noqa: S310  # nosec B310
             data = response.read()
         actual = hashlib.sha256(data).hexdigest()
         if actual != expected_sha256:

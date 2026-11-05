@@ -33,7 +33,8 @@ def fetch(destination: Path) -> None:
         DATASET_URL,
         headers={"User-Agent": "ResQ-TextModel/1.0", "Accept": "application/zip"},
     )
-    with urlopen(request, timeout=90) as response:  # noqa: S310 - pinned HTTPS dataset
+    # The URL uses a fixed HTTPS host/version and the archive contents are hashed.
+    with urlopen(request, timeout=90) as response:  # noqa: S310  # nosec B310
         archive_bytes = response.read()
     archive_sha256 = hashlib.sha256(archive_bytes).hexdigest()
     if archive_sha256 != EXPECTED_ARCHIVE_SHA256:

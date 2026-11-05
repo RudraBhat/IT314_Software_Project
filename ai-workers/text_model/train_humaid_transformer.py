@@ -362,7 +362,11 @@ def train(
             tokenizer.save_pretrained(output_dir)
 
     del model
-    model = AutoModelForSequenceClassification.from_pretrained(output_dir).to(device)
+    # Reload the checkpoint just saved in output_dir; never resolve a remote model.
+    model = AutoModelForSequenceClassification.from_pretrained(  # nosec B615
+        output_dir,
+        local_files_only=True,
+    ).to(device)
     validation_probabilities = predict_probabilities(
         model,
         tokenizer,

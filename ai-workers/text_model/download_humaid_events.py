@@ -35,7 +35,8 @@ def fetch(destination: Path) -> None:
             f"{DATASET_REVISION}/{relative_path}"
         )
         request = Request(url, headers={"User-Agent": "DRCH-Humanitarian-Research/1.0"})
-        with urlopen(request, timeout=90) as response:  # noqa: S310 - pinned HTTPS source
+        # The URL uses a fixed HTTPS host/revision and the downloaded bytes are hashed.
+        with urlopen(request, timeout=90) as response:  # noqa: S310  # nosec B310
             data = response.read()
         actual_sha256 = hashlib.sha256(data).hexdigest()
         if actual_sha256 != expected_sha256:

@@ -31,15 +31,16 @@ def _load_model(model_dir: str):
         raise HumAIDModelUnavailable("Artifact is missing the required human-review safeguard")
 
     try:
+        # This is a verified local artifact; remote Hugging Face downloads are disabled.
         tokenizer = AutoTokenizer.from_pretrained(
             artifact_dir,
             local_files_only=True,
             normalization=True,
-        )
+        )  # nosec B615
         model = AutoModelForSequenceClassification.from_pretrained(
             artifact_dir,
             local_files_only=True,
-        )
+        )  # nosec B615
     except (OSError, ValueError) as exc:
         raise HumAIDModelUnavailable("Could not load the local HumAID model artifact") from exc
     model.eval()
