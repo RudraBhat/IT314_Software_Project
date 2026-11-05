@@ -1,0 +1,552 @@
+{
+  "artifact": {
+    "committed_to_git": false,
+    "path": "/Users/rudrabhatt/Documents/Codex/2026-11-03/i-x20/work/IT314_Software_Project/ai-workers/text_model/artifacts/model.joblib",
+    "sha256": "4a5f7c9a5c372a23a684a64cae3a989f9bd29f74cb279d2fdf98a0f168f38013"
+  },
+  "created_at_utc": "2026-11-04T16:49:08.272204+00:00",
+  "dataset": {
+    "candidate_rows": 29391,
+    "exact_duplicate_rows_removed": 65,
+    "india_language_filter": {
+      "english_kept": 10107,
+      "non_english_or_uncertain_excluded": 6893
+    },
+    "india_source_rows_before_global_dedup": {
+      "test": 1517,
+      "train": 7074,
+      "validation": 1516
+    },
+    "relevance_sources": [
+      {
+        "commit": "1657e1c4e11acbfa56241d2b5cd627adbd989ca2",
+        "license": "CC BY 4.0",
+        "name": "Disaster Response Messages (Robert Munro)",
+        "sha256": {
+          "disaster_response_test.csv": "566402713139ad7c910737cf5f18f3fef9ba6cc711b6aa5054c65e3fa0ecfc48",
+          "disaster_response_training.csv": "3fd06465488100a51f97f60b3e27eb58bf8dfda568ee92ec6e574e78c84b12dd",
+          "disaster_response_validation.csv": "2c6d4424e812b068ca2486a3c1b35bc0aea445643d922657e3023ae60387bc0b"
+        }
+      },
+      {
+        "doi": "10.17632/psv6b4zy9f.1",
+        "license": "CC BY 4.0",
+        "name": "Hierarchical Disaster Tweet Classification Corpus (India + Nepal)",
+        "sha256": "4d29070572760c2a52c5e0d72aa8d4ecdc7071417491abc1f50f863e57d564e8",
+        "usage": "supplemental India relevance labels only"
+      }
+    ],
+    "source_rows_by_split": {
+      "test": {
+        "appen": 580,
+        "india": 1517
+      },
+      "train": {
+        "appen": 18350,
+        "india": 7074
+      },
+      "validation": {
+        "appen": 289,
+        "india": 1516
+      }
+    },
+    "split_strategy": "event-held-out Appen: train Haiti/news, validate Pakistan, test Sandy; confidently English India tweets: stratified 70/15/15 random split, deduplicated by text",
+    "test_rows": 2097,
+    "train_rows": 25424,
+    "validation_rows": 1805
+  },
+  "evaluation": {
+    "disaster_relevance": {
+      "event_held_out_sandy": {
+        "accuracy": 0.896552,
+        "classification_report": {
+          "NOT_RELATED": {
+            "f1-score": 0.3023255813953488,
+            "precision": 0.41935483870967744,
+            "recall": 0.23636363636363636,
+            "support": 55.0
+          },
+          "RELATED": {
+            "f1-score": 0.9441340782122905,
+            "precision": 0.9234972677595629,
+            "recall": 0.9657142857142857,
+            "support": 525.0
+          },
+          "UNCERTAIN": {
+            "f1-score": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "support": 0.0
+          },
+          "accuracy": 0.896551724137931,
+          "macro avg": {
+            "f1-score": 0.41548655320254646,
+            "precision": 0.44761736882308006,
+            "recall": 0.4006926406926407,
+            "support": 580.0
+          },
+          "weighted avg": {
+            "f1-score": 0.8832729276520632,
+            "precision": 0.8756906581082806,
+            "recall": 0.896551724137931,
+            "support": 580.0
+          }
+        },
+        "determinate_binary": {
+          "f1": 0.944134,
+          "precision": 0.923497,
+          "recall": 0.965714,
+          "rows": 580
+        },
+        "macro_f1": 0.62323,
+        "multiclass_brier_score": 0.165684,
+        "rows": 580
+      },
+      "india_random_holdout": {
+        "accuracy": 1.0,
+        "classification_report": {
+          "NOT_RELATED": {
+            "f1-score": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "support": 540.0
+          },
+          "RELATED": {
+            "f1-score": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "support": 977.0
+          },
+          "UNCERTAIN": {
+            "f1-score": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "support": 0.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "f1-score": 0.6666666666666666,
+            "precision": 0.6666666666666666,
+            "recall": 0.6666666666666666,
+            "support": 1517.0
+          },
+          "weighted avg": {
+            "f1-score": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "support": 1517.0
+          }
+        },
+        "determinate_binary": {
+          "f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "rows": 1517
+        },
+        "macro_f1": 1.0,
+        "multiclass_brier_score": 0.001254,
+        "rows": 1517
+      },
+      "interpretation": "Keep these dataset-specific results separate; the India split is random and the Sandy split is event-held-out.",
+      "validation_abstention": {
+        "by_source": {
+          "appen": {
+            "accepted_accuracy": 0.902062,
+            "accepted_rows": 194,
+            "coverage": 0.67128,
+            "review_threshold": 0.752602,
+            "rows": 289
+          },
+          "india": {
+            "accepted_accuracy": 1.0,
+            "accepted_rows": 1515,
+            "coverage": 0.99934,
+            "review_threshold": 0.752602,
+            "rows": 1516
+          }
+        },
+        "minimum_coverage": 0.5,
+        "target_accepted_accuracy": 0.9,
+        "threshold_selected_on": "Pakistan event holdout only"
+      }
+    },
+    "multilabel_categories": {
+      "aid_related": {
+        "f1": 0.749004,
+        "precision": 0.77686,
+        "recall": 0.723077,
+        "support_positive": 390,
+        "threshold": 0.5
+      },
+      "buildings": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 5,
+        "threshold": 0.5
+      },
+      "cold": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 3,
+        "threshold": 0.5
+      },
+      "death": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 4,
+        "threshold": 0.5
+      },
+      "direct_report": {
+        "f1": 0.196078,
+        "precision": 0.277778,
+        "recall": 0.151515,
+        "support_positive": 132,
+        "threshold": 0.5
+      },
+      "earthquake": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 5,
+        "threshold": 0.5
+      },
+      "electricity": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 15,
+        "threshold": 0.5
+      },
+      "fire": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 3,
+        "threshold": 0.5
+      },
+      "floods": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 16,
+        "threshold": 0.5
+      },
+      "food": {
+        "f1": 0.661682,
+        "precision": 0.694118,
+        "recall": 0.632143,
+        "support_positive": 280,
+        "threshold": 0.5
+      },
+      "hospitals": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 1,
+        "threshold": 0.5
+      },
+      "infrastructure_related": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 11,
+        "threshold": 0.5
+      },
+      "medical_help": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 17,
+        "threshold": 0.5
+      },
+      "medical_products": {
+        "f1": 0.230769,
+        "precision": 0.642857,
+        "recall": 0.140625,
+        "support_positive": 128,
+        "threshold": 0.5
+      },
+      "missing_people": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 3,
+        "threshold": 0.5
+      },
+      "other_weather": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 12,
+        "threshold": 0.5
+      },
+      "request": {
+        "f1": 0.1625,
+        "precision": 0.149425,
+        "recall": 0.178082,
+        "support_positive": 73,
+        "threshold": 0.5
+      },
+      "search_and_rescue": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 10,
+        "threshold": 0.5
+      },
+      "security": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 2,
+        "threshold": 0.5
+      },
+      "shelter": {
+        "f1": 0.305556,
+        "precision": 0.647059,
+        "recall": 0.2,
+        "support_positive": 55,
+        "threshold": 0.5
+      },
+      "storm": {
+        "f1": 0.25,
+        "precision": 0.666667,
+        "recall": 0.153846,
+        "support_positive": 39,
+        "threshold": 0.5
+      },
+      "transport": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "support_positive": 18,
+        "threshold": 0.5
+      },
+      "water": {
+        "f1": 0.534884,
+        "precision": 0.547619,
+        "recall": 0.522727,
+        "support_positive": 44,
+        "threshold": 0.5
+      },
+      "weather_related": {
+        "f1": 0.219512,
+        "precision": 0.6,
+        "recall": 0.134328,
+        "support_positive": 67,
+        "threshold": 0.5
+      }
+    },
+    "threshold_selection": {
+      "aid_related": "validation_event_max_f1_with_0.5_minimum",
+      "buildings": "validation_event_max_f1_with_0.5_minimum",
+      "cold": "default_0.5_insufficient_validation_examples",
+      "death": "default_0.5_insufficient_validation_examples",
+      "direct_report": "validation_event_max_f1_with_0.5_minimum",
+      "earthquake": "default_0.5_insufficient_validation_examples",
+      "electricity": "default_0.5_insufficient_validation_examples",
+      "fire": "default_0.5_insufficient_validation_examples",
+      "floods": "validation_event_max_f1_with_0.5_minimum",
+      "food": "validation_event_max_f1_with_0.5_minimum",
+      "hospitals": "default_0.5_insufficient_validation_examples",
+      "infrastructure_related": "validation_event_max_f1_with_0.5_minimum",
+      "medical_help": "validation_event_max_f1_with_0.5_minimum",
+      "medical_products": "default_0.5_insufficient_validation_examples",
+      "missing_people": "default_0.5_insufficient_validation_examples",
+      "other_weather": "default_0.5_insufficient_validation_examples",
+      "request": "validation_event_max_f1_with_0.5_minimum",
+      "search_and_rescue": "default_0.5_insufficient_validation_examples",
+      "security": "default_0.5_insufficient_validation_examples",
+      "shelter": "validation_event_max_f1_with_0.5_minimum",
+      "storm": "default_0.5_insufficient_validation_examples",
+      "transport": "default_0.5_insufficient_validation_examples",
+      "water": "default_0.5_insufficient_validation_examples",
+      "weather_related": "validation_event_max_f1_with_0.5_minimum"
+    }
+  },
+  "limitations": [
+    "The source is mostly 2010-2012 disaster SMS, message-board posts, and news; it is not a representative sample of current social media.",
+    "The India tweet source does not specify a language; high-confidence English-only language detection excludes non-English and uncertain short texts, which may leave language-related selection bias.",
+    "The India tweet README does not document annotation procedures, and its public X text requires a separate rights and platform-terms review before product use.",
+    "Its labels do not distinguish cyclone from other storms, urban flooding from other floods, or industrial fire from other fires.",
+    "It has no general urgency, incident-coordinate, location-mention, or event-time labels.",
+    "Event-held-out scores measure transfer to one older event and do not establish readiness for Gujarat operations."
+  ],
+  "model": "resq-english-crisis-text-v1",
+  "training": {
+    "category_counts": {
+      "aid_related": {
+        "test_positive": 390,
+        "train_positive": 7680,
+        "validation_positive": 137
+      },
+      "buildings": {
+        "test_positive": 5,
+        "train_positive": 950,
+        "validation_positive": 51
+      },
+      "cold": {
+        "test_positive": 3,
+        "train_positive": 376,
+        "validation_positive": 8
+      },
+      "death": {
+        "test_positive": 4,
+        "train_positive": 884,
+        "validation_positive": 3
+      },
+      "direct_report": {
+        "test_positive": 132,
+        "train_positive": 3317,
+        "validation_positive": 111
+      },
+      "earthquake": {
+        "test_positive": 5,
+        "train_positive": 1373,
+        "validation_positive": 3
+      },
+      "electricity": {
+        "test_positive": 15,
+        "train_positive": 330,
+        "validation_positive": 3
+      },
+      "fire": {
+        "test_positive": 3,
+        "train_positive": 220,
+        "validation_positive": 1
+      },
+      "floods": {
+        "test_positive": 16,
+        "train_positive": 1521,
+        "validation_positive": 93
+      },
+      "food": {
+        "test_positive": 280,
+        "train_positive": 1975,
+        "validation_positive": 48
+      },
+      "hospitals": {
+        "test_positive": 1,
+        "train_positive": 207,
+        "validation_positive": 1
+      },
+      "infrastructure_related": {
+        "test_positive": 11,
+        "train_positive": 1271,
+        "validation_positive": 33
+      },
+      "medical_help": {
+        "test_positive": 17,
+        "train_positive": 1557,
+        "validation_positive": 24
+      },
+      "medical_products": {
+        "test_positive": 128,
+        "train_positive": 912,
+        "validation_positive": 14
+      },
+      "missing_people": {
+        "test_positive": 3,
+        "train_positive": 208,
+        "validation_positive": 1
+      },
+      "offer": {
+        "test_positive": 36,
+        "train_positive": 0,
+        "validation_positive": 0
+      },
+      "other_weather": {
+        "test_positive": 12,
+        "train_positive": 1023,
+        "validation_positive": 4
+      },
+      "request": {
+        "test_positive": 73,
+        "train_positive": 3251,
+        "validation_positive": 120
+      },
+      "search_and_rescue": {
+        "test_positive": 10,
+        "train_positive": 540,
+        "validation_positive": 11
+      },
+      "security": {
+        "test_positive": 2,
+        "train_positive": 356,
+        "validation_positive": 5
+      },
+      "shelter": {
+        "test_positive": 55,
+        "train_positive": 1726,
+        "validation_positive": 65
+      },
+      "storm": {
+        "test_positive": 39,
+        "train_positive": 1376,
+        "validation_positive": 4
+      },
+      "transport": {
+        "test_positive": 18,
+        "train_positive": 826,
+        "validation_positive": 13
+      },
+      "water": {
+        "test_positive": 44,
+        "train_positive": 1230,
+        "validation_positive": 12
+      },
+      "weather_related": {
+        "test_positive": 67,
+        "train_positive": 4508,
+        "validation_positive": 104
+      }
+    },
+    "classifier": "scikit-learn logistic regression",
+    "feature_count": 151601,
+    "multilabel_categories": [
+      "request",
+      "direct_report",
+      "aid_related",
+      "medical_help",
+      "medical_products",
+      "search_and_rescue",
+      "security",
+      "water",
+      "food",
+      "shelter",
+      "missing_people",
+      "death",
+      "infrastructure_related",
+      "transport",
+      "buildings",
+      "electricity",
+      "hospitals",
+      "weather_related",
+      "floods",
+      "storm",
+      "fire",
+      "earthquake",
+      "cold",
+      "other_weather"
+    ],
+    "related_label_counts": {
+      "0": 7264,
+      "1": 18083,
+      "2": 77
+    },
+    "runtime_versions": {
+      "joblib": "1.6.0",
+      "langdetect": "1.0.9",
+      "numpy": "2.5.4",
+      "python": "3.14.6",
+      "scikit_learn": "1.9.1"
+    },
+    "skipped_categories": {
+      "offer": "insufficient_train_class_examples"
+    },
+    "vectorizer": "word TF-IDF uni/bi-grams + character 3-5 grams"
+  }
+}

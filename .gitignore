@@ -100,6 +100,8 @@ backend/.venv/
 backend/venv/
 ai-workers/.venv/
 ai-workers/venv/
+ai-workers/text_model/data/external/
+ai-workers/text_model/artifacts/
 
 # Python packaging & distribution
 develop-eggs/

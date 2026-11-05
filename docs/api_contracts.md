@@ -730,7 +730,24 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
   ]
 }
 ```
-### 8.2 AI Service Health
+### 8.2 English Text Analysis (Experimental Advisory Endpoint)
+* **Path:** `POST /analyze-text`
+* **Auth:** Optional `Authorization: Bearer <AI_TRIAGE_TOKEN>` when the worker token is configured.
+* **Purpose:** Run the separately trained English crisis-message model. This endpoint is additive and does not change `/triage` or the backend incident lifecycle.
+* **Request Body:**
+```json
+{
+  "description": "The underpass is flooded and several people need rescue.",
+  "source": "example-feed",
+  "source_created_at": "2026-11-04T12:30:00Z",
+  "latitude": 23.02,
+  "longitude": 72.57
+}
+```
+* **Response (200 OK):** Includes advisory disaster relevance and probabilities for learned help intent, direct-report, and humanitarian information categories. Low-confidence relevance is returned as `REVIEW` with a candidate label. Text not confidently detected as English returns `LANGUAGE_UNCERTAIN` or `UNSUPPORTED_LANGUAGE` without classification. `source_metadata` is copied from the caller; it is not extracted from the text. The model explicitly returns `NOT_TRAINED` for the project's exact operational scenario and priority, location mentions, and event-time extraction.
+* **Availability:** Returns `503` when `TEXT_MODEL_DIR` does not point to a trained model artifact. Human review is required; this response must not trigger incident verification or dispatch.
+
+### 8.3 AI Service Health
 * **Path:** `GET /health`
 * **Response (200 OK):** `{"status": "ok", "service": "drch-ai-triage"}`
 

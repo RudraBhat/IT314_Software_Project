@@ -3,6 +3,8 @@ __pycache__/
 *$py.class
 venv/
 .venv/
+text_model/data/external/
+text_model/artifacts/
 .env*
 !.env.example
 .git
