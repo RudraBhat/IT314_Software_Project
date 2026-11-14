@@ -14,7 +14,8 @@ export interface Translations {
   portalSubtitle: string;
   publicUser: string;
   backendLive: string;
-  localStorageMode: string;
+  /** Shown when the dashboard's data calls fail; there is no offline or local-storage mode. */
+  backendUnreachable: string;
   signOut: string;
   notifications: string;
   markRead: string;
@@ -112,7 +113,7 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     portalSubtitle: "Citizen Safety Portal",
     publicUser: "Citizen User",
     backendLive: "Backend Live",
-    localStorageMode: "Offline Mode",
+    backendUnreachable: "Server unreachable",
     signOut: "Sign Out",
     notifications: "Notifications",
     markRead: "Mark read",
@@ -202,7 +203,7 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     portalSubtitle: "नागरिक सुरक्षा पोर्टल",
     publicUser: "नागरिक उपयोगकर्ता",
     backendLive: "सर्वर सक्रिय",
-    localStorageMode: "ऑफ़लाइन मोड",
+    backendUnreachable: "सर्वर से संपर्क नहीं",
     signOut: "साइन आउट",
     notifications: "सूचनाएं",
     markRead: "पढ़ा हुआ चिह्नित करें",
@@ -292,7 +293,7 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     portalSubtitle: "નાગરિક સુરક્ષા પોર્ટલ",
     publicUser: "જાહેર નાગરિક",
     backendLive: "સર્વર સક્રિય",
-    localStorageMode: "ઑફલાઇન મોડ",
+    backendUnreachable: "સર્વર સાથે સંપર્ક નથી",
     signOut: "સાઇન આઉટ",
     notifications: "સૂચનાઓ",
     markRead: "વાંચેલ તરીકે ચિહ્નિત કરો",
