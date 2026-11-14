@@ -341,7 +341,7 @@ if [[ "$SMOKE_SKIP_OUTSIDE_GUJARAT" == "1" || -z "$CITIZEN_TOKEN" ]]; then
     skip_step "CORE-4" "Out-of-state incident rejection" "SMOKE_SKIP_OUTSIDE_GUJARAT=1 or missing citizen token"
 else
     OUTSIDE_PAYLOAD="{\"scenario\": \"urban_flooding\", \"description\": \"Jaipur test.\", \"reported_urgency\": \"HIGH\", \"people_affected\": 2, \"location_source\": \"GPS\", \"latitude\": 26.9124, \"longitude\": 75.7873, \"address_text\": \"Jaipur, Rajasthan\"}"
-    do_request "POST" "/api/v1/incidents" "$CITIZEN_TOKEN" "" "$OUTSIDE_PAYLOAD"
+    do_request "POST" "/api/v1/incidents" "$CITIZEN_TOKEN" "smoke-outside-$(date +%s)-$RANDOM" "$OUTSIDE_PAYLOAD"
     ERR_CODE="$(py_eval "$(get_resp_body)" "data.get('error', {}).get('code')")"
     if [[ "$LAST_HTTP_CODE" -eq 422 && "$ERR_CODE" == "OUTSIDE_GUJARAT" ]]; then
         pass_step "CORE-4" "Out-of-state incident refused with 422 OUTSIDE_GUJARAT"

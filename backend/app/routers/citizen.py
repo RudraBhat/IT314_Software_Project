@@ -108,20 +108,23 @@ def create_incident(
     principal: Citizen,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=100)] = None,
 ):
+    # Required, like POST /donations: without it a retried request (lost reply, double tap) would file a duplicate report.
+    if not idempotency_key or not idempotency_key.strip():
+        raise ApiError(422, "IDEMPOTENCY_KEY_REQUIRED", "The Idempotency-Key header is required")
+    idempotency_key = idempotency_key.strip()
     if not is_in_gujarat(body.latitude, body.longitude):
         raise ApiError(422, "OUTSIDE_GUJARAT", "The reported location is outside Gujarat")
     district = district_for(body.latitude, body.longitude)
     with db.transaction() as conn:
-        if idempotency_key:
-            existing = conn.execute(
-                """
-                SELECT incident_id, incident_ref, status, district, submitted_at
-                FROM incidents WHERE reporter_id = %s AND idempotency_key = %s
-                """,
-                (principal.user_id, idempotency_key),
-            ).fetchone()
-            if existing:
-                return JSONResponse(status_code=200, content=jsonable_encoder(_created_body(existing)))
+        existing = conn.execute(
+            """
+            SELECT incident_id, incident_ref, status, district, submitted_at
+            FROM incidents WHERE reporter_id = %s AND idempotency_key = %s
+            """,
+            (principal.user_id, idempotency_key),
+        ).fetchone()
+        if existing:
+            return JSONResponse(status_code=200, content=jsonable_encoder(_created_body(existing)))
         ref = next_incident_ref(conn)
         row = conn.execute(
             """

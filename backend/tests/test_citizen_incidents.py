@@ -20,8 +20,7 @@ PAYLOAD = {
 
 def _post(client, citizen, payload=None, key=None):
     headers = dict(citizen["headers"])
-    if key:
-        headers["Idempotency-Key"] = key
+    headers["Idempotency-Key"] = key or str(uuid.uuid4())  # the key is required
     return client.post("/api/v1/incidents", json=payload or PAYLOAD, headers=headers)
 
 
@@ -58,6 +57,32 @@ def test_idempotency_key_returns_same_incident(client, make):
     second = _post(client, citizen, key=key)
     assert first.status_code == 201 and second.status_code == 200
     assert first.json()["incident_id"] == second.json()["incident_id"]
+
+
+def test_missing_or_blank_idempotency_key_is_rejected_and_nothing_is_created(client, make, sql):
+    citizen = make.citizen()
+    for headers in (citizen["headers"], {**citizen["headers"], "Idempotency-Key": "   "}):
+        r = client.post("/api/v1/incidents", json=PAYLOAD, headers=headers)
+        assert r.status_code == 422 and r.json()["error"]["code"] == "IDEMPOTENCY_KEY_REQUIRED"
+    count = sql.execute("SELECT COUNT(*) AS n FROM incidents WHERE reporter_id = %s", (citizen["user_id"],)).fetchone()["n"]
+    assert count == 0
+
+
+def test_key_is_checked_before_the_location_and_does_not_replace_other_checks(client, make):
+    citizen = make.citizen()
+    outside = {**PAYLOAD, "latitude": 26.9124, "longitude": 75.7873}
+    no_key = client.post("/api/v1/incidents", json=outside, headers=citizen["headers"])
+    assert no_key.status_code == 422 and no_key.json()["error"]["code"] == "IDEMPOTENCY_KEY_REQUIRED"
+    with_key = _post(client, citizen, outside)
+    assert with_key.status_code == 422 and with_key.json()["error"]["code"] == "OUTSIDE_GUJARAT"
+
+
+def test_same_key_from_two_different_citizens_creates_two_reports(client, make):
+    a, b = make.citizen(), make.citizen()
+    key = str(uuid.uuid4())
+    first, second = _post(client, a, key=key), _post(client, b, key=key)
+    assert first.status_code == 201 and second.status_code == 201
+    assert first.json()["incident_id"] != second.json()["incident_id"]
 
 
 def test_outside_gujarat_is_rejected(client, make):

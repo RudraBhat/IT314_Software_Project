@@ -1,6 +1,7 @@
 """Citizen photo attachments (NU-FR-05): upload, list, download, remove, limits, isolation, moderation."""
 
 import base64
+import uuid
 
 import pytest
 
@@ -26,7 +27,7 @@ def _png(n: int = 0) -> bytes:
 
 
 def _incident(client, citizen) -> str:
-    r = client.post("/api/v1/incidents", json=PAYLOAD, headers=citizen["headers"])
+    r = client.post("/api/v1/incidents", json=PAYLOAD, headers={**citizen["headers"], "Idempotency-Key": str(uuid.uuid4())})
     assert r.status_code == 201, r.text
     return r.json()["incident_id"]
 
