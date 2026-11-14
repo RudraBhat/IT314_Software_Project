@@ -32,8 +32,11 @@ dispatches, escalates and closes.
   [release-runbook.md](release-runbook.md) and [env-variables.md](env-variables.md).
 - **State on 14 Nov 2026:** the frontend answers on Vercel; the backend at
   `it314-software-project-backend1.onrender.com` answers `/api/v1/health` with `database: ok` and runs build
-  `54007f9`, which is behind `main`. The staging service defined in `render.yaml` is not yet created
-  (defect D-02).
+  `54007f9`, which is behind `main`. The staging backend `drch-backend-latest.onrender.com` answers the same
+  way; its CD secrets are still to be set (defect D-02).
+- **Photo storage:** citizen photos are stored in PostgreSQL (`evidence_blobs`) for this release, so they share the
+  database's backups and access rules; Cloudinary is planned later. The image classifier is not deployed, so photo
+  analysis shows its labelled "unavailable" state.
 - **Delivery pipeline:** pull requests must pass the Quality Gate (secret scan, lint, SAST, dependency audit,
   unit and PostGIS-backed tests, Playwright e2e, container build with Trivy). Merges to `main` publish images,
   deploy staging, smoke-test it, then deploy production; the last CD job fails the run if an expected deployment
@@ -64,18 +67,8 @@ signals, AI, analytics, ingestion health, aid, content, moderation, staff).
 
 Citizen registration and login, incident reporting with an idempotency key and Gujarat check, a timeline with
 readable labels, replying to an information request, optional photo evidence, withdrawal requests, account
-deletion and email copies. The public map opens on Gujarat and can be zoomed out to all of India, with two
-OpenStreetMap base maps, a district filter that zooms to the district, an alerts layer, zoom into an incident and a
-click-for-address lookup; dispatcher-published guidance and updates appear on the Safety page. Field
+deletion and email copies. The public map is locked to Gujarat with a district filter and an alerts layer. Field
 teams see only their own team's dispatches and report acknowledgement, progress, team requests and completion.
-
-**Real and simulated in the citizen features:** reports, timelines, replies, photos, withdrawal requests, account
-changes and deletion are real and stored in PostgreSQL. A photo is held in `evidence_blobs` (5 MB, 5 per report) and
-a moderator reviews it before it is used. Email copies of notifications are real only when `SMTP_HOST` is set; without
-it they are simulated in an in-memory outbox. Email verification is a stub (no link is emailed and nothing is
-enforced), SMS alerts are a saved preference only because no SMS provider exists, and there is no relief-shelter
-feed. A withdrawal request only asks the dispatchers; they decide. Account deletion erases the person's details and
-photos but keeps the reports for the audit trail.
 Screens are described in [frontend-citizen-field-guide.md](frontend-citizen-field-guide.md) and
 [frontend-dispatcher-public-guide.md](frontend-dispatcher-public-guide.md).
 
