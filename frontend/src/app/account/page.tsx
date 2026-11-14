@@ -106,6 +106,7 @@ export default function AccountPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       <SiteHeader subtitle="My Account" maxWidth="max-w-3xl">
         <NavLink href="/my-reports">My Reports</NavLink>
+        <NavLink href="/my-donations">My Donations</NavLink>
         <NavLink href="/citizen/dashboard" hideBelow="sm">Dashboard</NavLink>
       </SiteHeader>
 
