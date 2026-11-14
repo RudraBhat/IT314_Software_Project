@@ -13,7 +13,7 @@ export default function AboutPage() {
     >
       <Section title="What it does">
         <p>
-          Citizens report cyclones, floods, fires and earthquakes. Trained dispatchers verify each report, and only
+          Citizens report cyclones, urban floods and industrial fires. Trained dispatchers verify each report, and only
           verified incidents appear on the public map. Dispatchers then assign response teams, and field teams update
           their progress until the incident is resolved.
         </p>
