@@ -266,6 +266,15 @@ export default function DonatePage() {
     }
   };
 
+  /**
+   * Tell the server the donor abandoned this unpaid order (PENDING -> FAILED / ABANDONED).
+   * Best effort: an unpaid order also expires on the server, and a payment the gateway still
+   * captures later confirms the donation anyway, so a failed call here changes nothing for the donor.
+   */
+  const abandonOrder = (order: CreatedOrder) => {
+    postJson(`/api/citizen/donations/${order.donation_id}/cancel`).catch(() => undefined);
+  };
+
   /** Open Razorpay Checkout for the created order, then let the server verify the signature. */
   const handleRazorpayPayment = async () => {
     if (!createdOrder?.checkout_key) return;
@@ -307,8 +316,9 @@ export default function DonatePage() {
         },
         modal: {
           ondismiss: () => {
-            // Closed without paying: the order stays PENDING and can be retried.
+            // Closed without paying: the order is abandoned on the server; "Resume" starts a new order.
             setSandboxBusy(false);
+            abandonOrder(order);
             setStep((current) => (current === "order_created" ? "abandoned" : current));
           },
         },
@@ -646,6 +656,7 @@ export default function DonatePage() {
                       type="button"
                       onClick={() => {
                         setSimulated(false);
+                        abandonOrder(createdOrder);
                         goTo("abandoned");
                       }}
                       className="w-full min-h-11 rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition cursor-pointer"
