@@ -1,4 +1,4 @@
-# Text dataset sources (S1-10)
+# Text dataset sources
 
 Where to get **real** texts for the label schema in [text-label-guideline.md](text-label-guideline.md):
 `cyclone`, `flood`, `fire`, `earthquake`, `other_disaster`, `not_disaster`, in `en`, `hi` and `gu`.
@@ -73,7 +73,7 @@ Use A1–A3 first: they already carry class-like labels, so they need the least 
   original land in the same split. Never put translations in test.
 - LLM-written texts stay the last resort, as the guideline already says.
 
-## Suggested collection plan to reach the S1-10 target
+## Suggested collection plan to reach the dataset target
 
 Target: ≥ 600 items, ≥ 20 per class in test, test human-written only.
 

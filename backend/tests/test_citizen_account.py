@@ -96,8 +96,8 @@ def test_mark_all_notifications_read(client, make):
         "scenario": "urban_flooding", "description": "Severe waterlogging on the main market road.",
         "latitude": 23.0225, "longitude": 72.5714,
     }
-    keyed = {**citizen["headers"], "Idempotency-Key": str(uuid.uuid4())}
-    assert client.post("/api/v1/incidents", json=payload, headers=keyed).status_code == 201
+    headers = {**citizen["headers"], "Idempotency-Key": str(uuid.uuid4())}
+    assert client.post("/api/v1/incidents", json=payload, headers=headers).status_code == 201
     unread = client.get("/api/v1/me/notifications", headers=citizen["headers"]).json()["items"]
     assert unread and all(n["read_at"] is None for n in unread)
     done = client.post("/api/v1/me/notifications/read-all", headers=citizen["headers"])
@@ -115,7 +115,8 @@ REPORT = {
 
 
 def _report(client, citizen) -> str:
-    r = client.post("/api/v1/incidents", json=REPORT, headers={**citizen["headers"], "Idempotency-Key": str(uuid.uuid4())})
+    headers = {**citizen["headers"], "Idempotency-Key": str(uuid.uuid4())}
+    r = client.post("/api/v1/incidents", json=REPORT, headers=headers)
     assert r.status_code == 201, r.text
     return r.json()["incident_id"]
 

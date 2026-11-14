@@ -12,7 +12,7 @@ Team sources:
 
 Usage:
     python scripts/evaluate_team_recommendations.py
-    python scripts/evaluate_team_recommendations.py --out docs/sprints/s3-14-review-sheet.md
+    python scripts/evaluate_team_recommendations.py --out review-sheet.md
     python scripts/evaluate_team_recommendations.py --database-url "$DATABASE_URL"
 """
 

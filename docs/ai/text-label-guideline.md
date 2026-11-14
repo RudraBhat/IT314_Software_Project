@@ -1,4 +1,4 @@
-# Text dataset: label schema and guideline (S1-10)
+# Text dataset: label schema and guideline
 
 One page for everyone who labels texts. The text model is **advisory only**; a dispatcher decides.
 

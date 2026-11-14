@@ -4,7 +4,6 @@ import os
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
-from urllib.parse import unquote
 
 import httpx
 from fastapi import APIRouter, Depends, Request
@@ -25,6 +24,7 @@ from app.services.incidents import (
     lock_incident,
     update_incident,
 )
+from app.uploads import read_capped_body, safe_filename, sniff_image_type
 
 router = APIRouter()
 
@@ -273,40 +273,6 @@ _IMAGE_CLASS_MAPPING: dict[str, str] = {
 _OUT_OF_SCOPE_IMAGE_CLASSES = {"earthquake", "landslide", "other_disaster"}
 
 
-def sniff_image_type(data: bytes) -> str | None:
-    """Identify JPEG, PNG or WebP from the first bytes; the client-declared type is not trusted."""
-    if data.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return "image/webp"
-    return None
-
-
-def safe_filename(raw: str | None) -> str:
-    """Decode the percent-encoded X-Filename header and keep a short, printable base name."""
-    name = unquote(raw or "").replace("\\", "/").rsplit("/", 1)[-1]
-    name = "".join(c for c in name if c.isprintable() and c not in '<>:"|?*')[:100].strip()
-    return name or "photo"
-
-
-async def _read_capped_body(request: Request, limit: int) -> bytes:
-    """Read the request body but stop as soon as it passes `limit`, so an oversized upload never sits in memory."""
-    too_large = ApiError(413, "FILE_TOO_LARGE", f"Image file exceeds the {limit // (1024 * 1024)} MB limit.")
-    declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > limit:
-        raise too_large
-    chunks: list[bytes] = []
-    size = 0
-    async for chunk in request.stream():
-        size += len(chunk)
-        if size > limit:
-            raise too_large
-        chunks.append(chunk)
-    return b"".join(chunks)
-
-
 def _load_open_incident(incident_id: uuid.UUID) -> None:
     with db.transaction() as conn:
         row = conn.execute("SELECT * FROM incidents WHERE incident_id = %s", (incident_id,)).fetchone()
@@ -338,7 +304,7 @@ async def analyze_incident_photo(incident_id: uuid.UUID, request: Request, princ
         raise ApiError(415, "UNSUPPORTED_MEDIA_TYPE", "Send the photo as the request body with a JPEG, PNG or WebP content type.")
     await run_in_threadpool(_load_open_incident, incident_id)
 
-    content = await _read_capped_body(request, _MAX_IMAGE_BYTES)
+    content = await read_capped_body(request, _MAX_IMAGE_BYTES)
     image_type = sniff_image_type(content)
     if image_type is None:
         raise ApiError(415, "INVALID_IMAGE", "The file is not a JPEG, PNG or WebP image.")

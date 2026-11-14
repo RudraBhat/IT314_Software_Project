@@ -1,6 +1,6 @@
 # Payment Gateway — Test-Account Findings
 
-**Sprint 1, S1-16 · Author:** Shlok · **Date:** 2026-11-02
+**Author:** Shlok · **Date:** 2026-11-02
 
 > **Note:** This memo records research findings only.  
 > Live API keys are **never stored in this repo** (gitleaks runs on every push).  
@@ -18,7 +18,7 @@
 | Webhook secret | Generated per endpoint under *Settings → Webhooks*; test events can be triggered from the dashboard. |
 | SDK / API | Official Python SDK (`razorpay` on PyPI); REST API documented at [razorpay.com/docs](https://razorpay.com/docs/). |
 | Limits in test mode | Unlimited test orders/payments; INR-only for Indian merchants; no real money moves. |
-| Production activation | Requires GST registration + business bank account verification (out of Sprint 1 scope). |
+| Production activation | Requires GST registration + business bank account verification (out of current scope). |
 | **Verdict** | ✅ Test account can be opened **this week** with no blockers. |
 
 ---

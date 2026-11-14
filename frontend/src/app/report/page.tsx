@@ -128,12 +128,6 @@ export default function ReportIncidentPage() {
         if (d.description) setDescription(d.description);
         if (d.peopleAffected) setPeopleAffected(d.peopleAffected);
         if (d.urgency) setUrgency(d.urgency);
-        if (d.latitude && d.longitude) {
-          setLatitude(d.latitude);
-          setLongitude(d.longitude);
-        }
-        if (d.addressText) setAddressText(d.addressText);
-        if (d.landmark) setLandmark(d.landmark);
         if (Array.isArray(d.needs)) setNeeds(d.needs);
         /* eslint-enable react-hooks/set-state-in-effect */
       }
@@ -142,7 +136,8 @@ export default function ReportIncidentPage() {
     }
   }, []);
 
-  // Save draft whenever important fields change
+  // Save draft whenever important fields change. The reporter's location, address and landmark are
+  // deliberately left out: browser storage is readable by any script on the page, so they are re-entered.
   useEffect(() => {
     if (successResult) {
       sessionStorage.removeItem(DRAFT_STORAGE_KEY);
@@ -156,17 +151,13 @@ export default function ReportIncidentPage() {
           description,
           peopleAffected,
           urgency,
-          latitude,
-          longitude,
-          addressText,
-          landmark,
           needs,
         })
       );
     } catch {
       // Ignore storage errors
     }
-  }, [scenario, description, peopleAffected, urgency, latitude, longitude, addressText, landmark, needs, successResult]);
+  }, [scenario, description, peopleAffected, urgency, needs, successResult]);
 
   // Advisory hints: verified incidents already reported nearby, and an instant rule-based urgency hint.
   useEffect(() => {
@@ -486,7 +477,7 @@ export default function ReportIncidentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-y-auto">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Top Emergency Lifeline Banner */}
       <div className="bg-red-600 text-white px-4 py-2 text-xs md:text-sm font-semibold flex items-center justify-between shadow-md">
         <div className="flex items-center gap-2 max-w-4xl mx-auto w-full justify-between">

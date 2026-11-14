@@ -12,8 +12,10 @@ Covers:
 - Rejection of unverified state transitions: donations remain PENDING until verified.
 - Sandbox labeling (is_sandbox=True) and production hiding of mock payment generation.
 - Donor isolation and privacy: signed-in citizen donations private from other citizens.
-- Webhook handlers: defect notes and xfail coverage for missing webhook routes (Owner: Shlok).
-- Donor history: defect note and xfail coverage for missing GET /api/v1/me/donations (Owner: Shlok / Zalak).
+- POST /api/v1/payments/webhook/{gateway}: signature check, replay idempotency on event id,
+  wrong amount/currency refused, webhook-before-callback, payment.failed (issue #102).
+- GET /api/v1/me/donations: the caller's own donations and receipts only (issue #102).
+- The mock signature binds order, payment, amount and currency (issue #102).
 - SHA-256 cryptographic audit hash-chain integrity verification across donation lifecycle.
 """
 
@@ -45,16 +47,31 @@ def _gateway_secrets(monkeypatch):
     get_settings.cache_clear()
 
 
-def _sign_mock(order_id: str, payment_id: str) -> str:
-    """Deterministic HMAC-SHA256 signature generator mirroring MockGateway."""
+def _sign_mock(order_id: str, payment_id: str, amount: str = "2500.00", currency: str = "INR") -> str:
+    """Deterministic HMAC-SHA256 signature mirroring MockGateway: binds order, payment, amount, currency."""
     secret = os.getenv("MOCK_GATEWAY_SECRET", "").encode()
-    return hmac.new(secret, f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+    message = f"{order_id}|{payment_id}|{amount}|{currency}".encode()
+    return hmac.new(secret, message, hashlib.sha256).hexdigest()
 
 
-def _sign_webhook(body_bytes: bytes) -> str:
-    """Deterministic HMAC-SHA256 signature for webhook payloads."""
-    secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "test-razorpay-webhook-secret").encode()
-    return hmac.new(secret, body_bytes, hashlib.sha256).hexdigest()
+def _mock_webhook(client, order_id, payment_id, *, event="payment.captured", amount=250000,
+                  currency="INR", event_id=None, signature=None):
+    """POST a mock-gateway webhook (same body shape as Razorpay), signed with MOCK_GATEWAY_SECRET."""
+    body = {
+        "id": event_id or f"evt_{uuid.uuid4().hex[:12]}",
+        "event": event,
+        "payload": {"payment": {"entity": {
+            "id": payment_id, "order_id": order_id, "amount": amount, "currency": currency, "status": "captured",
+        }}},
+    }
+    raw = json.dumps(body).encode()
+    secret = os.getenv("MOCK_GATEWAY_SECRET", "").encode()
+    sig = signature or hmac.new(secret, raw, hashlib.sha256).hexdigest()
+    return client.post(
+        "/api/v1/payments/webhook/mock",
+        content=raw,
+        headers={"Content-Type": "application/json", "X-Mock-Signature": sig},
+    )
 
 
 def _create_donation(client, campaign, key=None, headers=None, **extra):
@@ -89,6 +106,7 @@ def test_create_donation_order_and_idempotency(client, campaign):
     assert order1["currency"] == "INR"
     assert order1["status"] == "PENDING"
     assert order1["is_sandbox"] is True
+    assert order1["checkout_key"] is None
 
     # Same Idempotency-Key returns 200 OK with identical donation record
     res2 = _create_donation(client, campaign, key=key)
@@ -386,157 +404,130 @@ def test_signed_in_donor_privacy_and_guest_donation_isolation(client, campaign, 
 # ── Webhook Defect Notes & XFAIL Tests (Owner: Shlok) ─────────────────────
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="DEFECT-S2-16-WEBHOOK-404: POST /api/v1/payments/webhook/{gateway} not implemented by Shlok",
-)
+def _status(sql, donation_id):
+    return sql.execute(
+        "SELECT status, receipt_no, gateway_payment_id FROM donations WHERE donation_id = %s", (donation_id,)
+    ).fetchone()
+
+
 def test_payments_webhook_valid_signature_confirms_donation(client, campaign, sql):
-    """Defect Note:
-    Route: POST /api/v1/payments/webhook/{gateway} (or /payments/webhook/{gateway})
-    Input: Valid HMAC-SHA256 signed payment webhook event (payment.captured)
-    Expected: 200 OK, donation status updated to CONFIRMED, receipt_no issued
-    Actual: 404 Not Found (endpoint not mounted in FastAPI app)
-    Owner: Shlok
-    """
     order = _create_donation(client, campaign).json()
-    don_id = order["donation_id"]
-    order_id = order["gateway_order_id"]
     payment_id = "pay_mock_" + uuid.uuid4().hex[:12]
 
-    payload = {
-        "event": "payment.captured",
-        "payload": {
-            "payment": {
-                "entity": {
-                    "id": payment_id,
-                    "order_id": order_id,
-                    "amount": 250000,
-                    "currency": "INR",
-                    "status": "captured",
-                }
-            }
-        },
-    }
-    raw_body = json.dumps(payload).encode()
-    signature = _sign_webhook(raw_body)
-
-    res = client.post(
-        "/api/v1/payments/webhook/razorpay",
-        content=raw_body,
-        headers={"Content-Type": "application/json", "X-Razorpay-Signature": signature},
-    )
+    res = _mock_webhook(client, order["gateway_order_id"], payment_id)
     assert res.status_code == 200, res.text
+    assert res.json()["outcome"] == "CONFIRMED"
 
-    # Webhook confirmation should confirm donation in DB
-    row = sql.execute("SELECT status, receipt_no FROM donations WHERE donation_id = %s", (don_id,)).fetchone()
-    assert row["status"] == "CONFIRMED"
-    assert row["receipt_no"] is not None
+    row = _status(sql, order["donation_id"])
+    assert row["status"] == "CONFIRMED" and row["receipt_no"] is not None
+    assert row["gateway_payment_id"] == payment_id
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="DEFECT-S2-16-WEBHOOK-404: POST /api/v1/payments/webhook/{gateway} not implemented by Shlok",
-)
-def test_payments_webhook_idempotent_event_replay_and_tampered_rejection(client, campaign):
-    """Defect Note:
-    Route: POST /api/v1/payments/webhook/{gateway}
-    Input: Repeated event ID or tampered webhook signature
-    Expected: Repeated event is idempotent (200 OK); tampered signature is rejected (400)
-    Actual: 404 Not Found (endpoint not mounted in FastAPI app)
-    Owner: Shlok
-    """
+def test_payments_webhook_tampered_signature_is_rejected(client, campaign, sql):
     order = _create_donation(client, campaign).json()
-    order_id = order["gateway_order_id"]
+    res = _mock_webhook(client, order["gateway_order_id"], "pay_mock_tampered1", signature="0" * 64)
+    assert res.status_code == 400 and res.json()["error"]["code"] == "INVALID_SIGNATURE"
+    assert _status(sql, order["donation_id"])["status"] == "PENDING"
+
+
+def test_payments_webhook_replay_is_idempotent(client, campaign, sql):
+    order = _create_donation(client, campaign).json()
+    payment_id = "pay_mock_" + uuid.uuid4().hex[:12]
+    event_id = f"evt_{uuid.uuid4().hex[:12]}"
+
+    first = _mock_webhook(client, order["gateway_order_id"], payment_id, event_id=event_id)
+    receipt = _status(sql, order["donation_id"])["receipt_no"]
+    replay = _mock_webhook(client, order["gateway_order_id"], payment_id, event_id=event_id)
+
+    assert first.json()["outcome"] == "CONFIRMED"
+    assert replay.status_code == 200 and replay.json()["outcome"] == "DUPLICATE_EVENT"
+    assert _status(sql, order["donation_id"])["receipt_no"] == receipt
+    stored = sql.execute(
+        "SELECT COUNT(*) AS n FROM payment_webhook_events WHERE event_id = %s", (event_id,)
+    ).fetchone()["n"]
+    assert stored == 1
+
+    # A different event for the same payment does not confirm twice either.
+    again = _mock_webhook(client, order["gateway_order_id"], payment_id)
+    assert again.json()["outcome"] == "ALREADY_CONFIRMED"
+    assert _status(sql, order["donation_id"])["receipt_no"] == receipt
+
+
+@pytest.mark.parametrize("amount,currency", [(100, "INR"), (250001, "INR"), (250000, "USD")])
+def test_payments_webhook_wrong_amount_or_currency_does_not_confirm(client, campaign, sql, amount, currency):
+    order = _create_donation(client, campaign).json()
+    res = _mock_webhook(client, order["gateway_order_id"], "pay_mock_" + uuid.uuid4().hex[:8],
+                        amount=amount, currency=currency)
+    assert res.status_code == 200 and res.json()["outcome"] == "AMOUNT_MISMATCH"
+    row = _status(sql, order["donation_id"])
+    assert row["status"] == "PENDING" and row["receipt_no"] is None
+
+
+def test_webhook_before_client_callback_race_condition(client, campaign, sql):
+    """Webhook confirms first; the browser callback then returns the same receipt, no second one."""
+    order = _create_donation(client, campaign).json()
+    don_id, order_id = order["donation_id"], order["gateway_order_id"]
     payment_id = "pay_mock_" + uuid.uuid4().hex[:12]
 
-    payload = {
-        "event": "payment.captured",
-        "payload": {"payment": {"entity": {"id": payment_id, "order_id": order_id, "status": "captured"}}},
-    }
-    raw_body = json.dumps(payload).encode()
+    assert _mock_webhook(client, order_id, payment_id).json()["outcome"] == "CONFIRMED"
+    receipt = _status(sql, don_id)["receipt_no"]
 
-    # Tampered signature refused
-    res_tampered = client.post(
-        "/api/v1/payments/webhook/razorpay",
-        content=raw_body,
-        headers={"Content-Type": "application/json", "X-Razorpay-Signature": "invalid-sig-000"},
-    )
-    assert res_tampered.status_code in (400, 422)
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="DEFECT-S2-16-WEBHOOK-404: Webhook handler not implemented by Shlok",
-)
-def test_webhook_before_client_callback_race_condition(client, campaign):
-    """Defect Note:
-    Route: POST /api/v1/payments/webhook/{gateway} -> POST /api/v1/donations/{id}/verify
-    Input: Webhook arrives before client browser callback
-    Expected: Webhook confirms donation, subsequent client callback succeeds without double confirmation (same receipt)
-    Actual: 404 Not Found on webhook step
-    Owner: Shlok
-    """
-    order = _create_donation(client, campaign).json()
-    don_id = order["donation_id"]
-    order_id = order["gateway_order_id"]
-    payment_id = "pay_mock_" + uuid.uuid4().hex[:12]
-
-    # Step 1: Webhook arrives first
-    payload = {
-        "event": "payment.captured",
-        "payload": {"payment": {"entity": {"id": payment_id, "order_id": order_id, "status": "captured"}}},
-    }
-    raw_body = json.dumps(payload).encode()
-    sig = _sign_webhook(raw_body)
-    res_hook = client.post(
-        "/api/v1/payments/webhook/razorpay",
-        content=raw_body,
-        headers={"Content-Type": "application/json", "X-Razorpay-Signature": sig},
-    )
-    assert res_hook.status_code == 200
-
-    # Step 2: Browser returns with callback
-    mock_sig = _sign_mock(order_id, payment_id)
     res_callback = client.post(
         f"{BASE_DONATIONS}/{don_id}/verify",
-        json={"gateway_payment_id": payment_id, "signature": mock_sig},
+        json={"gateway_payment_id": payment_id, "signature": _sign_mock(order_id, payment_id)},
     )
-    assert res_callback.status_code == 200
+    assert res_callback.status_code == 200, res_callback.text
     assert res_callback.json()["status"] == "CONFIRMED"
+    assert res_callback.json()["receipt_no"] == receipt
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="DEFECT-S2-16-ME-DONATIONS-404: GET /api/v1/me/donations not implemented",
-)
-def test_me_donations_shows_caller_donations_and_receipts(client, campaign, make):
-    """Defect Note:
-    Route: GET /api/v1/me/donations (or /api/v1/donations/me)
-    Input: Authenticated citizen bearer token
-    Expected: 200 OK returning list of caller's donations and receipt_no
-    Actual: 404 Not Found (endpoint not mounted in FastAPI app)
-    Owner: Shlok / Zalak
-    """
-    citizen = make.citizen()
-    order = _create_donation(client, campaign, headers=citizen["headers"], guest_email=None).json()
-    don_id = order["donation_id"]
-    order_id = order["gateway_order_id"]
+def test_payment_failed_webhook_marks_pending_donation_failed(client, campaign, sql):
+    order = _create_donation(client, campaign).json()
+    res = _mock_webhook(client, order["gateway_order_id"], "pay_mock_failed01", event="payment.failed")
+    assert res.json()["outcome"] == "FAILED"
+    assert _status(sql, order["donation_id"])["status"] == "FAILED"
 
-    # Verify donation
+
+def test_webhook_for_another_gateway_is_not_found(client):
+    res = client.post("/api/v1/payments/webhook/razorpay", content=b"{}", headers={"X-Razorpay-Signature": "x"})
+    assert res.status_code == 404
+
+
+def test_callback_signature_is_bound_to_the_amount(client, campaign, sql):
+    """A signature produced for a different amount cannot confirm this donation."""
+    order = _create_donation(client, campaign).json()
     payment_id = "pay_mock_" + uuid.uuid4().hex[:12]
-    sig = _sign_mock(order_id, payment_id)
+    res = client.post(
+        f"{BASE_DONATIONS}/{order['donation_id']}/verify",
+        json={"gateway_payment_id": payment_id, "signature": _sign_mock(order["gateway_order_id"], payment_id, "1.00")},
+    )
+    assert res.status_code == 400 and res.json()["error"]["code"] == "INVALID_SIGNATURE"
+    assert _status(sql, order["donation_id"])["status"] == "PENDING"
+
+
+def test_me_donations_shows_caller_donations_and_receipts(client, campaign, make):
+    citizen, other = make.citizen(), make.citizen()
+    order = _create_donation(client, campaign, headers=citizen["headers"], guest_email=None).json()
+    don_id, order_id = order["donation_id"], order["gateway_order_id"]
+
+    payment_id = "pay_mock_" + uuid.uuid4().hex[:12]
     client.post(
         f"{BASE_DONATIONS}/{don_id}/verify",
-        json={"gateway_payment_id": payment_id, "signature": sig},
+        json={"gateway_payment_id": payment_id, "signature": _sign_mock(order_id, payment_id)},
         headers=citizen["headers"],
     )
 
-    # Fetch citizen donation history
     res = client.get("/api/v1/me/donations", headers=citizen["headers"])
     assert res.status_code == 200
-    items = res.json().get("items", res.json())
-    don_ids = {item["donation_id"] for item in items}
-    assert don_id in don_ids
+    body = res.json()
+    assert body["total"] == 1
+    item = body["items"][0]
+    assert item["donation_id"] == don_id
+    assert item["status"] == "CONFIRMED" and item["receipt_no"].startswith("REC-")
+    assert item["is_sandbox"] is True and item["campaign_title"]
+
+    assert client.get("/api/v1/me/donations", headers=other["headers"]).json()["total"] == 0
+    assert client.get("/api/v1/me/donations").status_code == 401
 
 
 # ── Audit Hash Chain Integrity ───────────────────────────────────────────

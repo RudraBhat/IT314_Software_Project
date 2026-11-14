@@ -138,15 +138,15 @@ def test_get_field_profile_from_db(field_principal: FieldPrincipal):
     assert profile.capabilities == {"boat": True, "water_rescue": True}
 
 
-def test_get_field_profile_fallback_when_db_not_configured(field_principal: FieldPrincipal):
+def test_get_field_profile_returns_503_when_db_not_configured(field_principal: FieldPrincipal):
+    """Issue #96: no fabricated phone number or team status without a database."""
     with patch("app.routers.field.get_settings") as mock_settings:
         mock_settings.return_value.database_url = ""
-        profile = get_field_profile(field_principal)
+        with pytest.raises(ApiError) as exc_info:
+            get_field_profile(field_principal)
 
-    assert isinstance(profile, FieldProfileResponse)
-    assert profile.user_id == field_principal.user_id
-    assert profile.callsign == "QR1-LEAD"
-    assert profile.status == "AVAILABLE"
+    assert exc_info.value.status == 503
+    assert exc_info.value.code == "DATABASE_UNAVAILABLE"
 
 
 # ── 2. Mission Assignment Listing Tests ─────────────────────────────────

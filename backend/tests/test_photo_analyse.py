@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.routers.dm.ai import safe_filename, sniff_image_type
+from app.uploads import safe_filename, sniff_image_type
 
 BASE = "/api/v1/dm"
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64

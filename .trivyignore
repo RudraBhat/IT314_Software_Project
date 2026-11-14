@@ -1,0 +1,7 @@
+# Reviewed Trivy findings that are accepted. Add an entry only with a reason and an owner; remove it as
+# soon as a fixed base image or package is available.
+
+# setuptools 70.3.0 comes with the python:3.12 base image, is not a dependency of the application and is
+# never imported at runtime (all services run from a virtualenv that does not contain it). The reported
+# flaw is in PackageIndex (easy_install downloads), which nothing here calls.
+CVE-2025-47273

@@ -1,4 +1,4 @@
-# Sprint 3 Security, RBAC and Privacy Review (S3-02)
+# Security, RBAC and Privacy Review
 
 Owner: Siddh. Inputs still needed from others are marked **Open**.
 

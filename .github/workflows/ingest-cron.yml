@@ -9,6 +9,9 @@ concurrency:
   group: ingest-cron
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   trigger:
     name: Wake Backend & Trigger Ingest

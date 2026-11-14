@@ -8,7 +8,7 @@ from psycopg import Error as PsycopgError
 from app import db
 from app.auth import DMUser
 from app.config import get_settings
-from app.errors import ApiError
+from app.errors import ApiError, database_unavailable
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ router = APIRouter()
 def dashboard(principal: DMUser):
     timeout = get_settings().dispatch_ack_timeout_minutes
     if not get_settings().database_url:
-        raise ApiError(503, "DATABASE_UNAVAILABLE", "Database connection required")
+        raise database_unavailable()
 
     try:
         with db.transaction() as conn:

@@ -12,7 +12,8 @@ on:
 
 concurrency:
   group: cd-${{ github.ref }}
-  cancel-in-progress: false
+  # Only the newest push to main deploys; older queued/running runs are cancelled.
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -28,35 +29,78 @@ jobs:
     name: Detect Changed Components
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      backend: ${{ steps.filter.outputs.backend }}
-      ai-workers: ${{ steps.filter.outputs.ai-workers }}
+      frontend: ${{ steps.detect.outputs.frontend }}
+      backend: ${{ steps.detect.outputs.backend }}
+      ai-workers: ${{ steps.detect.outputs.ai-workers }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      # Ref guard: only main and release tags may build or deploy. The "main" ruleset (PR + strict
+      # Quality Gate check) already ensures code reaching main passed CI; it does not cover manual
+      # runs from other branches or release tags, so check here. Every later job needs this job.
+      - name: Only main and release tags may run CD
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ] && [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::CD runs only from main or a release tag (got $GITHUB_REF)."
+            exit 1
+          fi
 
-      - name: Check for file changes
-        id: filter
-        # Release tags build every image, so path filtering (which needs a base commit) is skipped.
-        if: ${{ github.ref_type == 'branch' }}
-        uses: dorny/paths-filter@v3
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v4
         with:
-          filters: |
-            frontend:
-              - 'frontend/**'
-              - 'docker-compose*.yml'
-              - '.github/workflows/cd.yml'
-            backend:
-              - 'backend/**'
-              - 'docker-compose*.yml'
-              - 'render.yaml'
-              - 'scripts/**'
-              - '.github/workflows/cd.yml'
-            ai-workers:
-              - 'ai-workers/**'
-              - 'docker-compose*.yml'
-              - '.github/workflows/cd.yml'
+          fetch-depth: 0
+
+      - name: Release tag must be on main
+        if: ${{ github.ref_type == 'tag' }}
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME ($GITHUB_SHA) is not on main."
+            exit 1
+          fi
+
+      # A newer push cancels an older CD run, and a run can also fail. Comparing each commit
+      # only with its parent would then lose the older run's changes, so compare with the
+      # commit of the last CD run that succeeded. Anything since then is built and deployed.
+      - name: Detect changed components
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set_all() {
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "ai-workers=true" >> "$GITHUB_OUTPUT"
+          }
+
+          # Release tags build every image; there is no base commit to compare with.
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            set_all
+            exit 0
+          fi
+
+          BASE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cd.yml/runs?branch=main&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)
+
+          if [ -z "$BASE" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "::notice::No earlier successful CD run found; treating every component as changed."
+            set_all
+            exit 0
+          fi
+
+          echo "Comparing $GITHUB_SHA with last successful CD run $BASE"
+          CHANGED=$(git diff --name-only "$BASE" "$GITHUB_SHA")
+          echo "Changed files:"; echo "$CHANGED"
+
+          check() {  # $1 = output name, $2 = extended regex of paths that affect it
+            if echo "$CHANGED" | grep -Eq "$2"; then echo "$1=true" >> "$GITHUB_OUTPUT"; else echo "$1=false" >> "$GITHUB_OUTPUT"; fi
+          }
+          COMMON='docker-compose[^/]*\.yml$|\.github/workflows/cd\.yml$'
+          check frontend   "^(frontend/|$COMMON)"
+          check backend    "^(backend/|scripts/|render\.yaml$|$COMMON)"
+          check ai-workers "^(ai-workers/|$COMMON)"
 
   # ============================================================================
   # 1. Build and Publish Frontend Container to GHCR (Only if frontend changed)
@@ -65,11 +109,12 @@ jobs:
     name: Publish Container / Frontend
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: detect-changes
+    needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' }}
     permissions:
       contents: read
       packages: write
+      pull-requests: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -84,22 +129,55 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # CI already built, tested and scanned this code in the pull request. When the merged tree is
+      # identical to the PR head, retag that exact image instead of rebuilding it; otherwise (direct
+      # push, differing tree, no CI image) fall back to building from source below.
+      - name: Promote the CI-built image when it matches this commit
+        id: promote
+        if: ${{ github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "done=false" >> "$GITHUB_OUTPUT"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/drch_frontend"
+          PR_HEAD=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+            --jq '[.[] | select(.base.ref == "main" and .merged_at != null)][0].head.sha // empty' 2>/dev/null || true)
+          if [ -z "$PR_HEAD" ]; then
+            echo "No merged pull request found for this commit; building from source."; exit 0
+          fi
+          TREE_NOW=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq .commit.tree.sha)
+          TREE_PR=$(gh api "repos/$GITHUB_REPOSITORY/commits/$PR_HEAD" --jq .commit.tree.sha)
+          if [ "$TREE_NOW" != "$TREE_PR" ]; then
+            echo "Merged tree differs from the pull request head; building from source."; exit 0
+          fi
+          if docker buildx imagetools create -t "$IMAGE:latest" -t "$IMAGE:sha-${GITHUB_SHA:0:7}" "$IMAGE:ci-$PR_HEAD"; then
+            echo "done=true" >> "$GITHUB_OUTPUT"
+            echo "version=$PR_HEAD" >> "$GITHUB_OUTPUT"
+            echo "Promoted $IMAGE:ci-$PR_HEAD to latest and sha-${GITHUB_SHA:0:7}."
+          else
+            echo "No CI image $IMAGE:ci-$PR_HEAD found; building from source."
+          fi
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}/drch_frontend
           tags: |
-            type=raw,value=latest,enable=${{ github.ref_type == 'branch' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,format=short,prefix=sha-
             type=ref,event=tag
 
       - name: Build and push verified container to GHCR
+        if: ${{ steps.promote.outputs.done != 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ vars.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=frontend
@@ -112,11 +190,14 @@ jobs:
     name: Publish Container / Backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: detect-changes
+    needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' }}
     permissions:
       contents: read
       packages: write
+      pull-requests: read
+    outputs:
+      version: ${{ steps.promote.outputs.version || github.sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -131,17 +212,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # CI already built, tested and scanned this code in the pull request. When the merged tree is
+      # identical to the PR head, retag that exact image instead of rebuilding it; otherwise (direct
+      # push, differing tree, no CI image) fall back to building from source below.
+      - name: Promote the CI-built image when it matches this commit
+        id: promote
+        if: ${{ github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "done=false" >> "$GITHUB_OUTPUT"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/drch_backend"
+          PR_HEAD=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+            --jq '[.[] | select(.base.ref == "main" and .merged_at != null)][0].head.sha // empty' 2>/dev/null || true)
+          if [ -z "$PR_HEAD" ]; then
+            echo "No merged pull request found for this commit; building from source."; exit 0
+          fi
+          TREE_NOW=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq .commit.tree.sha)
+          TREE_PR=$(gh api "repos/$GITHUB_REPOSITORY/commits/$PR_HEAD" --jq .commit.tree.sha)
+          if [ "$TREE_NOW" != "$TREE_PR" ]; then
+            echo "Merged tree differs from the pull request head; building from source."; exit 0
+          fi
+          if docker buildx imagetools create -t "$IMAGE:latest" -t "$IMAGE:sha-${GITHUB_SHA:0:7}" "$IMAGE:ci-$PR_HEAD"; then
+            echo "done=true" >> "$GITHUB_OUTPUT"
+            echo "version=$PR_HEAD" >> "$GITHUB_OUTPUT"
+            echo "Promoted $IMAGE:ci-$PR_HEAD to latest and sha-${GITHUB_SHA:0:7}."
+          else
+            echo "No CI image $IMAGE:ci-$PR_HEAD found; building from source."
+          fi
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}/drch_backend
           tags: |
-            type=raw,value=latest,enable=${{ github.ref_type == 'branch' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,format=short,prefix=sha-
             type=ref,event=tag
 
       - name: Build and push verified container to GHCR
+        if: ${{ steps.promote.outputs.done != 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -161,11 +272,12 @@ jobs:
     name: Publish Container / AI Workers
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: detect-changes
+    needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.ai-workers == 'true' || github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' }}
     permissions:
       contents: read
       packages: write
+      pull-requests: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -180,17 +292,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # CI already built, tested and scanned this code in the pull request. When the merged tree is
+      # identical to the PR head, retag that exact image instead of rebuilding it; otherwise (direct
+      # push, differing tree, no CI image) fall back to building from source below.
+      - name: Promote the CI-built image when it matches this commit
+        id: promote
+        if: ${{ github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "done=false" >> "$GITHUB_OUTPUT"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/drch_ai_workers"
+          PR_HEAD=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+            --jq '[.[] | select(.base.ref == "main" and .merged_at != null)][0].head.sha // empty' 2>/dev/null || true)
+          if [ -z "$PR_HEAD" ]; then
+            echo "No merged pull request found for this commit; building from source."; exit 0
+          fi
+          TREE_NOW=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq .commit.tree.sha)
+          TREE_PR=$(gh api "repos/$GITHUB_REPOSITORY/commits/$PR_HEAD" --jq .commit.tree.sha)
+          if [ "$TREE_NOW" != "$TREE_PR" ]; then
+            echo "Merged tree differs from the pull request head; building from source."; exit 0
+          fi
+          if docker buildx imagetools create -t "$IMAGE:latest" -t "$IMAGE:sha-${GITHUB_SHA:0:7}" "$IMAGE:ci-$PR_HEAD"; then
+            echo "done=true" >> "$GITHUB_OUTPUT"
+            echo "version=$PR_HEAD" >> "$GITHUB_OUTPUT"
+            echo "Promoted $IMAGE:ci-$PR_HEAD to latest and sha-${GITHUB_SHA:0:7}."
+          else
+            echo "No CI image $IMAGE:ci-$PR_HEAD found; building from source."
+          fi
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}/drch_ai_workers
           tags: |
-            type=raw,value=latest,enable=${{ github.ref_type == 'branch' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,format=short,prefix=sha-
             type=ref,event=tag
 
       - name: Build and push verified container to GHCR
+        if: ${{ steps.promote.outputs.done != 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: ./ai-workers
@@ -202,118 +344,73 @@ jobs:
           cache-to: type=gha,mode=max,scope=ai-workers
 
   # ============================================================================
-  # 4. Production Deployment: Trigger Respective Deployments
+  # 3b. Staging: deploy the commit's backend image, then smoke-test it.
+  #     Production deploys only after this passes (or when staging is not configured).
   # ============================================================================
-  deploy:
-    name: Deploy to Production
+  check-staging:
+    name: Check Staging Config
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [detect-changes, publish-frontend, publish-backend, publish-ai-workers]
+    timeout-minutes: 5
+    needs: [publish-backend]
     if: |
       always() &&
-      github.ref_type == 'branch' &&
-      !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled') &&
-      (needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.ai-workers == 'true' || github.event_name == 'workflow_dispatch')
+      github.ref == 'refs/heads/main' &&
+      needs.publish-backend.result == 'success'
     environment:
-      name: production
+      name: staging
+    outputs:
+      configured: ${{ steps.cfg.outputs.configured }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Trigger Vercel Production Deployment (Frontend Only)
-        if: ${{ needs.detect-changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch' }}
+      - name: Detect staging secrets
+        id: cfg
         env:
-          VERCEL_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          STAGING_HOOK: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
+          STAGING_URL: ${{ secrets.STAGING_BACKEND_URL }}
         run: |
-          if [ -n "$VERCEL_HOOK" ]; then
-            echo "🚀 Triggering Vercel frontend deployment..."
-            response=$(curl -s -L -o /dev/null -w "%{http_code}" -X POST "$VERCEL_HOOK")
-            if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
-              echo "✅ Successfully dispatched Vercel build (HTTP $response)."
-            else
-              echo "⚠️ Vercel hook responded with HTTP $response. Please check secret VERCEL_DEPLOY_HOOK."
-            fi
+          if [ -n "$STAGING_HOOK" ] && [ -n "$STAGING_URL" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
           else
-            echo "ℹ️ VERCEL_DEPLOY_HOOK secret not set. Skipping Vercel trigger."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::RENDER_STAGING_DEPLOY_HOOK or STAGING_BACKEND_URL not set. Staging deploy and smoke will be skipped."
           fi
 
-      - name: Trigger Render Production Deployment (Backend Only)
-        if: ${{ needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.ai-workers == 'true' || github.event_name == 'workflow_dispatch' }}
+  deploy-staging:
+    name: Deploy Backend / Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [check-staging]
+    if: |
+      always() &&
+      needs.check-staging.result == 'success' &&
+      needs.check-staging.outputs.configured == 'true'
+    environment:
+      name: staging
+    steps:
+      - name: Trigger Render Staging Deployment
         env:
-          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          STAGING_HOOK: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
         run: |
-          if [ -n "$RENDER_HOOK" ]; then
-            echo "🚀 Triggering Render backend deployment..."
-            response=$(curl -s -L -o /dev/null -w "%{http_code}" -X POST "$RENDER_HOOK")
-            if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
-              echo "✅ Successfully dispatched Render deployment (HTTP $response)."
-            else
-              echo "⚠️ Render hook responded with HTTP $response. Please check secret RENDER_DEPLOY_HOOK."
-            fi
+          # Same image that production will receive: built once, promoted by tag.
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/drch_backend:sha-${GITHUB_SHA:0:7}"
+          SEP="?"; case "$STAGING_HOOK" in *\?*) SEP="&";; esac
+          echo "Triggering Render staging deployment of $IMAGE..."
+          response=$(curl -s -L -o /dev/null -w "%{http_code}" -X POST "${STAGING_HOOK}${SEP}imgURL=${IMAGE}")
+          if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
+            echo "Dispatched staging deployment (HTTP $response)."
           else
-            echo "ℹ️ RENDER_DEPLOY_HOOK secret not set. Skipping Render trigger."
+            echo "::error::Render staging hook responded with HTTP $response. Please check secret RENDER_STAGING_DEPLOY_HOOK."
+            exit 1
           fi
 
-      - name: Trigger Render AI Triage Deployment (AI Workers Only)
-        if: ${{ needs.detect-changes.outputs.ai-workers == 'true' || github.event_name == 'workflow_dispatch' }}
-        env:
-          RENDER_AI_HOOK: ${{ secrets.RENDER_AI_DEPLOY_HOOK }}
-        run: |
-          if [ -n "$RENDER_AI_HOOK" ]; then
-            echo "🚀 Triggering Render AI triage deployment..."
-            response=$(curl -s -L -o /dev/null -w "%{http_code}" -X POST "$RENDER_AI_HOOK")
-            if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
-              echo "✅ Successfully dispatched Render AI triage deployment (HTTP $response)."
-            else
-              echo "⚠️ Render AI hook responded with HTTP $response. Please check secret RENDER_AI_DEPLOY_HOOK."
-            fi
-          else
-            echo "ℹ️ RENDER_AI_DEPLOY_HOOK secret not set. Skipping AI triage deployment (drch-ai-triage in render.yaml)."
-          fi
-
-      - name: Verify Backend Health
-        if: ${{ (needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.ai-workers == 'true' || github.event_name == 'workflow_dispatch') }}
-        env:
-          BACKEND_URL: ${{ secrets.PROD_BACKEND_URL }}
-        run: |
-          if [ -n "$BACKEND_URL" ]; then
-            BACKEND_URL="${BACKEND_URL%/}"
-            BACKEND_URL="${BACKEND_URL%/api/v1}"
-            echo "Waiting for backend to complete deployment rollout at $BACKEND_URL..."
-            sleep 10
-            for i in $(seq 1 30); do
-              HTTP_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 15 "$BACKEND_URL/health" || echo "000")
-              if [ "$HTTP_STATUS" != "200" ]; then
-                HTTP_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 15 "$BACKEND_URL/api/v1/health" || echo "000")
-              fi
-              if [ "$HTTP_STATUS" = "200" ]; then
-                echo "✅ Backend healthcheck passed (HTTP 200)."
-                exit 0
-              fi
-              echo "Polling $BACKEND_URL/health - attempt $i/30 (got HTTP $HTTP_STATUS), retrying in 5s..."
-              sleep 5
-            done
-            echo "⚠️ Health check timed out or failed on $BACKEND_URL"
-          else
-            echo "ℹ️ PROD_BACKEND_URL secret not set. Skipping live health verification."
-          fi
-
-  # ============================================================================
-  # 5. Live Staging Smoke Gate (Live-SHA Verified)
-  # ============================================================================
   smoke:
     name: Staging Smoke / Live SHA Verification
-    needs: [detect-changes, deploy]
+    needs: [publish-backend, check-staging, deploy-staging]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     environment: staging
     if: |
       always() &&
-      github.ref_type == 'branch' &&
-      !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled') &&
-      (needs.detect-changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch')
+      needs.deploy-staging.result == 'success'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -327,48 +424,40 @@ jobs:
         run: |
           pip install httpx pyotp
 
-      - name: Wait until this commit is live
+      - name: Wait until this commit is live on staging
         id: wait_live
         env:
-          STAGING_URL: ${{ secrets.PROD_BACKEND_URL }}
+          STAGING_URL: ${{ secrets.STAGING_BACKEND_URL }}
         run: |
-          if [ -z "$STAGING_URL" ]; then
-            echo "::notice::PROD_BACKEND_URL secret not set in GitHub Secrets. Skipping staging live version verification."
-            echo "is_live=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           # Normalize URL (strip trailing slashes and /api/v1 if included)
           API_URL="${STAGING_URL%/}"
           API_URL="${API_URL%/api/v1}"
           echo "target_url=$API_URL" >> "$GITHUB_OUTPUT"
 
-          COMMIT_SHA="${{ github.sha }}"
+          COMMIT_SHA="${{ needs.publish-backend.outputs.version }}"
           SHORT_SHA="${COMMIT_SHA:0:7}"
-          echo "Waiting for live commit $COMMIT_SHA ($SHORT_SHA) on $API_URL..."
+          echo "Waiting for live commit $COMMIT_SHA ($SHORT_SHA) on staging..."
 
-          for i in $(seq 1 36); do
+          v="none"
+          for i in $(seq 1 60); do
             HTTP_CODE=$(curl -s -L -o out.json -w "%{http_code}" --max-time 15 "$API_URL/api/v1/health" || echo "000")
             if [ "$HTTP_CODE" = "200" ]; then
               v=$(jq -r .version out.json 2>/dev/null || echo "unknown")
-              echo "Polling attempt $i/36: HTTP 200, version '$v'"
+              echo "Polling attempt $i/60: HTTP 200, version '$v'"
               if [ "$v" = "$COMMIT_SHA" ] || [ "$v" = "$SHORT_SHA" ]; then
-                echo "✅ Deployed build is live on staging!"
-                echo "is_live=true" >> "$GITHUB_OUTPUT"
+                echo "Deployed build is live on staging."
                 exit 0
               fi
             else
-              echo "Polling attempt $i/36: got HTTP $HTTP_CODE"
+              echo "Polling attempt $i/60: got HTTP $HTTP_CODE"
             fi
             sleep 10
           done
 
-          echo "::warning::New build $COMMIT_SHA not live on $API_URL after 6 minutes."
-          echo "is_live=false" >> "$GITHUB_OUTPUT"
-          exit 0
+          echo "::error::Build $COMMIT_SHA not live on staging after 10 minutes (last reported version: '$v')."
+          exit 1
 
       - name: Run Staging Smoke Test
-        if: ${{ steps.wait_live.outputs.is_live == 'true' }}
         env:
           API_URL: ${{ steps.wait_live.outputs.target_url }}
           SMOKE_STAFF_EMAIL: ${{ secrets.SMOKE_STAFF_EMAIL }}
@@ -376,3 +465,172 @@ jobs:
           SMOKE_STAFF_TOTP_SECRET: ${{ secrets.SMOKE_STAFF_TOTP_SECRET }}
         run: |
           python scripts/smoke.py --base-url "$API_URL"
+
+  # ============================================================================
+  # 4. Production Deployment (Vercel, Render backend and Render AI run in parallel)
+  # ============================================================================
+  # Each deploy job waits only for what it actually deploys: Vercel builds the frontend itself
+  # (it does not use the GHCR image) and starts immediately; Render jobs wait for their own image.
+  # Secrets cannot be read in a job-level `if`, so this job reports which deploy
+  # hooks are configured. Deploy jobs gate on it, so a missing hook shows the job
+  # as "Skipped" instead of a misleading green "Success".
+  check-hooks:
+    name: Check Deploy Hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [detect-changes]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.detect-changes.result == 'success' &&
+      (needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.ai-workers == 'true' || github.event_name == 'workflow_dispatch')
+    environment:
+      name: production
+    outputs:
+      vercel: ${{ steps.hooks.outputs.vercel }}
+      render: ${{ steps.hooks.outputs.render }}
+      render_ai: ${{ steps.hooks.outputs.render_ai }}
+      prod_url: ${{ steps.hooks.outputs.prod_url }}
+    steps:
+      - name: Detect configured hooks
+        id: hooks
+        env:
+          VERCEL_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          RENDER_AI_HOOK: ${{ secrets.RENDER_AI_DEPLOY_HOOK }}
+          PROD_URL: ${{ secrets.PROD_BACKEND_URL }}
+        run: |
+          if [ -n "$VERCEL_HOOK" ]; then echo "vercel=true" >> "$GITHUB_OUTPUT"; else
+            echo "vercel=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::VERCEL_DEPLOY_HOOK secret not set. Vercel deployment will be skipped."
+          fi
+          if [ -n "$RENDER_HOOK" ]; then echo "render=true" >> "$GITHUB_OUTPUT"; else
+            echo "render=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::RENDER_DEPLOY_HOOK secret not set. Render deployment will be skipped."
+          fi
+          if [ -n "$RENDER_AI_HOOK" ]; then echo "render_ai=true" >> "$GITHUB_OUTPUT"; else
+            echo "render_ai=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::RENDER_AI_DEPLOY_HOOK secret not set. AI triage deployment (drch-ai-triage) will be skipped."
+          fi
+          if [ -n "$PROD_URL" ]; then echo "prod_url=true" >> "$GITHUB_OUTPUT"; else
+            echo "prod_url=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PROD_BACKEND_URL secret not set. Production live-commit verification will be skipped."
+          fi
+
+  deploy-vercel:
+    name: Deploy Frontend / Vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [detect-changes, check-hooks]
+    if: |
+      always() &&
+      needs.check-hooks.result == 'success' &&
+      needs.check-hooks.outputs.vercel == 'true' &&
+      (needs.detect-changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch')
+    environment:
+      name: production
+    steps:
+      - name: Trigger Vercel Production Deployment
+        env:
+          VERCEL_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          echo "🚀 Triggering Vercel frontend deployment..."
+          response=$(curl -s -L -o /dev/null -w "%{http_code}" -X POST "$VERCEL_HOOK")
+          if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
+            echo "✅ Successfully dispatched Vercel build (HTTP $response)."
+          else
+            echo "::error::Vercel hook responded with HTTP $response. Please check secret VERCEL_DEPLOY_HOOK."
+            exit 1
+          fi
+
+  deploy-render:
+    name: Deploy Backend / Render
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [detect-changes, check-hooks, publish-backend, deploy-staging, smoke]
+    # Staging smoke must have passed. "Skipped" is accepted only when staging was
+    # skipped too (not configured); a failed staging deploy or smoke blocks production.
+    if: |
+      always() &&
+      needs.check-hooks.result == 'success' &&
+      needs.check-hooks.outputs.render == 'true' &&
+      needs.publish-backend.result == 'success' &&
+      (needs.detect-changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch') &&
+      (needs.smoke.result == 'success' || (needs.smoke.result == 'skipped' && needs.deploy-staging.result == 'skipped'))
+    environment:
+      name: production
+    steps:
+      - name: Trigger Render Production Deployment
+        env:
+          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          # Pin the exact image built for this commit. A bare hook may redeploy a
+          # cached ":latest", leaving the old build (version "dev") running.
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/drch_backend:sha-${GITHUB_SHA:0:7}"
+          SEP="?"; case "$RENDER_HOOK" in *\?*) SEP="&";; esac
+          echo "🚀 Triggering Render backend deployment of $IMAGE..."
+          response=$(curl -s -L -o /dev/null -w "%{http_code}" -X POST "${RENDER_HOOK}${SEP}imgURL=${IMAGE}")
+          if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
+            echo "✅ Successfully dispatched Render deployment (HTTP $response)."
+          else
+            echo "::error::Render hook responded with HTTP $response. Please check secret RENDER_DEPLOY_HOOK."
+            exit 1
+          fi
+
+      - name: Verify production is running this commit
+        if: ${{ needs.check-hooks.outputs.prod_url == 'true' }}
+        env:
+          BACKEND_URL: ${{ secrets.PROD_BACKEND_URL }}
+        run: |
+          API_URL="${BACKEND_URL%/}"
+          API_URL="${API_URL%/api/v1}"
+          COMMIT_SHA="${{ needs.publish-backend.outputs.version }}"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          echo "Waiting for commit $SHORT_SHA to be live on production..."
+          v="none"
+          for i in $(seq 1 60); do
+            HTTP_CODE=$(curl -s -L -o out.json -w "%{http_code}" --max-time 15 "$API_URL/api/v1/health" || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              v=$(jq -r .version out.json 2>/dev/null || echo "unknown")
+              echo "Attempt $i/60: HTTP 200, version '$v'"
+              if [ "$v" = "$COMMIT_SHA" ] || [ "$v" = "$SHORT_SHA" ]; then
+                echo "Production is running this commit."
+                exit 0
+              fi
+            else
+              echo "Attempt $i/60: got HTTP $HTTP_CODE"
+            fi
+            sleep 10
+          done
+          echo "::error::Commit $COMMIT_SHA not live on production after 10 minutes (last reported version: '$v')."
+          exit 1
+
+  deploy-render-ai:
+    name: Deploy AI Triage / Render
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [detect-changes, check-hooks, publish-ai-workers]
+    if: |
+      always() &&
+      needs.check-hooks.result == 'success' &&
+      needs.check-hooks.outputs.render_ai == 'true' &&
+      needs.publish-ai-workers.result == 'success' &&
+      (needs.detect-changes.outputs.ai-workers == 'true' || github.event_name == 'workflow_dispatch')
+    environment:
+      name: production
+    steps:
+      - name: Trigger Render AI Triage Deployment
+        env:
+          RENDER_AI_HOOK: ${{ secrets.RENDER_AI_DEPLOY_HOOK }}
+        run: |
+          # Pin the exact image built for this commit (see deploy-render).
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/drch_ai_workers:sha-${GITHUB_SHA:0:7}"
+          SEP="?"; case "$RENDER_AI_HOOK" in *\?*) SEP="&";; esac
+          echo "🚀 Triggering Render AI triage deployment of $IMAGE..."
+          response=$(curl -s -L -o /dev/null -w "%{http_code}" -X POST "${RENDER_AI_HOOK}${SEP}imgURL=${IMAGE}")
+          if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
+            echo "✅ Successfully dispatched Render AI triage deployment (HTTP $response)."
+          else
+            echo "::error::Render AI hook responded with HTTP $response. Please check secret RENDER_AI_DEPLOY_HOOK."
+            exit 1
+          fi

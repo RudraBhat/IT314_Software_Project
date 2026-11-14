@@ -10,12 +10,13 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
+from psycopg import Error as PsycopgError
 
 from app import audit, db
 from app.auth import Dispatcher, DMUser
 from app.common import notify
 from app.config import get_settings
-from app.errors import ApiError, not_found
+from app.errors import ApiError, database_unavailable, not_found
 from app.geo import get_district_centroid
 from app.schemas.recommendations import (
     TeamRecommendationResponse,
@@ -28,6 +29,24 @@ from app.services.recommendations import extract_capability_tags, recommend_cand
 logger = logging.getLogger("drch.dm.recommendations")
 
 router = APIRouter()
+
+RECOMMENDATIONS_UNAVAILABLE = (
+    "Team recommendations are unavailable because the spatial query failed. Assign teams manually."
+)
+
+
+def _rank_teams_or_none(conn, **kwargs) -> list | None:
+    """Run the PostGIS ranking inside a savepoint; None means the spatial query failed.
+
+    The savepoint keeps the outer transaction usable after a query error, so the caller can
+    still answer (or record a decision) without the failure being hidden behind invented teams.
+    """
+    try:
+        with conn.transaction():
+            return recommend_candidate_teams(conn=conn, **kwargs)
+    except PsycopgError:
+        logger.exception("Spatial team recommendation query failed")
+        return None
 
 
 # ── 1. Advisory Team Recommendations ─────────────────────────────────────
@@ -48,15 +67,7 @@ def get_incident_team_recommendations(
     Never creates a dispatch automatically. Dispatch creation requires human authorization.
     """
     if not get_settings().database_url:
-        # Offline/mock fallback for demo resilience
-        demo_teams = recommend_candidate_teams(23.0225, 72.5714, "URBAN_FLOODING", limit=limit)
-        return TeamRecommendationResponse(
-            incident_id=incident_id,
-            scenario="URBAN_FLOODING",
-            requires_confirmation=True,
-            recommendations=demo_teams,
-            generated_at=datetime.now(UTC),
-        )
+        raise database_unavailable()
 
     with db.transaction() as conn:
         row = conn.execute(
@@ -82,19 +93,21 @@ def get_incident_team_recommendations(
             else:
                 lat, lon = 23.0225, 72.5714  # Default fallback to State HQ centroid (Ahmedabad)
 
-        candidates = recommend_candidate_teams(
+        candidates = _rank_teams_or_none(
+            conn,
             latitude=lat,
             longitude=lon,
             scenario=row["scenario"],
             limit=limit,
-            conn=conn,
         )
 
         return TeamRecommendationResponse(
             incident_id=row["incident_id"],
             scenario=row["scenario"],
             requires_confirmation=True,
-            recommendations=candidates,
+            recommendations=candidates or [],
+            unavailable=candidates is None,
+            unavailable_reason=RECOMMENDATIONS_UNAVAILABLE if candidates is None else None,
             generated_at=datetime.now(UTC),
         )
 
@@ -114,7 +127,7 @@ def list_team_requests(
 ) -> list[TeamRequestItem]:
     """List reinforcement and specialized backup requests submitted by field units."""
     if not get_settings().database_url:
-        return []
+        raise database_unavailable()
 
     with db.transaction() as conn:
         rows = conn.execute(
@@ -294,6 +307,7 @@ def decide_team_request(
 
         # Resolve target team resource for dispatch draft
         target_res: dict[str, Any] | None = None
+        ranking_failed = False
         if body.target_resource_id:
             res_row = conn.execute(
                 """
@@ -327,14 +341,15 @@ def decide_team_request(
 
             if lat is not None and lon is not None:
                 # Query candidate teams matching the specifically requested capability
-                candidates = recommend_candidate_teams(
+                candidates = _rank_teams_or_none(
+                    conn,
                     latitude=float(lat),
                     longitude=float(lon),
                     scenario=row["scenario"],
                     limit=5,
-                    conn=conn,
                     required_capabilities=[row["required_capability"]],
                 )
+                ranking_failed = candidates is None
                 if candidates:
                     top = candidates[0]
                     target_res = {
@@ -346,7 +361,9 @@ def decide_team_request(
         instructions_text = (
             f"Reinforce {row['dispatch_ref']}: Deploy {row['required_capability']} unit as requested by frontline responders. {body.rationale or ''}".strip()
         )
-        if target_res is None:
+        if ranking_failed:
+            instructions_text += " [Note: Team recommendations were unavailable (spatial query failed); manual allocation required.]"
+        elif target_res is None:
             instructions_text += f" [Note: No available team matched capability '{row['required_capability']}'; manual allocation required.]"
 
         dispatch_draft: dict[str, Any] = {

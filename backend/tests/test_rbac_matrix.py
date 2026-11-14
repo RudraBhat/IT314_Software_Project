@@ -14,7 +14,12 @@ import pytest
 
 pytestmark = pytest.mark.db
 
-PUBLIC_PREFIXES = ("/api/v1/public", "/api/v1/auth", "/api/v1/internal", "/api/v1/donations", "/api/v1/health")
+# The payment webhook has no bearer token by design: it is authenticated by the gateway's HMAC
+# signature over the raw body (tests/test_donations.py covers the tampered-signature case).
+PUBLIC_PREFIXES = (
+    "/api/v1/public", "/api/v1/auth", "/api/v1/internal", "/api/v1/donations", "/api/v1/health",
+    "/api/v1/payments/webhook",
+)
 
 
 def _routes():

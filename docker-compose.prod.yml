@@ -1,4 +1,6 @@
-version: '3.8'
+# Production container stack. Run it behind a reverse proxy that terminates TLS (Caddy, nginx or a
+# cloud load balancer): the app ports are bound to localhost only and are not meant to be public.
+# IMAGE_TAG is required: use a release tag (v1.2.3) or a commit tag (sha-abc1234), never a moving tag.
 
 services:
   # ------------------------------------------------------------------------------
@@ -26,11 +28,13 @@ services:
   # Application Services (Built from Production Container Registry)
   # ------------------------------------------------------------------------------
   frontend:
-    image: ${FRONTEND_IMAGE:-ghcr.io/siddhcreator-1706/it314_software_project/drch_frontend:latest}
+    image: ghcr.io/siddhcreator-1706/it314_software_project/drch_frontend:${IMAGE_TAG:?Set IMAGE_TAG to a release (v1.2.3) or commit (sha-abc1234) tag}
     container_name: drch_prod_frontend
     restart: always
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -42,11 +46,13 @@ services:
         condition: service_healthy
 
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/siddhcreator-1706/it314_software_project/drch_backend:latest}
+    image: ghcr.io/siddhcreator-1706/it314_software_project/drch_backend:${IMAGE_TAG:?Set IMAGE_TAG to a release (v1.2.3) or commit (sha-abc1234) tag}
     container_name: drch_prod_backend
     restart: always
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - APP_ENV=${APP_ENV:-production}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?}@postgres-postgis:5432/${POSTGRES_DB:-drch_db}
@@ -58,17 +64,24 @@ services:
       - AI_TRIAGE_TOKEN=${AI_TRIAGE_TOKEN:-}
       - PAYMENT_GATEWAY=mock
       - MOCK_GATEWAY_SECRET=${MOCK_GATEWAY_SECRET:?}
-      - GIT_SHA=${GIT_SHA:-unknown}
     depends_on:
       postgres-postgis:
         condition: service_healthy
 
   ai-workers:
-    image: ${AI_WORKERS_IMAGE:-ghcr.io/siddhcreator-1706/it314_software_project/drch_ai_workers:latest}
+    image: ghcr.io/siddhcreator-1706/it314_software_project/drch_ai_workers:${IMAGE_TAG:?Set IMAGE_TAG to a release (v1.2.3) or commit (sha-abc1234) tag}
     container_name: drch_prod_ai_workers
     restart: always
+    security_opt:
+      - no-new-privileges:true
     environment:
       - AI_TRIAGE_TOKEN=${AI_TRIAGE_TOKEN:-}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 volumes:
   pgdata:

@@ -90,4 +90,7 @@ def _apply_pending() -> list[str]:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    apply_migrations()
+    try:
+        apply_migrations()
+    finally:
+        db.close_pool()

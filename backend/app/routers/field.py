@@ -17,7 +17,7 @@ from app import audit, db
 from app.auth import FieldPrincipal, FieldUser
 from app.common import notify
 from app.config import get_settings
-from app.errors import ApiError, not_found
+from app.errors import ApiError, database_unavailable, not_found
 from app.schemas.field import (
     FieldAcknowledgementResponse,
     FieldAssignmentResponse,
@@ -99,22 +99,7 @@ def _run_field_event(
 def get_field_profile(principal: FieldUser) -> FieldProfileResponse:
     """Return responder identity, team metadata, agency, and assigned capabilities."""
     if not get_settings().database_url:
-        return FieldProfileResponse(
-            user_id=principal.user_id,
-            email=principal.email,
-            full_name=principal.full_name,
-            phone="+919876543210",
-            role=principal.role,
-            callsign=principal.callsign,
-            is_leader=principal.is_leader,
-            member_id=principal.member_id,
-            team_resource_id=principal.team_resource_id,
-            team_name=principal.team_name,
-            agency_id=principal.agency_id,
-            agency_name=principal.agency_name,
-            capabilities=principal.capabilities,
-            status="AVAILABLE",
-        )
+        raise database_unavailable()
 
     with db.transaction() as conn:
         row = conn.execute(
@@ -161,7 +146,7 @@ def get_field_assignments(
 ) -> list[FieldAssignmentResponse]:
     """List operational dispatches assigned to the responder's team."""
     if not get_settings().database_url:
-        return []
+        raise database_unavailable()
 
     query = sql.SQL("""
     SELECT d.dispatch_id, d.dispatch_ref, d.status, d.priority,

@@ -2,7 +2,7 @@
 
 This directory contains optional supplemental seed data for development and demonstration purposes.
 
-These files are located in `optional/` so that automated test runners (`conftest.py`) and standard seed resets (`scripts/seed_reset.py`), which use a non-recursive `glob("*.sql")` on `backend/db/seeds/`, only apply the minimal baseline seeds (`seed_data.sql`).
+These files are located in `optional/` so that `app.migrate`, the automated test runners (`conftest.py`) and the default `scripts/seed_reset.py` run, which read only `backend/db/seeds/reference/` (and `demo/` in development), never apply them. Load them by hand.
 
 ---
 
@@ -31,14 +31,14 @@ docker exec -i drch_postgres psql -U postgres -d drch_test < backend/db/seeds/op
 `scripts/seed_reset.py` supports a `--seed-files` CLI argument or the `SEED_FILES` environment variable:
 
 ```bash
-python scripts/seed_reset.py --seed-files "backend/db/seeds/seed_data.sql,backend/db/seeds/optional/seed_demo_incidents.sql"
+python scripts/seed_reset.py --seed-files "backend/db/seeds/reference/10_reference_data.sql,backend/db/seeds/demo/90_demo_incidents.sql,backend/db/seeds/demo/91_demo_signal_clusters.sql,backend/db/seeds/optional/seed_demo_incidents.sql"
 ```
 
 ---
 
 ## ⚠️ Warning for Main Suite Integration
 
-Do **not** move `seed_demo_incidents.sql` into the root `backend/db/seeds/` directory without updating the following upstream tests:
+Do **not** move `seed_demo_incidents.sql` into `backend/db/seeds/reference/` or `demo/` without updating the following upstream tests:
 
 1. **`backend/tests/test_seed_reset.py`**:
    `test_seed_reset_lifecycle_and_idempotency` asserts a hardcoded incident count:

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import db
 from app.config import ConfigError, get_settings, validate_for_environment
 from app.errors import install_error_handlers
+from app.payments import payment_config_problems
 from app.routers import auth, citizen, donations, field, internal
 from app.routers.dm import router as dm_router
 from app.routers.public import router as public_router  # Nisarg S1-07: public incidents API
@@ -111,7 +112,12 @@ async def ingestion_background_worker():
 # ═══════════════════════════════════════════════════════════════════
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    problems = validate_for_environment(get_settings())
+    # Payment configuration is checked in every environment: an unsupported PAYMENT_GATEWAY
+    # must stop startup, not turn the first donation into a 500.
+    problems = (
+        validate_for_environment(get_settings())
+        + payment_config_problems(get_settings())
+    )
     if problems:
         raise ConfigError("; ".join(problems))
     # Startup: ensure database schema migrations are applied

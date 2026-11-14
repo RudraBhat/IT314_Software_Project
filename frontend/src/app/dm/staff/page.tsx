@@ -13,7 +13,10 @@ import {
   Notice,
   PageHeader,
 } from "@/components/ui";
-import { api, useQuery, newIdempotencyKey } from "@/lib/api";
+import { InviteAccountDialog } from "@/components/staff/InviteAccountDialog";
+import { PendingInvitations } from "@/components/staff/PendingInvitations";
+import { PermissionEditor } from "@/components/staff/PermissionEditor";
+import { api, useQuery } from "@/lib/api";
 import { useStaff } from "../shell";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -30,63 +33,6 @@ type StaffMember = {
   permissions: string[];
   created_at: string;
 };
-
-type CreateResult = {
-  user_id: string;
-  email: string;
-  full_name: string;
-  permissions: string[];
-  mfa_secret: string;
-  mfa_uri: string;
-  message: string;
-};
-
-const ALL_PERMISSIONS = ["PUBLISHER", "MODERATOR", "CLOSURE", "DISPATCH", "SUPERVISOR"] as const;
-
-const PERMISSION_DESC: Record<string, string> = {
-  PUBLISHER: "Publish incidents & public alerts",
-  MODERATOR: "Verify/reject evidence uploads",
-  CLOSURE: "Close & archive incidents",
-  DISPATCH: "Assign & dispatch responder units",
-  SUPERVISOR: "Full oversight + staff management",
-};
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function PermissionChip({ perm, active, onClick }: { perm: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={PERMISSION_DESC[perm]}
-      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition cursor-pointer select-none ${
-        active
-          ? "bg-sky-500/20 border-sky-500/60 text-sky-300"
-          : "bg-surface-muted border-border text-muted hover:border-sky-500/40 hover:text-foreground"
-      }`}
-    >
-      {perm}
-    </button>
-  );
-}
-
-function PermissionEditor({
-  value,
-  onChange,
-}: {
-  value: string[];
-  onChange: (perms: string[]) => void;
-}) {
-  const toggle = (p: string) =>
-    onChange(value.includes(p) ? value.filter((x) => x !== p) : [...value, p]);
-  return (
-    <div className="flex flex-wrap gap-2">
-      {ALL_PERMISSIONS.map((p) => (
-        <PermissionChip key={p} perm={p} active={value.includes(p)} onClick={() => toggle(p)} />
-      ))}
-    </div>
-  );
-}
 
 function MfaRevealBox({ secret, uri, onClose }: { secret: string; uri: string; onClose: () => void }) {
   return (
@@ -118,149 +64,6 @@ function MfaRevealBox({ secret, uri, onClose }: { secret: string; uri: string; o
         I have saved the secret — Close
       </Button>
     </div>
-  );
-}
-
-// ─── Create Staff Dialog ──────────────────────────────────────────────────────
-
-function CreateStaffDialog({ onCreated }: { onCreated: () => void }) {
-  const { run, busy } = useAction();
-  const [open, setOpen] = useState(false);
-  const [mfaResult, setMfaResult] = useState<CreateResult | null>(null);
-
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [designation, setDesignation] = useState("");
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [showPass, setShowPass] = useState(false);
-
-  function reset() {
-    setEmail(""); setFullName(""); setPassword(""); setConfirmPassword("");
-    setPhone(""); setDesignation(""); setPermissions([]); setShowPass(false);
-  }
-
-  async function handleCreate() {
-    if (password !== confirmPassword) {
-      alert("Passwords do not match.");
-      return;
-    }
-    if (password.length < 12) {
-      alert("Password must be at least 12 characters.");
-      return;
-    }
-    const result = await run<CreateResult>(
-      "create-staff",
-      () =>
-        api<CreateResult>("staff", {
-          method: "POST",
-          body: { email, full_name: fullName, password, phone: phone || undefined, designation: designation || undefined, permissions },
-          idempotencyKey: newIdempotencyKey(),
-        }),
-      undefined, // don't show default toast — we show the MFA box instead
-    );
-    if (result) {
-      setMfaResult(result);
-      reset();
-      onCreated();
-    }
-  }
-
-  const inputClass = "w-full rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-foreground placeholder-muted focus:outline-none focus:border-sky-500 transition";
-
-  return (
-    <>
-      <Button variant="primary" onClick={() => setOpen(true)} id="add-staff-btn">
-        + Add Staff Account
-      </Button>
-
-      {/* MFA reveal dialog — shown after creation */}
-      <Dialog
-        open={!!mfaResult}
-        onClose={() => setMfaResult(null)}
-        title={`Account created — ${mfaResult?.full_name}`}
-      >
-        {mfaResult && (
-          <MfaRevealBox
-            secret={mfaResult.mfa_secret}
-            uri={mfaResult.mfa_uri}
-            onClose={() => setMfaResult(null)}
-          />
-        )}
-      </Dialog>
-
-      {/* Create form dialog */}
-      <Dialog
-        open={open && !mfaResult}
-        onClose={() => { setOpen(false); reset(); }}
-        title="Add Disaster Management Staff"
-        footer={
-          <>
-            <Button onClick={() => { setOpen(false); reset(); }}>Cancel</Button>
-            <Button
-              id="create-staff-submit"
-              variant="primary"
-              busy={busy === "create-staff"}
-              disabled={!email || !fullName || !password || !confirmPassword}
-              onClick={handleCreate}
-            >
-              Create Account
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Notice tone="info">
-            The new account will require <strong>MFA enrolment</strong>. The TOTP secret will be shown once after creation.
-          </Notice>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="cs-name" className="block text-xs font-semibold text-muted mb-1">Full Name *</label>
-              <input id="cs-name" type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. Asha Rao" className={inputClass} autoComplete="off" />
-            </div>
-            <div>
-              <label htmlFor="cs-email" className="block text-xs font-semibold text-muted mb-1">Email *</label>
-              <input id="cs-email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="asha@resq.gov.in" className={inputClass} autoComplete="off" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="cs-phone" className="block text-xs font-semibold text-muted mb-1">Phone</label>
-              <input id="cs-phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 98765 00000" className={inputClass} />
-            </div>
-            <div>
-              <label htmlFor="cs-designation" className="block text-xs font-semibold text-muted mb-1">Designation</label>
-              <input id="cs-designation" type="text" value={designation} onChange={e => setDesignation(e.target.value)} placeholder="e.g. Dispatcher" className={inputClass} />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor="cs-password" className="text-xs font-semibold text-muted">Password * (min 12 chars)</label>
-              <button type="button" onClick={() => setShowPass(v => !v)} className="text-[11px] text-sky-400 hover:text-sky-300 cursor-pointer">
-                {showPass ? "Hide" : "Show"}
-              </button>
-            </div>
-            <input id="cs-password" type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimum 12 characters" className={inputClass} autoComplete="new-password" />
-          </div>
-
-          <div>
-            <label htmlFor="cs-confirm" className="block text-xs font-semibold text-muted mb-1">Confirm Password *</label>
-            <input id="cs-confirm" type={showPass ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Re-enter password" className={inputClass} autoComplete="new-password" />
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold text-muted mb-2">Permissions</p>
-            <PermissionEditor value={permissions} onChange={setPermissions} />
-            <p className="mt-2 text-[10px] text-muted">Click to toggle. Hover a permission to see what it grants.</p>
-          </div>
-        </div>
-      </Dialog>
-    </>
   );
 }
 
@@ -368,7 +171,8 @@ function ResetMfaDialog({ member, onDone }: { member: StaffMember; onDone: () =>
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function StaffManagementPage() {
-  const { can, email: myEmail } = useStaff();
+  const { can, email: myEmail, permissions: myPermissions } = useStaff();
+  const [invitedCount, setInvitedCount] = useState(0);
   const { data, error, loading, reload } = useQuery<StaffMember[]>(
     can("SUPERVISOR") ? "staff" : null,
   );
@@ -394,7 +198,12 @@ export default function StaffManagementPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button onClick={reload} busy={loading && !!data}>Refresh</Button>
-            <CreateStaffDialog onCreated={reload} />
+            {/* Supervisors invite DM staff (only with permissions they hold) and Field Team responders. */}
+            <InviteAccountDialog
+              roles={["DISASTER_MGMT", "FIELD_TEAM"]}
+              grantablePermissions={myPermissions}
+              onInvited={() => { setInvitedCount((n) => n + 1); reload(); }}
+            />
           </div>
         }
       />
@@ -403,7 +212,7 @@ export default function StaffManagementPage() {
       {loading && !data && <LoadingRows />}
 
       {data && members.length === 0 && (
-        <EmptyState title="No staff accounts yet.">Create the first one with the button above.</EmptyState>
+        <EmptyState title="No staff accounts yet.">Invite the first one with the button above.</EmptyState>
       )}
 
       {data && members.length > 0 && (
@@ -447,7 +256,8 @@ export default function StaffManagementPage() {
                   {!isMe && (
                     <div className="flex shrink-0 gap-2">
                       <EditPermissionsDialog member={m} onDone={reload} />
-                      <ResetMfaDialog member={m} onDone={reload} />
+                      {/* A pending invitee has no authenticator yet: resend or revoke it below instead. */}
+                      {m.status !== "PENDING_SETUP" && <ResetMfaDialog member={m} onDone={reload} />}
                     </div>
                   )}
                   {isMe && (
@@ -459,6 +269,8 @@ export default function StaffManagementPage() {
           </ul>
         </Card>
       )}
+
+      <PendingInvitations refreshKey={invitedCount} />
     </>
   );
 }

@@ -138,8 +138,52 @@ function toReport(i: MyIncident): ReportData {
   };
 }
 
-export async function createReport(payload: IncidentReportPayload, options?: ApiOptions) {
+/**
+ * Submit a report. The Idempotency-Key is required by the backend (422 IDEMPOTENCY_KEY_REQUIRED
+ * otherwise): keep ONE key per form session and reuse it on retries, so a resubmission after a
+ * network failure returns the same incident instead of creating a duplicate.
+ */
+export async function createReport(payload: IncidentReportPayload, options: ApiOptions & { idempotencyKey: string }) {
   return apiFetch<CreatedIncident>("/api/citizen/incidents", options, { method: "POST", body: JSON.stringify(payload) });
+}
+
+// ── Evidence photos (issue #68) ────────────────────────────────
+
+export interface EvidencePolicy {
+  enabled: boolean;
+  max_bytes: number;
+  allowed_types: string[];
+}
+
+export interface UploadedEvidence {
+  evidence_id: string;
+  file_name: string;
+  sha256: string;
+  moderation_state: "PENDING";
+}
+
+export async function fetchEvidencePolicy(): Promise<ApiResult<EvidencePolicy>> {
+  return apiFetch<EvidencePolicy>("/api/citizen/incidents/evidence-policy");
+}
+
+/** Attach a photo to the caller's own report. The file is sent as the raw body, not JSON. */
+export async function uploadEvidence(incidentId: string, file: File): Promise<ApiResult<UploadedEvidence>> {
+  try {
+    const res = await fetch(`/api/citizen/incidents/${encodeURIComponent(incidentId)}/evidence`, {
+      method: "POST",
+      headers: { "Content-Type": file.type, "X-Filename": encodeURIComponent(file.name) },
+      body: file,
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { data: null, error: body?.error?.message || `Upload failed (${res.status})`, isBackend: true };
+    }
+    return { data: body as UploadedEvidence, error: null, isBackend: true };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : "Service unreachable", isBackend: false };
+  }
 }
 
 export async function fetchMyReports(): Promise<ApiResult<ReportData[]>> {

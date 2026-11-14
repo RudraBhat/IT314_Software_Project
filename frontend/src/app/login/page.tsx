@@ -4,33 +4,19 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { useAuthLanguage } from "@/components/auth/AuthLanguage";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { LanguageSelector } from "@/components/auth/LanguageSelector";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
-import { AuthLanguageProvider, isSupportedAuthLanguage, useAuthLanguage } from "@/components/auth/AuthLanguage";
 
 import { StaffSignIn } from "./staff-sign-in";
 
 function LoginCard() {
   const next = useSearchParams().get("next") ?? undefined;
-  const { language, setLanguage, copy } = useAuthLanguage();
+  const { copy } = useAuthLanguage();
   return (
     <div className="space-y-6 rounded-2xl bg-white p-6 shadow-lg sm:p-8">
-      <div className="flex items-center justify-end gap-2">
-        <label htmlFor="auth-language" className="text-sm font-semibold text-slate-700">{copy.language}</label>
-        <select
-          id="auth-language"
-          value={language}
-          onChange={(event) => {
-            const selected = event.currentTarget.value;
-            if (isSupportedAuthLanguage(selected)) setLanguage(selected);
-          }}
-          className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-300"
-        >
-          <option value="en">English</option>
-          <option value="hi">हिन्दी</option>
-          <option value="gu">ગુજરાતી</option>
-        </select>
-      </div>
+      <LanguageSelector />
       <div className="text-center">
         <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">{copy.signIn}</h1>
         <p className="mt-3 text-base text-slate-600">
@@ -45,11 +31,11 @@ function LoginCard() {
       <div className="space-y-3 border-t border-slate-200 pt-5 text-center">
         <div className="flex justify-center gap-4 text-sm text-slate-600">
           <Link href="/forgot-password" className="font-semibold text-sky-800 underline hover:text-sky-900">
-            Forgot password?
+            {copy.forgotPassword}
           </Link>
           <span>•</span>
           <Link href="/setup-account" className="font-semibold text-sky-800 underline hover:text-sky-900">
-            Staff invitation setup
+            {copy.staffInvitationSetup}
           </Link>
         </div>
         <p className="text-base text-slate-700">{copy.newHere}</p>
@@ -73,12 +59,15 @@ function LoginCard() {
 
 export default function LoginPage() {
   return (
-    <AuthLanguageProvider>
-      <AuthShell>
-        <Suspense fallback={<p className="text-center text-base text-slate-600">Loading…</p>}>
-          <LoginCard />
-        </Suspense>
-      </AuthShell>
-    </AuthLanguageProvider>
+    <AuthShell>
+      <Suspense fallback={<LoadingNote />}>
+        <LoginCard />
+      </Suspense>
+    </AuthShell>
   );
+}
+
+function LoadingNote() {
+  const { copy } = useAuthLanguage();
+  return <p className="text-center text-base text-slate-600">{copy.loading}</p>;
 }

@@ -13,7 +13,7 @@ database is left exactly as it was. --synthetic is refused on non-local database
 
 Usage:
     python scripts/explain_queries.py --database-url postgresql://postgres:postgres@localhost:5432/drch_test
-    python scripts/explain_queries.py --database-url ... --synthetic 50000 --out docs/perf/explain.md
+    python scripts/explain_queries.py --database-url ... --synthetic 50000 --out explain.md
 
 The report flags sequential scans over incidents/resources and sorts that spill to disk, which
 are the only findings that would justify a new index (added by migration, merged by Siddh).

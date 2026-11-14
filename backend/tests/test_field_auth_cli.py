@@ -13,7 +13,7 @@ import pytest
 from pydantic import ValidationError
 from starlette.requests import Request
 
-from app.auth import FieldPrincipal, Principal, require_field
+from app.auth import Principal, require_field
 from app.cli import create_field
 from app.errors import ApiError
 from app.schemas.field import (
@@ -198,7 +198,8 @@ def test_require_field_rejects_citizen_role(monkeypatch):
     assert exc_info.value.code == "ROLE_REQUIRED"
 
 
-def test_require_field_fallback_when_database_not_configured(monkeypatch):
+def test_require_field_returns_503_when_database_not_configured(monkeypatch):
+    """Issue #96: no DATABASE_URL must never yield a fabricated demo team identity."""
     from app.config import get_settings
 
     monkeypatch.setenv("DATABASE_URL", "")
@@ -214,11 +215,10 @@ def test_require_field_fallback_when_database_not_configured(monkeypatch):
     )
 
     try:
-        fp = require_field(req, field_principal)
-        assert isinstance(fp, FieldPrincipal)
-        assert fp.role == "FIELD_TEAM"
-        assert fp.team_name == "Demo Field Unit 1"
-        assert fp.is_leader is True
+        with pytest.raises(ApiError) as exc_info:
+            require_field(req, field_principal)
+        assert exc_info.value.status == 503
+        assert exc_info.value.code == "DATABASE_UNAVAILABLE"
     finally:
         get_settings.cache_clear()
 

@@ -14,6 +14,41 @@ interface CreatedOrder {
   amount: number | string;
   currency: string;
   status: string;
+  is_sandbox?: boolean;
+  /** Public Razorpay key id; null for the sandbox gateway. */
+  checkout_key?: string | null;
+}
+
+interface RazorpaySuccess {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+interface RazorpayCheckout {
+  open: () => void;
+  on: (event: "payment.failed", handler: (response: { error?: { description?: string } }) => void) => void;
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayCheckout;
+  }
+}
+
+const RAZORPAY_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
+
+/** Load Razorpay's hosted checkout script once; rejects when it cannot be fetched. */
+function loadRazorpay(): Promise<void> {
+  if (window.Razorpay) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = RAZORPAY_SCRIPT;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load the payment window. Check your connection and retry."));
+    document.body.appendChild(script);
+  });
 }
 
 interface ConfirmedDonation {
@@ -227,6 +262,65 @@ export default function DonatePage() {
         setStep(failure.kind);
       }
     } finally {
+      setSandboxBusy(false);
+    }
+  };
+
+  /** Open Razorpay Checkout for the created order, then let the server verify the signature. */
+  const handleRazorpayPayment = async () => {
+    if (!createdOrder?.checkout_key) return;
+    const order = createdOrder;
+    setSandboxBusy(true);
+    setFormError(null);
+    setSimulated(false);
+    try {
+      await loadRazorpay();
+      if (!window.Razorpay) throw new Error("The payment window is unavailable. Please retry.");
+      const checkout = new window.Razorpay({
+        key: order.checkout_key,
+        order_id: order.gateway_order_id,
+        // Razorpay takes paise; the server created the order for this exact amount.
+        amount: Math.round(Number(order.amount) * 100),
+        currency: order.currency,
+        name: "ResQ Gujarat Relief",
+        description: "Disaster relief contribution",
+        prefill: { name: isAnonymous ? "" : guestName.trim(), email: isAnonymous ? "" : guestEmail.trim() },
+        handler: async (response: RazorpaySuccess) => {
+          try {
+            const verified = await postJson(`/api/citizen/donations/${order.donation_id}/verify`, {
+              gateway_payment_id: response.razorpay_payment_id,
+              signature: response.razorpay_signature,
+            });
+            setConfirmed(verified as unknown as ConfirmedDonation);
+            setStep("confirmed");
+          } catch (err: unknown) {
+            const failure = classifyFailure(err);
+            if (failure.kind === "error") {
+              setFormError(failure.message);
+            } else {
+              setFailureReason(failure.message);
+              setStep(failure.kind);
+            }
+          } finally {
+            setSandboxBusy(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            // Closed without paying: the order stays PENDING and can be retried.
+            setSandboxBusy(false);
+            setStep((current) => (current === "order_created" ? "abandoned" : current));
+          },
+        },
+      });
+      checkout.on("payment.failed", (response) => {
+        setFailureReason(response.error?.description ?? "The payment was declined.");
+        setSandboxBusy(false);
+        setStep("declined");
+      });
+      checkout.open();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Could not start the payment");
       setSandboxBusy(false);
     }
   };
@@ -489,7 +583,16 @@ export default function DonatePage() {
                   )}
 
                   <div className="mt-6 space-y-3">
-                    {isSandbox ? (
+                    {createdOrder.checkout_key ? (
+                      <button
+                        type="button"
+                        disabled={sandboxBusy}
+                        onClick={handleRazorpayPayment}
+                        className="w-full rounded-lg bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-xs hover:bg-sky-500 transition disabled:opacity-50 cursor-pointer"
+                      >
+                        {sandboxBusy ? "Waiting for payment..." : `Pay ₹${Number(createdOrder.amount).toLocaleString()} with Razorpay`}
+                      </button>
+                    ) : isSandbox ? (
                       <button
                         type="button"
                         disabled={sandboxBusy}
@@ -585,7 +688,7 @@ export default function DonatePage() {
                   </div>
 
                   <div className="mt-3 rounded-lg bg-amber-50 p-2 text-center text-[11px] font-medium text-amber-800 border border-amber-200">
-                    {simulated ? "⚠️ SANDBOX PREVIEW — nothing was sent to the gateway and no money moved." : "⚠️ SANDBOX — no real money was charged to your card or account."}
+                    {simulated ? "⚠️ SANDBOX PREVIEW — nothing was sent to the gateway and no money moved." : createdOrder.is_sandbox === false ? "This payment was declined. Check with your bank before retrying." : "⚠️ SANDBOX — no real money was charged to your card or account."}
                   </div>
 
                   <div className="mt-6 flex flex-col gap-2 sm:flex-row">
@@ -639,7 +742,7 @@ export default function DonatePage() {
                   </div>
 
                   <div className="mt-3 rounded-lg bg-amber-50 p-2 text-center text-[11px] font-medium text-amber-800 border border-amber-200">
-                    {simulated ? "⚠️ SANDBOX PREVIEW — nothing was sent to the gateway." : "⚠️ SANDBOX — no real money moved."}
+                    {simulated ? "⚠️ SANDBOX PREVIEW — nothing was sent to the gateway." : createdOrder.is_sandbox === false ? "Your payment was not confirmed. If you were charged, the donation is confirmed automatically once the gateway reports it." : "⚠️ SANDBOX — no real money moved."}
                   </div>
 
                   <div className="mt-6 flex flex-col gap-2 sm:flex-row">
@@ -692,7 +795,7 @@ export default function DonatePage() {
                   </div>
 
                   <div className="mt-3 rounded-lg bg-amber-50 p-2 text-center text-[11px] font-medium text-amber-800 border border-amber-200">
-                    {simulated ? "⚠️ SANDBOX PREVIEW — nothing was sent to the gateway." : "⚠️ SANDBOX — no real money moved."}
+                    {simulated ? "⚠️ SANDBOX PREVIEW — nothing was sent to the gateway." : createdOrder.is_sandbox === false ? "Your payment was not confirmed. If you were charged, the donation is confirmed automatically once the gateway reports it." : "⚠️ SANDBOX — no real money moved."}
                   </div>
 
                   <div className="mt-6 flex flex-col gap-2 sm:flex-row">

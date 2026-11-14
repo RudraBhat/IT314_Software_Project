@@ -89,19 +89,15 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 
 `POSTGRES_USER`, `POSTGRES_PASSWORD` (S), `POSTGRES_DB` - used by Docker Compose to create the local database.
 
+`IMAGE_TAG` - required by `docker-compose.prod.yml`: the image tag to run (a release such as `v1.2.3` or a commit tag such as `sha-abc1234`).
+
 ## Tests and scripts
 
 | Variable | Purpose |
 |---|---|
 | `TEST_DATABASE_URL` (S) | Test database; the name must end in `_test`. |
 | `REQUIRE_DB_TESTS` | `1` = fail the run if no DB-backed test executed (CI guard). |
-| `SMOKE_BASE_URL`, `STAGING_URL`, `SMOKE_STAFF_EMAIL`, `SMOKE_STAFF_PASSWORD` (S), `SMOKE_STAFF_TOTP_SECRET` (S), `SMOKE_COLD_START_TIMEOUT` | Smoke-test runner configuration. |
-| `SMOKE_FIELD_EMAIL`, `SMOKE_FIELD_PASSWORD` (S), `SMOKE_FIELD_TOTP_SECRET` (S) | Seeded field responder (team 1) for the field-operations steps F1-F3. |
-| `SMOKE_FIELD2_EMAIL`, `SMOKE_FIELD2_PASSWORD` (S), `SMOKE_FIELD2_TOTP_SECRET` (S) | Responder from a second team for the cross-team isolation step F4. |
-| `SMOKE_TEAM_RESOURCE_ID`, `SMOKE_TEAM_AGENCY_ID` | Optional overrides; resolved automatically when unset. |
-| `SMOKE_MOCK_GATEWAY_SECRET` (S) | Mock-gateway signing secret used to sign sandbox donations; falls back to `MOCK_GATEWAY_SECRET`, then to a dummy dev value. Must match the backend under test. |
-| `SMOKE_DONATION_WEBHOOK_SECRET` (S), `SMOKE_STAGING_WEBHOOK_URL` | Webhook probe (W1) against staging. |
-| `SMOKE_SKIP_<STEP>` | `1` skips one smoke step (see `scripts/README.md` section 3). |
+| `SMOKE_BASE_URL` (or `API_URL`), `SMOKE_STAFF_EMAIL`, `SMOKE_STAFF_PASSWORD` (S), `SMOKE_STAFF_TOTP_SECRET` (S) | `scripts/smoke.py` configuration. |
 
 ## GitHub Actions secrets (CI/CD)
 
@@ -109,13 +105,21 @@ Entered by Siddh under the repository's Settings > Secrets and variables > Actio
 
 | Secret | Used by | Purpose |
 |---|---|---|
-| `PROD_BACKEND_URL` | `cd.yml` (health check, smoke), `ingest-cron.yml` | Base URL of the deployed backend (`https://<backend>.onrender.com`). |
+| `PROD_BACKEND_URL` | `cd.yml` (production live-commit check), `ingest-cron.yml` | Base URL of the production backend (`https://<backend>.onrender.com`). Unset = the production check is skipped. |
+| `STAGING_BACKEND_URL` | `cd.yml` (staging smoke) | Base URL of the staging backend. Unset = staging deploy and smoke are skipped. |
+| `RENDER_STAGING_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of the staging backend service; unset = staging is skipped. |
 | `RENDER_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of `drch-backend`; unset = no backend redeploy. |
 | `RENDER_AI_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of `drch-ai-triage`; unset = the AI service is redeployed by hand. |
 | `VERCEL_DEPLOY_HOOK` | `cd.yml` | Vercel deploy hook for the frontend. |
 | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | `ci.yml` | Vercel preview build. |
 | `INGEST_TOKEN` | `ingest-cron.yml` | Same value as the backend's `INGEST_TOKEN`. |
-| `SMOKE_STAFF_EMAIL`, `SMOKE_STAFF_PASSWORD`, `SMOKE_STAFF_TOTP_SECRET` | `cd.yml` | Staging smoke account (a `DISASTER_MGMT` user created with `app.cli create-staff`). |
+| `SMOKE_STAFF_EMAIL`, `SMOKE_STAFF_PASSWORD`, `SMOKE_STAFF_TOTP_SECRET` | `cd.yml` | Smoke account on the **staging** backend (a `DISASTER_MGMT` user created with `app.cli create-staff` against the staging database). |
+
+`STAGING_BACKEND_URL`, `RENDER_STAGING_DEPLOY_HOOK` and the `SMOKE_*` secrets belong to the GitHub environment `staging`; the production hooks and `PROD_BACKEND_URL` to the environment `production`.
+
+| Variable (not secret) | Used by | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `cd.yml` | Build arguments for the frontend container image (public values embedded in the browser bundle). Set them under Settings > Secrets and variables > Actions > Variables; leave unset if Vercel builds the frontend. |
 
 `GITHUB_TOKEN` is provided by GitHub and publishes the images to GHCR.
 

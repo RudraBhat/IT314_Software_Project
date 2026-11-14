@@ -56,10 +56,18 @@ async function forward(request: NextRequest, ctx: RouteContext) {
   }
 
   try {
+    // JSON passes as text; evidence photos must stay binary or they are corrupted.
+    const contentType = request.headers.get("content-type") ?? "";
+    const isText = contentType === "" || contentType.includes("json") || contentType.startsWith("text/");
+    const body = ["GET", "HEAD"].includes(request.method)
+      ? undefined
+      : isText
+        ? await request.text()
+        : await request.arrayBuffer();
     const upstream = await fetch(target, {
       method: request.method,
       headers,
-      body: ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer(),
+      body,
       cache: "no-store",
       signal: AbortSignal.timeout(20000),
     });

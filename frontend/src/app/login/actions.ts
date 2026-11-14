@@ -30,6 +30,8 @@ async function post(path: string, body: unknown, token?: string) {
 
 function safeNext(value: FormDataEntryValue | null, role?: string): string {
   const next = typeof value === "string" ? value : "";
+  // Administrators have one workspace; any other destination would only show a 403.
+  if (role === "APP_MGMT") return next.startsWith("/admin") ? next : "/admin";
   // Only same-site workspace paths; never an absolute or protocol-relative URL.
   if (next.startsWith("/") && !next.startsWith("//")) {
     if (next.startsWith("/dm") && role === "NORMAL_USER") {
@@ -83,7 +85,7 @@ async function verifyCode(prev: LoginState, form: FormData): Promise<LoginState>
     return { step: expired ? "password" : "mfa", error: err?.message ?? "Verification failed.", email: prev.email };
   }
   jar.delete(MFA_COOKIE);
-  if (res.data.role === "DISASTER_MGMT" || res.data.role === "FIELD_TEAM") {
+  if (res.data.role === "DISASTER_MGMT" || res.data.role === "FIELD_TEAM" || res.data.role === "APP_MGMT") {
     jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(res.data.expires_in));
     jar.set("drch_session", "1", cookieOptions(res.data.expires_in));
     redirect(safeNext(form.get("next"), res.data.role));
@@ -95,7 +97,7 @@ async function verifyCode(prev: LoginState, form: FormData): Promise<LoginState>
     redirect(safeNext(form.get("next"), "NORMAL_USER"));
   }
   await post("/api/v1/auth/logout", {}, res.data.access_token);
-  return { step: "password", error: "This workspace is for operational staff." };
+  return { step: "password", error: "This account type cannot sign in here." };
 }
 
 /** One action drives both steps, so the form always shows the step the server decided. */

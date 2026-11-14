@@ -1,4 +1,4 @@
-# ResQ Gujarat — Frontend Operations & Accessibility Runbook (S3-16)
+# ResQ Gujarat — Frontend Operations & Accessibility Runbook
 
 **Document Version:** 1.0.0  
 **Author / Component Lead:** Janvi Patel (`JanviVPatel`) — Frontend Lead (Citizen & Field Responder Interfaces)  
@@ -65,7 +65,7 @@ flowchart TD
 | **3** | `DISPATCHED` | Purple Badge | Field team assigned and mobilized toward scene. |
 | **4** | `RESOLVED` / `CLOSED` | Emerald / Slate Badge | Emergency cleared, casualties assisted, incident closed. |
 
-### 4.3 Citizen Information Reply (SRS S2-13)
+### 4.3 Citizen Information Reply
 When dispatchers flag an incident as `NEEDS_INFORMATION`, the report card dynamically surfaces a high-visibility orange response banner. Citizens can provide additional details (e.g., landmark directions, stranded counts), instantly pushing data back into the dispatcher's triage view.
 
 ---
@@ -96,7 +96,7 @@ stateDiagram-v2
 
 ---
 
-## 6. Payment Endings (`/donate`, S3-11)
+## 6. Payment Endings (`/donate`)
 
 After an order is created the donation page can end in one of four states. Each failure state names the order and amount, says whether money moved, and offers a next step. Focus moves to the state heading when it appears, and errors that stay on the order screen use `role="alert"`.
 

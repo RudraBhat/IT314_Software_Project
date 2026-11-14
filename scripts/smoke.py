@@ -72,7 +72,7 @@ def run(base_url: str) -> None:
     log(f"incident {ref} submitted")
 
     outside = client.post("/api/v1/incidents", json={**payload, "latitude": 26.9124, "longitude": 75.7873},
-                          headers={**citizen, "Idempotency-Key": f"smoke-outside-{uuid.uuid4()}"})
+                          headers={**citizen, "Idempotency-Key": f"smoke-{uuid.uuid4()}"})
     if outside.status_code != 422 or outside.json()["error"]["code"] != "OUTSIDE_GUJARAT":
         fail(f"a Jaipur location must be refused with OUTSIDE_GUJARAT, got {outside.status_code}: {outside.text[:200]}")
 

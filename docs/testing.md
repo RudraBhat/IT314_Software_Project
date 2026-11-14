@@ -101,7 +101,7 @@ docker stop drch_test_db && docker rm drch_test_db
 
 ## 5. Database Seed Reset (`make seed-reset`)
 
-The seed reset utility safely cleans dynamic operational data and reapplies baseline seed files (`backend/db/seeds/seed_data.sql`). It is completely idempotent.
+The seed reset utility safely cleans dynamic operational data and reapplies the baseline seed files (`backend/db/seeds/reference/` and `backend/db/seeds/demo/`). It is completely idempotent.
 
 ### Running Seed Reset
 
@@ -116,9 +116,9 @@ python scripts/seed_reset.py
 ```
 
 **Custom Seed Files:**
-The seed file list is defined at the top of the root `Makefile` via `SEED_FILES`. In PowerShell:
+By default the reference and demo seeds are used. To override, set `SEED_FILES` (the root `Makefile` passes it through when set) or use `--seed-files`. In PowerShell:
 ```powershell
-$env:SEED_FILES="backend/db/seeds/seed_data.sql"; python scripts/seed_reset.py
+$env:SEED_FILES="backend/db/seeds/reference/10_reference_data.sql"; python scripts/seed_reset.py
 ```
 
 ### Safety Guard
@@ -142,91 +142,54 @@ After applying seeds, the script prints verified row counts:
 
 ---
 
-## 6. End-to-End Smoke Testing (`scripts/smoke.sh`)
+## 6. End-to-End Smoke Testing (`scripts/smoke.py`)
 
-`scripts/smoke.sh` is a black-box smoke test validating the core disaster reporting, triage, and verification lifecycle against any running DRCH backend instance.
+`scripts/smoke.py` is a strict black-box check of the core loop against any running DRCH backend: liveness and database readiness, citizen registration and incident submission (with an idempotent replay and an outside-Gujarat refusal), the incident staying off the public map until verified, dispatcher sign-in with password and TOTP, verification, the incident appearing on the public map with no personal data and 4-decimal coordinates, and the citizen timeline. Field operations, AI triage, donations and the rest are covered by the backend pytest suites (for example `test_field_routes.py`, `test_ai_gate.py`, `test_donations.py`).
 
-### Prerequisites & Dependencies
-The script is POSIX/bash compliant and runs on Linux (e.g., Ubuntu CI runners), macOS, and Windows via Git Bash or WSL:
-* `bash` (shell interpreter)
-* `curl` (HTTP requests)
-* `jq` (JSON parsing; falls back automatically to standard Python if unavailable)
-* `python3`, `python`, or `oathtool` (for RFC 6238 TOTP MFA token generation)
+CI runs it against a local API in the backend job; CD runs it against the staging backend before production deploys.
 
-### Configuration & Environment Variables
-
-All secrets and targets are supplied strictly via environment variables. **No secret values are ever hardcoded or printed to the terminal.**
-
-| Variable Name | Required | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `SMOKE_BASE_URL` | No | `http://localhost:8000` | Target base URL of the DRCH backend gateway. |
-| `SMOKE_STAFF_EMAIL` | **Yes** | *None* | Email address of the test staff/dispatcher account. |
-| `SMOKE_STAFF_PASSWORD` | **Yes** | *None* | Password for the staff account (never logged). |
-| `SMOKE_STAFF_TOTP_SECRET` | **Yes** | *None* | Base32-encoded TOTP shared secret for MFA verification. |
-
-#### Contract Skip Switches (Pending Endpoints)
-Per Phase 0 contracts (`docs/api_contracts.md`), certain endpoints are currently being implemented by backend module owners. Set any switch to `1` to bypass assertion while contract work is completed:
-
-| Switch Variable | Step Covered | Contract Path | Responsible Owner |
-| :--- | :--- | :--- | :--- |
-| `SMOKE_SKIP_REGISTER` | Step 2 (Citizen Registration) | `POST /api/v1/auth/register` | **Zalak** |
-| `SMOKE_SKIP_INCIDENT_SUBMIT` | Step 5 (Incident Submission) | `POST /api/v1/incidents` | **Zalak** |
-| `SMOKE_SKIP_OUTSIDE_GUJARAT` | Step 6 (Gujarat Spatial Boundary) | `POST /api/v1/incidents` | **Zalak** |
-| `SMOKE_SKIP_PUBLIC_UNVERIFIED`| Step 7 (Public Unverified Isolation) | `GET /api/v1/public/incidents` | **Nisarg** |
-| `SMOKE_SKIP_PUBLIC_VERIFIED` | Step 10 (Verified Public Feed) | `GET /api/v1/public/incidents` | **Nisarg** |
-
-*(Note: Step-numbered aliases such as `SMOKE_SKIP_STEP2=1` are also supported).*
-
-### Running Against Local Docker Compose
-
-1. **Start infrastructure and backend:**
-   ```bash
-   docker compose up -d
-   ```
-
-2. **Run smoke test:**
-   ```bash
-   export SMOKE_BASE_URL="http://localhost:8000"
-   export SMOKE_STAFF_EMAIL="smoke-dispatcher@drch.gov.in"
-   export SMOKE_STAFF_PASSWORD="CorrectHorseBattery123!"
-   export SMOKE_STAFF_TOTP_SECRET="JBSWY3DPEHPK3PXP"
-
-   ./scripts/smoke.sh
-   ```
-
-3. **Running with blocked contract steps skipped:**
-   ```bash
-   SMOKE_SKIP_REGISTER=1 \
-   SMOKE_SKIP_INCIDENT_SUBMIT=1 \
-   SMOKE_SKIP_OUTSIDE_GUJARAT=1 \
-   SMOKE_SKIP_PUBLIC_UNVERIFIED=1 \
-   SMOKE_SKIP_PUBLIC_VERIFIED=1 \
-   ./scripts/smoke.sh
-   ```
-
-### Running Against Staging (Render)
+### Prerequisites
 
 ```bash
-export SMOKE_BASE_URL="https://drch-backend-staging.onrender.com"
-export SMOKE_STAFF_EMAIL="staging-dispatcher@drch.gov.in"
-export SMOKE_STAFF_PASSWORD="<STAGING_STAFF_PASSWORD>"
-export SMOKE_STAFF_TOTP_SECRET="<STAGING_STAFF_TOTP_SECRET>"
-
-./scripts/smoke.sh
+pip install httpx pyotp
 ```
 
-### Windows Execution (PowerShell & Git Bash)
+Create a dispatcher once (the command prints the TOTP secret; keep it out of the repository):
 
-Invoke `smoke.sh` using Git Bash or WSL directly from PowerShell:
+```bash
+cd backend && python -m app.cli create-staff --email smoke@example.in --name "Smoke Dispatcher" --permissions DISPATCH,CLOSURE
+```
+
+### Configuration
+
+| Variable | Required | Description |
+| :--- | :--- | :--- |
+| `SMOKE_STAFF_EMAIL` | **Yes** | The staff account's email. |
+| `SMOKE_STAFF_PASSWORD` | **Yes** | Its password (never logged). |
+| `SMOKE_STAFF_TOTP_SECRET` | **Yes** | The base32 TOTP secret printed by `create-staff`. |
+| `SMOKE_BASE_URL` / `API_URL` | No | Backend base URL (default `http://localhost:8000`); `--base-url` overrides them. |
+
+### Running
+
+Against a local stack (`docker compose up -d`):
+
+```bash
+export SMOKE_STAFF_EMAIL="smoke@example.in"
+export SMOKE_STAFF_PASSWORD="<password>"
+export SMOKE_STAFF_TOTP_SECRET="<secret>"
+python scripts/smoke.py --base-url http://localhost:8000
+```
+
+PowerShell:
 
 ```powershell
-$env:SMOKE_BASE_URL="http://localhost:8000"
-$env:SMOKE_STAFF_EMAIL="smoke-dispatcher@drch.gov.in"
-$env:SMOKE_STAFF_PASSWORD="CorrectHorseBattery123!"
-$env:SMOKE_STAFF_TOTP_SECRET="JBSWY3DPEHPK3PXP"
-
-& "C:\Program Files\Git\bin\bash.exe" ./scripts/smoke.sh
+$env:SMOKE_STAFF_EMAIL="smoke@example.in"
+$env:SMOKE_STAFF_PASSWORD="<password>"
+$env:SMOKE_STAFF_TOTP_SECRET="<secret>"
+python scripts/smoke.py --base-url http://localhost:8000
 ```
+
+Against staging, point `--base-url` at the staging backend and use the staging account. A successful run ends with `[SMOKE PASSED]`; any failure prints `[SMOKE FAILURE]` and exits 1. Each run leaves a registered citizen and a verified incident behind, so never point it at production.
 
 ---
 

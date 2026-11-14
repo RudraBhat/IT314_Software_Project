@@ -40,6 +40,7 @@ export default function FieldPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ dispatchRef: string; message: string } | null>(null);
   const [dialogInput, setDialogInput] = useState({ text: "", secondary: "" });
 
   const loadAssignments = useCallback(async () => {
@@ -93,7 +94,8 @@ export default function FieldPage() {
     };
   }, []);
 
-  const handleSimpleAction = async (dispatchId: string, url: string, body?: unknown) => {
+  /** POST a field action. Returns null on success, or the error message to show the responder. */
+  const postAction = async (dispatchId: string, url: string, body?: unknown): Promise<string | null> => {
     setBusyId(dispatchId);
     try {
       const res = await fetch(url, {
@@ -103,67 +105,53 @@ export default function FieldPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error?.message ?? "Action failed");
+        return data?.error?.message ?? `Action failed (${res.status}).`;
       }
       await loadAssignments();
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Action failed");
+      return null;
+    } catch {
+      return "Could not reach the server. Check your connection and try again.";
     } finally {
       setBusyId(null);
     }
+  };
+
+  // Card buttons: a failure stays on screen (not a blocking alert) until dismissed or retried.
+  const handleSimpleAction = async (dispatch: Assignment, url: string, body?: unknown) => {
+    setActionError(null);
+    const failure = await postAction(dispatch.dispatch_id, url, body);
+    if (failure) setActionError({ dispatchRef: dispatch.dispatch_ref, message: failure });
   };
 
   const handleDialogSubmit = async () => {
     if (!activeDialog) return;
     setDialogError(null);
     const { type, dispatch } = activeDialog;
+    const base = `/api/field/dispatches/${dispatch.dispatch_id}`;
+    const text = dialogInput.text.trim();
 
-    try {
-      if (type === "reject") {
-        if (dialogInput.text.trim().length < 3) {
-          setDialogError("Rejection reason must be at least 3 characters.");
-          return;
-        }
-        await handleSimpleAction(
-          dispatch.dispatch_id,
-          `/api/field/dispatches/${dispatch.dispatch_id}/rejection`,
-          { reason: dialogInput.text.trim() }
-        );
-      } else if (type === "delay") {
-        await handleSimpleAction(
-          dispatch.dispatch_id,
-          `/api/field/dispatches/${dispatch.dispatch_id}/progress`,
-          { status: "DELAYED", note: dialogInput.text.trim() || undefined }
-        );
-      } else if (type === "backup") {
-        if (dialogInput.text.trim().length < 2) {
-          setDialogError("Required capability must be at least 2 characters.");
-          return;
-        }
-        await handleSimpleAction(
-          dispatch.dispatch_id,
-          `/api/field/dispatches/${dispatch.dispatch_id}/team-requests`,
-          {
-            required_capability: dialogInput.text.trim(),
-            note: dialogInput.secondary.trim() || undefined,
-          }
-        );
-      } else if (type === "complete") {
-        if (dialogInput.text.trim().length < 3) {
-          setDialogError("Completion summary must be at least 3 characters.");
-          return;
-        }
-        await handleSimpleAction(
-          dispatch.dispatch_id,
-          `/api/field/dispatches/${dispatch.dispatch_id}/completion`,
-          { summary: dialogInput.text.trim() }
-        );
-      }
-      setActiveDialog(null);
-      setDialogInput({ text: "", secondary: "" });
-    } catch (err: unknown) {
-      setDialogError(err instanceof Error ? err.message : "Failed to submit");
+    let request: { url: string; body: unknown };
+    if (type === "reject") {
+      if (text.length < 3) return setDialogError("Rejection reason must be at least 3 characters.");
+      request = { url: `${base}/rejection`, body: { reason: text } };
+    } else if (type === "delay") {
+      request = { url: `${base}/progress`, body: { status: "DELAYED", note: text || undefined } };
+    } else if (type === "backup") {
+      if (text.length < 2) return setDialogError("Required capability must be at least 2 characters.");
+      request = {
+        url: `${base}/team-requests`,
+        body: { required_capability: text, note: dialogInput.secondary.trim() || undefined },
+      };
+    } else {
+      if (text.length < 3) return setDialogError("Completion summary must be at least 3 characters.");
+      request = { url: `${base}/completion`, body: { summary: text } };
     }
+
+    // Keep the dialog (and what the responder typed) open when the server refuses the action.
+    const failure = await postAction(dispatch.dispatch_id, request.url, request.body);
+    if (failure) return setDialogError(failure);
+    setActiveDialog(null);
+    setDialogInput({ text: "", secondary: "" });
   };
 
   const openDialog = (type: DialogType, dispatch: Assignment) => {
@@ -200,6 +188,17 @@ export default function FieldPage() {
       {loading && <LoadingRows rows={3} />}
 
       {error && <ErrorState message={error} onRetry={loadAssignments} />}
+
+      {actionError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-critical/30 bg-critical-soft px-4 py-3 text-sm text-critical">
+          <span>
+            <strong>{actionError.dispatchRef}:</strong> {actionError.message}
+          </span>
+          <Button size="sm" onClick={() => setActionError(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       {!loading && !error && assignments.length === 0 && (
         <EmptyState title="No active field dispatches">
@@ -255,7 +254,7 @@ export default function FieldPage() {
                             busy={isBusy}
                             onClick={() =>
                               handleSimpleAction(
-                                item.dispatch_id,
+                                item,
                                 `/api/field/dispatches/${item.dispatch_id}/acknowledgement`
                               )
                             }
@@ -280,7 +279,7 @@ export default function FieldPage() {
                           busy={isBusy}
                           onClick={() =>
                             handleSimpleAction(
-                              item.dispatch_id,
+                              item,
                               `/api/field/dispatches/${item.dispatch_id}/progress`,
                               { status: "EN_ROUTE" }
                             )
@@ -298,7 +297,7 @@ export default function FieldPage() {
                             busy={isBusy}
                             onClick={() =>
                               handleSimpleAction(
-                                item.dispatch_id,
+                                item,
                                 `/api/field/dispatches/${item.dispatch_id}/progress`,
                                 { status: "ON_SCENE" }
                               )

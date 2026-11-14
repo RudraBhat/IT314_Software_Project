@@ -11,8 +11,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
 
 jobs:
   # ============================================================================
@@ -39,10 +37,15 @@ jobs:
               - '.github/workflows/ci.yml'
             backend:
               - 'backend/**'
+              - 'scripts/**'
+              - 'docs/env-variables.md'
+              - 'render.yaml'
+              - 'docker-compose*.yml'
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
             ai-workers:
               - 'ai-workers/**'
+              - 'docker-compose*.yml'
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
 
@@ -76,10 +79,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20 with npm cache
+      - name: Set up Node.js 22 with npm cache
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: './frontend/package-lock.json'
 
@@ -94,7 +97,7 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('**/frontend/package-lock.json') }}-
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Ban demo and mock data markers
         run: bash ../scripts/check_no_demo_data.sh
@@ -109,7 +112,7 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:8000
 
       - name: Dependency vulnerability audit (High+Critical)
-        run: npm audit --audit-level=high || true
+        run: npm audit --audit-level=high
 
   # ============================================================================
   # 2. Python Backend & AI Workers Quality Scan
@@ -140,20 +143,58 @@ jobs:
           key: ${{ runner.os }}-ruff-${{ hashFiles('backend/**', 'ai-workers/**') }}
           restore-keys: ${{ runner.os }}-ruff-
 
-      - name: Install code quality and security tools
-        run: pip install ruff bandit pip-audit
+      - name: Install code quality and security tools (pinned in requirements-dev.txt)
+        run: pip install -r backend/requirements-dev.txt
 
       - name: Run Ruff linter
         run: ruff check backend/ ai-workers/ --no-fix
 
       - name: Run Bandit security scan (SAST)
-        run: >
-          bandit -r backend/ ai-workers/
-          -ll -ii
-          --skip B101,B311,B105,B106,B107,B301,B403,B404,B603,B607
+        run: |
+          bandit -r backend/ ai-workers/ -ll -ii
+          # scripts/ are developer tools: B104 (0.0.0.0 in an allow-list) and B608
+          # (SQL built from internal table names) are reviewed false positives there.
+          bandit -r scripts/ -ll -ii --skip B104,B608
 
       - name: Run pip-audit for known CVEs
-        run: pip-audit -r backend/requirements.txt || true
+        run: pip-audit -r backend/requirements.txt -r ai-workers/requirements.txt
+
+  # ============================================================================
+  # 2b. AI Workers Test Suite (runs when ai-workers changes, without the database job)
+  # ============================================================================
+  ai-workers-tests:
+    name: AI Workers / Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.ai-workers == 'true' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 with pip cache
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: ai-workers/requirements-dev.txt
+
+      - name: Install dependencies
+        working-directory: ./ai-workers
+        run: pip install -r requirements-dev.txt
+
+      - name: Run AI triage service tests
+        working-directory: ./ai-workers
+        run: python -m pytest tests -v --tb=short --junitxml=junit-ai-workers.xml
+
+      - name: Upload AI workers test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-workers-test-results
+          path: ai-workers/junit-ai-workers.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
   # ============================================================================
   # 3. Database Schema, Triggers & Backend Integration Tests (Consolidated Job)
@@ -187,41 +228,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Apply schema migrations and seeds with version tracking
+      - name: Set up Python 3.12 with pip cache
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: './backend/requirements.txt'
+
+      - name: Install dependencies
+        working-directory: ./backend
         run: |
-          psql -h localhost -U postgres -d drch_test -v ON_ERROR_STOP=1 <<'SQL'
-          CREATE TABLE IF NOT EXISTS schema_migrations (
-              version VARCHAR(255) PRIMARY KEY,
-              applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-          );
-          SQL
+          pip install -r requirements.txt -r requirements-dev.txt
 
-          echo "Checking and applying migrations in version order..."
-          for file in $(find backend/db/migrations -maxdepth 1 -name '*.sql' | sort -V); do
-            version=$(basename "$file")
-            already=$(psql -h localhost -U postgres -d drch_test -t -A -c "SELECT 1 FROM schema_migrations WHERE version = '$version';")
-            if [ "$already" = "1" ]; then
-              echo "  [SKIP] Migration already applied: $version"
-            else
-              echo "  [APPLY] Migration: $version"
-              psql -h localhost -U postgres -d drch_test -f "$file" -v ON_ERROR_STOP=1
-              psql -h localhost -U postgres -d drch_test -c "INSERT INTO schema_migrations (version) VALUES ('$version');"
-            fi
-          done
-
-          echo "Checking and applying seeds in version order..."
-          for seed in $(find backend/db/seeds -mindepth 2 -maxdepth 2 -name '*.sql' | sort -t/ -k5,5 -V); do
-            version="seeds/$(basename "$(dirname "$seed")")/$(basename "$seed")"
-            already=$(psql -h localhost -U postgres -d drch_test -t -A -c "SELECT 1 FROM schema_migrations WHERE version = '$version';")
-            if [ "$already" = "1" ]; then
-              echo "  [SKIP] Seed already applied: $version"
-            else
-              echo "  [APPLY] Seed: $version"
-              psql -h localhost -U postgres -d drch_test -f "$seed" -v ON_ERROR_STOP=1
-              psql -h localhost -U postgres -d drch_test -c "INSERT INTO schema_migrations (version) VALUES ('$version');"
-            fi
-          done
-          echo "All migrations and seeds evaluated successfully."
+      - name: Apply schema migrations and seeds (same runner as production)
+        working-directory: ./backend
+        run: python -m app.migrate
 
       - name: Verify audit log cryptographic hash trigger
         run: |
@@ -243,34 +264,28 @@ jobs:
           SQL
           echo "Cryptographic audit hash chain trigger verified successfully."
 
-      - name: Set up Python 3.12 with pip cache
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: './backend/requirements.txt'
-
-      - name: Install dependencies
-        working-directory: ./backend
-        run: |
-          pip install -r requirements.txt pytest httpx pytest-asyncio
-
       - name: Run test suite with pytest & DB test execution guard
         working-directory: ./backend
         env:
           REQUIRE_DB_TESTS: "1"
         run: |
-          python -m pytest tests/ -v --tb=short
+          python -m pytest tests/ -v --tb=short --cov=app --cov-report=xml --cov-report=term --junitxml=junit-backend.xml
+          python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload backend test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            backend/junit-backend.xml
+            backend/coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Environment variable documentation check
         working-directory: .
         run: python scripts/check_env_docs.py
-
-      - name: AI triage service tests
-        working-directory: ./ai-workers
-        run: |
-          pip install -r requirements-dev.txt
-          python -m pytest tests -v
 
       - name: Execute Core Loop Smoke Test (strict)
         working-directory: ./backend
@@ -286,11 +301,121 @@ jobs:
           export SMOKE_STAFF_TOTP_SECRET="$(echo "$OUT" | awk '/Secret key/ {print $NF}')"
           python -m uvicorn main:app --host 127.0.0.1 --port 8000 &
           SERVER_PID=$!
-          sleep 5
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://127.0.0.1:8000/api/v1/health > /dev/null; then break; fi
+            if ! kill -0 $SERVER_PID 2>/dev/null; then echo "::error::API server exited before becoming healthy"; exit 1; fi
+            if [ "$i" = "30" ]; then echo "::error::API server did not become healthy in 30s"; kill $SERVER_PID || true; exit 1; fi
+            sleep 1
+          done
           python ../scripts/smoke.py --base-url http://127.0.0.1:8000
           STATUS=$?
           kill $SERVER_PID || true
           exit $STATUS
+
+  # ============================================================================
+  # 3b. End-to-End (Playwright): API scenarios against a real backend + the public map page
+  # ============================================================================
+  e2e:
+    name: E2E / Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch' }}
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: drch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      JWT_SECRET: "ci_pipeline_jwt_secret_token_minimum_32_characters_key"
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/drch_test"
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+      API_URL: http://127.0.0.1:8000
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 with pip cache
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: './backend/requirements.txt'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: pip install -r requirements.txt
+
+      - name: Apply schema migrations and seeds
+        working-directory: ./backend
+        run: python -m app.migrate
+
+      - name: Start the API
+        working-directory: ./backend
+        run: |
+          nohup python -m uvicorn main:app --host 127.0.0.1 --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://127.0.0.1:8000/api/v1/health > /dev/null; then echo "API is up."; exit 0; fi
+            sleep 1
+          done
+          echo "::error::API did not become healthy in 30s"; cat "$RUNNER_TEMP/api.log"; exit 1
+
+      - name: Set up Node.js 22 with npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: './frontend/package-lock.json'
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build and start the frontend (standalone server, as in the container)
+        working-directory: ./frontend
+        run: |
+          npm run build
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+          PORT=3000 HOSTNAME=127.0.0.1 nohup node .next/standalone/server.js > "$RUNNER_TEMP/web.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://127.0.0.1:3000/ > /dev/null; then echo "Frontend is up."; exit 0; fi
+            sleep 1
+          done
+          echo "::error::Frontend did not start in 30s"; cat "$RUNNER_TEMP/web.log"; exit 1
+
+      - name: Install Playwright browser
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        working-directory: ./frontend
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npx playwright test --reporter=list,html
+
+      - name: Upload Playwright report and server logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            ${{ runner.temp }}/api.log
+            ${{ runner.temp }}/web.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   # ============================================================================
   # 4. Container Build Validation (Matrix on Changed Components Only)
@@ -299,12 +424,25 @@ jobs:
     name: Container / Build (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    # Images are built, scanned and published only after every other check passed: the secrets scan,
+    # lint/SAST, the test suites and e2e. "Skipped" is fine for components whose paths did not change.
     needs:
       - detect-changes
+      - security-secrets-scan
       - frontend-check
       - python-check
+      - ai-workers-tests
       - backend-and-db-tests
-    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+      - e2e
+    if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      needs.security-secrets-scan.result == 'success' &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     strategy:
       fail-fast: false
       matrix:
@@ -313,11 +451,16 @@ jobs:
             context: ./backend
             file: ./backend/Dockerfile
             image_name: drch_backend
+            build_args: |
+              GIT_SHA=${{ github.event.pull_request.head.sha || github.sha }}
             enabled: ${{ needs.detect-changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch' }}
           - name: frontend
             context: ./frontend
             file: ./frontend/Dockerfile
             image_name: drch_frontend
+            build_args: |
+              NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+              NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ vars.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
             enabled: ${{ needs.detect-changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch' }}
           - name: ai-workers
             context: ./ai-workers
@@ -344,74 +487,117 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           load: true
+          build-args: ${{ matrix.build_args }}
           tags: ${{ matrix.image_name }}:test
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Start image and verify it answers
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          IMAGE="${{ matrix.image_name }}:test"
+          case "${{ matrix.name }}" in
+            backend)
+              # Needs a database to serve traffic; here, prove the runtime dependencies import.
+              docker run --rm "$IMAGE" python -c "import main"
+              exit 0 ;;
+            ai-workers) PORT_NUM=8001; URL_PATH=/health ;;
+            frontend)   PORT_NUM=3000; URL_PATH=/ ;;
+          esac
+          docker run -d --name ci-smoke -p "$PORT_NUM:$PORT_NUM" "$IMAGE"
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 "http://127.0.0.1:$PORT_NUM$URL_PATH" > /dev/null; then
+              echo "Image answered on port $PORT_NUM."
+              docker rm -f ci-smoke > /dev/null
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Image did not answer on port $PORT_NUM within 60s."
+          docker logs ci-smoke || true
+          docker rm -f ci-smoke > /dev/null || true
+          exit 1
+
+      - name: Get today's date for the Trivy cache key
+        id: trivy_date
+        if: steps.check.outputs.should_run == 'true'
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Trivy Vulnerability Database
         if: steps.check.outputs.should_run == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cache/trivy
-          key: ${{ runner.os }}-trivy-${{ github.run_id }}
+          key: ${{ runner.os }}-trivy-${{ steps.trivy_date.outputs.day }}
           restore-keys: |
             ${{ runner.os }}-trivy-
 
       - name: Run Trivy vulnerability scan
         if: steps.check.outputs.should_run == 'true'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'image'
           image-ref: ${{ matrix.image_name }}:test
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: .trivyignore
           cache: true
 
+      # CD promotes this exact image to main instead of rebuilding it (see publish-* in cd.yml).
+      # Only after the tests and the scan passed, and only for pull requests from this repository
+      # (a fork's token cannot write packages).
+      - name: Log in to GHCR
+        if: steps.check.outputs.should_run == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the scanned image for promotion
+        if: steps.check.outputs.should_run == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          REPO="${GITHUB_REPOSITORY,,}"
+          TARGET="ghcr.io/$REPO/${{ matrix.image_name }}:ci-${{ github.event.pull_request.head.sha }}"
+          docker tag "${{ matrix.image_name }}:test" "$TARGET"
+          docker push "$TARGET"
+
   # ============================================================================
-  # 5. CI Gatekeeper + Vercel Preview Deploy
+  # 5a. Vercel Preview (separate from the gate so a Vercel outage cannot fail CI)
   # ============================================================================
-  ci-gatekeeper:
-    name: Pipeline Status / Quality Gate
+  vercel-preview:
+    name: Preview / Vercel
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    needs: [detect-changes, container-validation]
+    # Only when the pull request changes the frontend and every container image built and passed its
+    # scan (container-validation itself runs only after all other checks passed). The quality gate runs
+    # after this job so its status is the last word, but it never depends on the preview's outcome.
+    if: |
+      always() &&
+      github.event_name == 'pull_request' &&
+      needs.detect-changes.outputs.frontend == 'true' &&
+      needs.container-validation.result == 'success'
+    # Reaching Vercel is best effort: a failure here is reported but does not block merging.
+    continue-on-error: true
     permissions:
       contents: read
       pull-requests: write
       issues: write
-    needs:
-      - detect-changes
-      - security-secrets-scan
-      - frontend-check
-      - python-check
-      - backend-and-db-tests
-      - container-validation
-    if: always()
     steps:
-      # ── Vercel Preview Deployment (runs BEFORE quality gate check) ──
       - name: Checkout repository for Vercel deployment
-        if: |
-          github.event_name == 'pull_request' &&
-          needs.detect-changes.outputs.frontend == 'true' &&
-          needs.frontend-check.result == 'success'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Node.js for Vercel CLI
-        if: |
-          github.event_name == 'pull_request' &&
-          needs.detect-changes.outputs.frontend == 'true' &&
-          needs.frontend-check.result == 'success'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Deploy Verified Preview to Vercel
         id: vercel_deploy
-        if: |
-          github.event_name == 'pull_request' &&
-          needs.detect-changes.outputs.frontend == 'true' &&
-          needs.frontend-check.result == 'success'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -422,7 +608,7 @@ jobs:
             exit 0
           fi
           echo "Deploying preview to Vercel..."
-          DEPLOY_OUTPUT=$(npx --yes vercel@latest deploy --token="$VERCEL_TOKEN" --yes)
+          DEPLOY_OUTPUT=$(npx --yes vercel@65.15.0 deploy --yes)
           echo "$DEPLOY_OUTPUT"
           PREVIEW_URL=$(echo "$DEPLOY_OUTPUT" | grep -o 'https://[^ ]*vercel\.app' | tail -n 1)
           if [ -z "$PREVIEW_URL" ]; then
@@ -450,10 +636,11 @@ jobs:
         with:
           script: |
             const url = process.env.PREVIEW_URL;
+            const sha = (context.payload.pull_request ? context.payload.pull_request.head.sha : context.sha).substring(0, 7);
             if (!url) return;
             const prNumber = context.payload.pull_request ? context.payload.pull_request.number : context.issue.number;
             if (!prNumber) return;
-            const body = `## 🚀 Vercel Preview\n\n🔗 **Preview URL:** ${url}\n\n_Deployed from commit \`${context.sha.substring(0, 7)}\`_`;
+            const body = `## 🚀 Vercel Preview\n\n🔗 **Preview URL:** ${url}\n\n_Deployed from commit \`${sha}\` at ${new Date().toISOString()}_`;
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -476,32 +663,92 @@ jobs:
               });
             }
 
+  # ============================================================================
+  # 5. CI Gatekeeper (Quality Gate)
+  # ============================================================================
+  ci-gatekeeper:
+    name: Pipeline Status / Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    needs:
+      - detect-changes
+      - security-secrets-scan
+      - frontend-check
+      - python-check
+      - ai-workers-tests
+      - backend-and-db-tests
+      - e2e
+      - container-validation
+      - vercel-preview
+    if: always()
+    steps:
       # ── Quality Gate (runs LAST with if: always()) ──
+      # vercel-preview is listed only so the gate reports after it; its result is informational and is
+      # deliberately not evaluated below, so a Vercel problem can never fail or block the required check.
       - name: Evaluate pipeline execution status
         if: always()
+        env:
+          DETECT: ${{ needs.detect-changes.result }}
+          SECRETS_SCAN: ${{ needs.security-secrets-scan.result }}
+          FRONTEND: ${{ needs.frontend-check.result }}
+          PYTHON: ${{ needs.python-check.result }}
+          AI_TESTS: ${{ needs.ai-workers-tests.result }}
+          BACKEND: ${{ needs.backend-and-db-tests.result }}
+          E2E: ${{ needs.e2e.result }}
+          CONTAINER: ${{ needs.container-validation.result }}
+          PREVIEW: ${{ needs.vercel-preview.result }}
+          CHANGED_FRONTEND: ${{ needs.detect-changes.outputs.frontend }}
+          CHANGED_BACKEND: ${{ needs.detect-changes.outputs.backend }}
+          CHANGED_AI: ${{ needs.detect-changes.outputs.ai-workers }}
+          EVENT: ${{ github.event_name }}
         run: |
           echo "=== CI Job Results ==="
-          echo "frontend-check:       ${{ needs.frontend-check.result }}"
-          echo "python-check:         ${{ needs.python-check.result }}"
-          echo "backend-and-db-tests: ${{ needs.backend-and-db-tests.result }}"
-          echo "container-validation: ${{ needs.container-validation.result }}"
+          echo "detect-changes:        $DETECT"
+          echo "security-secrets-scan: $SECRETS_SCAN"
+          echo "frontend-check:        $FRONTEND"
+          echo "python-check:          $PYTHON"
+          echo "ai-workers-tests:      $AI_TESTS"
+          echo "backend-and-db-tests:  $BACKEND"
+          echo "e2e:                   $E2E"
+          echo "container-validation:  $CONTAINER"
+          echo "vercel-preview (info): $PREVIEW"
           echo "======================"
 
-          is_ok() {
-            case "$1" in
-              success|skipped) return 0 ;;
-              *) return 1 ;;
-            esac
+          FAILED=""
+
+          # Must always succeed. A skipped or failed detect-changes would otherwise
+          # skip every job below and let the gate pass with nothing tested.
+          require_success() {
+            [ "$2" = "success" ] || FAILED="$FAILED $1($2)"
+          }
+          # Must succeed when the matching paths changed (or on a manual run);
+          # may be skipped otherwise.
+          require_if_changed() {
+            if [ "$3" = "true" ] || [ "$EVENT" = "workflow_dispatch" ]; then
+              [ "$2" = "success" ] || FAILED="$FAILED $1($2)"
+            else
+              case "$2" in success|skipped) ;; *) FAILED="$FAILED $1($2)" ;; esac
+            fi
           }
 
-          FAILED=""
-          ! is_ok "${{ needs.frontend-check.result }}" && FAILED="$FAILED frontend-check"
-          ! is_ok "${{ needs.python-check.result }}" && FAILED="$FAILED python-check"
-          ! is_ok "${{ needs.backend-and-db-tests.result }}" && FAILED="$FAILED backend-and-db-tests"
-          ! is_ok "${{ needs.container-validation.result }}" && FAILED="$FAILED container-validation"
+          E2E_CHANGED=false
+          if [ "$CHANGED_FRONTEND" = "true" ] || [ "$CHANGED_BACKEND" = "true" ]; then E2E_CHANGED=true; fi
+          PY_CHANGED=false
+          if [ "$CHANGED_BACKEND" = "true" ] || [ "$CHANGED_AI" = "true" ]; then PY_CHANGED=true; fi
+
+          require_success detect-changes "$DETECT"
+          require_success security-secrets-scan "$SECRETS_SCAN"
+          require_if_changed frontend-check "$FRONTEND" "$CHANGED_FRONTEND"
+          require_if_changed python-check "$PYTHON" "$PY_CHANGED"
+          require_if_changed ai-workers-tests "$AI_TESTS" "$CHANGED_AI"
+          require_if_changed backend-and-db-tests "$BACKEND" "$CHANGED_BACKEND"
+          require_if_changed e2e "$E2E" "$E2E_CHANGED"
+          require_success container-validation "$CONTAINER"
 
           if [ -n "$FAILED" ]; then
-            echo "CI check FAILED: the following job(s) did not succeed: $FAILED"
+            echo "::error::CI quality gate FAILED. Jobs that did not succeed:$FAILED"
             exit 1
           fi
-          echo "CI check PASSED: all required validation and security jobs succeeded."
+          echo "CI quality gate PASSED: every required job succeeded."

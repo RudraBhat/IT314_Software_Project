@@ -1,6 +1,6 @@
-# ResQ — Final Demo Script (Sprint 3)
+# ResQ — Final Demo Script
 
-**Version:** 2.0 (replaces the Sprint 2 script) · **Owner:** Siddh (S2-15, S3-15) · **Draft from the scenario test:** Dhruv
+**Version:** 2.0 (replaces the earlier demo script) · **Owner:** Siddh (S2-15, S3-15) · **Draft from the scenario test:** Dhruv
 **Environment:** Render staging backend + Vercel frontend (fallback: `docker-compose.prod.yml`, see [release-runbook.md](release-runbook.md))
 
 The demo follows one cyclone incident from a citizen report to closure, with the ingestion, AI,
@@ -18,7 +18,7 @@ call behind it and what the audience should see. The automated version of the sa
 
 ---
 
-## 1. Roles (S3-15)
+## 1. Roles
 
 Proposed from each member's rehearsal role in the sprint plan; Siddh confirms before rehearsal 1.
 
@@ -178,7 +178,7 @@ Proposed from each member's rehearsal role in the sprint plan; Siddh confirms be
 
 ---
 
-## 7. Rehearsal log (S3-15)
+## 7. Rehearsal log
 
 | Run | Date | Duration | Steps that failed | Defects raised (P0 / P1 / P2) | Fixed before next run? |
 |---|---|---|---|---|---|

@@ -29,6 +29,13 @@ class CandidateTeam(BaseModel):
     reasons: str = Field(..., description="Human-readable justification for the rank")
     status: str = Field(..., description="Current operational status of resource")
     capabilities: dict[str, Any] | list[Any] | None = None
+    is_fallback: bool = Field(
+        False,
+        description=(
+            "True only for the offline seed roster (no database connection). Such teams are not "
+            "live availability and must be labelled as a fallback in the UI."
+        ),
+    )
 
 
 class TeamRecommendationResponse(BaseModel):
@@ -41,6 +48,16 @@ class TeamRecommendationResponse(BaseModel):
         description="Strict safety flag indicating dispatcher confirmation is required",
     )
     recommendations: list[CandidateTeam] = Field(default_factory=list)
+    unavailable: bool = Field(
+        False,
+        description=(
+            "True when the spatial team query failed. recommendations is then empty and the "
+            "dispatcher must allocate teams manually; no substitute teams are invented."
+        ),
+    )
+    unavailable_reason: str | None = Field(
+        None, description="Human-readable reason shown to the dispatcher when unavailable is true"
+    )
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

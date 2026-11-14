@@ -34,8 +34,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 # Install curl for container healthchecking if needed
+# "apt-get upgrade" pulls the fixed Debian security versions of the base image's packages.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
@@ -53,5 +55,9 @@ USER aiworker
 
 EXPOSE 8001
 
-# Command to execute the worker process
-CMD ["uvicorn", "triage_service:app", "--host", "0.0.0.0", "--port", "8001"]
+# Container healthcheck (the service reports liveness on /health)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8001}/health || exit 1
+
+# Command to execute the worker process, binding to $PORT when the host sets it (Render) or 8001
+CMD ["sh", "-c", "exec uvicorn triage_service:app --host 0.0.0.0 --port ${PORT:-8001}"]

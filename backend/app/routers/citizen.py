@@ -25,7 +25,7 @@ from app.geo import district_for, is_in_gujarat
 from app.ratelimit import rate_limit
 from app.routers.auth import _PHONE_RE
 from app.routers.auth import _check_password_policy as check_password_policy
-from app.routers.dm.ai import _read_capped_body, safe_filename, sniff_image_type
+from app.uploads import read_capped_body, safe_filename, sniff_image_type
 
 router = APIRouter(prefix="/api/v1", tags=["citizen"])
 
@@ -60,6 +60,13 @@ class InformationReply(BaseModel):
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     address_text: str | None = Field(default=None, max_length=300)
+
+    @field_validator("message")
+    @classmethod
+    def _message_has_content(cls, value: str | None) -> str | None:
+        if value is not None and len(value.strip()) < 3:
+            raise ValueError("message must contain at least 3 non-whitespace characters")
+        return value
 
     @model_validator(mode="after")
     def _needs_content(self):
@@ -108,7 +115,8 @@ def create_incident(
     principal: Citizen,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=100)] = None,
 ):
-    # Required, like POST /donations: without it a retried request (lost reply, double tap) would file a duplicate report.
+    # Required (docs/api_contracts.md s.2.3): without a key, every client retry of the same
+    # emergency would create another report. Same rule and error code as POST /donations.
     if not idempotency_key or not idempotency_key.strip():
         raise ApiError(422, "IDEMPOTENCY_KEY_REQUIRED", "The Idempotency-Key header is required")
     idempotency_key = idempotency_key.strip()
@@ -200,7 +208,9 @@ _MY_COLUMNS = """
                    jsonb_build_object(
                        'status', h.to_status,
                        'timestamp', h.changed_at,
-                       'message', CASE WHEN h.to_status IN ('NEEDS_INFORMATION', 'REJECTED') THEN h.reason END
+                       -- Staff questions/rejections, and the reporter's own replies; never internal notes.
+                       'message', CASE WHEN h.to_status IN ('NEEDS_INFORMATION', 'REJECTED')
+                                         OR h.changed_by = i.reporter_id THEN h.reason END
                    ) ORDER BY h.changed_at, h.history_id)
         FROM incident_status_history h
         WHERE h.incident_id = i.incident_id AND h.from_status IS DISTINCT FROM h.to_status
@@ -311,6 +321,8 @@ def reply_to_information_request(incident_id: uuid.UUID, body: InformationReply,
             entity_type="incident",
             entity_id=incident_id,
             rationale="Reporter replied to an information request",
+            before={"status": "NEEDS_INFORMATION"},
+            after={"status": "SUBMITTED"},
             ip=principal.ip,
         )
     return {"incident_id": incident_id, "status": "SUBMITTED", "status_label": STATUS_LABELS["SUBMITTED"]}
@@ -418,7 +430,7 @@ async def upload_attachment(incident_id: uuid.UUID, request: Request, principal:
     if declared not in _ATTACHMENT_TYPES:
         raise ApiError(415, "UNSUPPORTED_MEDIA_TYPE", "Send a JPEG, PNG or WebP photo as the request body.")
     await run_in_threadpool(_ensure_own_open_incident, incident_id, principal.user_id)
-    content = await _read_capped_body(request, _MAX_ATTACHMENT_BYTES)
+    content = await read_capped_body(request, _MAX_ATTACHMENT_BYTES)
     mime = sniff_image_type(content)
     if mime is None:
         raise ApiError(415, "INVALID_IMAGE", "The file is not a JPEG, PNG or WebP image.")
@@ -558,7 +570,7 @@ class ProfileUpdate(BaseModel):
     @classmethod
     def _valid_phone(cls, value: str | None) -> str | None:
         if value is not None and value.strip() and not _PHONE_RE.fullmatch(value.strip()):
-            raise ValueError("Enter a valid phone number, for example +919876543210")
+            raise ValueError("Enter a valid phone number with the country code, for example +91 followed by 10 digits")
         return value
 
 

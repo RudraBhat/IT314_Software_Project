@@ -1,7 +1,7 @@
 # ==============================================================================
 # Stage 1: Dependencies
 # ==============================================================================
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -12,7 +12,7 @@ RUN npm ci
 # ==============================================================================
 # Stage 2: Builder
 # ==============================================================================
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -23,6 +23,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Support build-time public environment variables
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
 
 # Build the application
 RUN npm run build
@@ -30,14 +32,17 @@ RUN npm run build
 # ==============================================================================
 # Stage 3: Production Runner
 # ==============================================================================
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install wget for healthcheck
-RUN apk add --no-cache wget
+# Upgrade Alpine packages to their fixed versions, install wget for the healthcheck, and drop npm and
+# yarn: the runtime image only runs "node server.js", and their bundled dependencies are scanner findings.
+RUN apk upgrade --no-cache && apk add --no-cache wget && \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
 
 # Create a non-root user for security
 RUN addgroup --system --gid 1001 nodejs && \

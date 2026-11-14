@@ -160,11 +160,9 @@ gantt
 
 ---
 
-## 📋 Sprint Roadmap & Archived Work Allocation
+## 📋 Sprint Roadmap
 
 The active implementation plan follows the **3-Sprint Production Delivery Roadmap** shown in the Gantt chart above.
-
-The original 5-phase theoretical concept allocation (Kafka, drone edge CV, Indic-BERT, 10-member allocation) has been archived for reference in [`docs/archive/original-roadmap.md`](docs/archive/original-roadmap.md).
 
 ---
 
@@ -186,7 +184,7 @@ The original 5-phase theoretical concept allocation (Kafka, drone edge CV, Indic
 
 ### Prerequisites
 - [Docker & Docker Compose](https://www.docker.com/) installed
-- [Node.js (v18+)](https://nodejs.org/) & [Python (v3.10+)](https://python.org/)
+- [Node.js (v20+)](https://nodejs.org/) (the frontend uses Next.js 16, and CI runs Node 20) & [Python (v3.10+)](https://python.org/)
 - Git
 
 ### 1. Clone the Repository
@@ -226,6 +224,7 @@ uvicorn main:app --reload --port 8000
 
 # Terminal 2 - Next.js Frontend (starts web client on :3000)
 cd frontend
+npm ci        # first run only: installs exact versions from package-lock.json
 npm run dev
 ```
 
@@ -244,6 +243,36 @@ Once the services are running, access:
   - Liveness: `http://localhost:8000/health`
   - Readiness (database): `http://localhost:8000/api/v1/health`
 
+### 6. Frontend UI, Branding & Checks
+
+The web client lives in `frontend/` (Next.js App Router, React 19, TypeScript, Tailwind CSS). Every screen shares one identity and one top bar.
+
+**Logo and header**
+- The final logo is the **Q-Radar** lockup: R, E and S drawn as strokes, with the Q drawn as a radar sweep and a red alert dot. Assets are in `frontend/public/` (`logo.svg` for light backgrounds, `logo-dark.svg` for dark/navy backgrounds, `logo-symbol.svg` for the symbol alone, `icon.svg` for the app icon) and `frontend/src/app/icon.svg` is the favicon.
+- `frontend/src/components/Brand.tsx` exports `Logo`, `LogoMark`, `Brand`, `SiteHeader` and `NavLink`. Every page header uses `SiteHeader`; do not hand-roll headers or use emoji logos.
+- Brand tokens are defined in `frontend/src/app/globals.css`: navy `#0C4A75`, sky `#38BDF8` and alert red `#DC2626`, with Montserrat for header text.
+
+**Layout rules**
+- The document scrolls normally. Do not set `overflow: hidden` or `100vh` on `body`.
+- Only full-screen app views (the public map `/` and the `/dm` workspace) use the fixed `.app-screen` class, and `/dm` scrolls inside its own pane.
+- Header links and primary controls must be at least 44 px tall, and pages must not scroll horizontally at 375 px wide.
+
+**Checks** (run from `frontend/`)
+
+```bash
+npm run lint
+npm run build
+```
+
+The scroll and overflow regression test needs a running production build:
+
+```bash
+npx playwright install chromium
+npm run build
+npx next start -p 3100
+PLAYWRIGHT_BASE_URL=http://localhost:3100 npx playwright test e2e/scroll-layout.spec.ts
+```
+
 ---
 
 ## 🌐 Production Deployment Architecture
@@ -251,31 +280,33 @@ Once the services are running, access:
 The platform supports both multi-cloud serverless deployment and fully containerized production orchestration:
 
 ### Option A: Cloud / Managed Services (Recommended)
-- **Frontend:** Hosted on **Vercel** (`frontend/`) with change-detection filtering via `vercel.json` and `vercel-ignored-build.sh`.
+- **Frontend:** Hosted on **Vercel** (`frontend/`). Vercel's own Git deployments are disabled in `frontend/vercel.json`; production deploys come from the `cd.yml` deploy hook, and pull requests get a preview from `ci.yml`.
 - **Backend API:** Hosted on **Render** using `render.yaml` with auto-deployments, containerized runtime, and health check probes at `/health`.
 - **Database:** Hosted on **Neon Serverless PostgreSQL** with PostGIS enabled.
 
 ### Option B: Self-Hosted Production Docker Compose
-To deploy the full stack against external cloud databases/queues using production containers:
+To deploy the full stack from the published images (a release or commit tag is required; the app ports bind to localhost, so put a TLS-terminating reverse proxy in front):
 
 ```bash
-docker compose -f docker-compose.prod.yml up --build -d
+IMAGE_TAG=v1.0.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
 ### 🔄 CI/CD Automation & Security Gates
 The repository separates verification (CI) from publication & deployment (CD):
 1. **Continuous Integration ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))**:
-   - Triggers on every **Pull Request** targeting `main`.
-   - **Frontend Check:** Node.js 20 & ESLint.
-   - **Python Check:** Ruff linter + Bandit static security analysis (SAST).
-   - **Database Integrity:** PostgreSQL 16 + PostGIS schema validation and cryptographic audit chain hash verification.
-   - **Backend Tests:** Pytest unit test execution.
-   - **Container Validation:** Fast Docker build verification and **Aqua Security Trivy** vulnerability scan.
-   - **Quality Gate:** `ci-gatekeeper` blocks PR merge if any check fails.
+   - Runs on every **Pull Request** targeting `main` (and on manual dispatch); path filters skip jobs for components that did not change.
+   - **Secrets scan:** Gitleaks.
+   - **Frontend:** Node.js 22, ESLint (warnings fail), production build, `npm audit` (high and critical fail).
+   - **Python:** Ruff, Bandit (SAST) and `pip-audit` for the backend and AI workers.
+   - **Backend and database:** PostGIS 16, migrations through `app.migrate`, audit hash-chain trigger check, the full pytest suite with coverage, and a strict core-loop smoke test.
+   - **AI workers:** their own pytest suite.
+   - **E2E:** Playwright against a real API and the built frontend.
+   - **Containers:** only after every check above passed, each changed image is built (in parallel), started, scanned with Trivy (critical and high fail) and, from same-repository pull requests, pushed as `ci-<head sha>` so CD can promote it.
+   - **Quality Gate:** `ci-gatekeeper` ("Pipeline Status / Quality Gate") is the required check on `main`; it fails when a required job failed or was skipped although its paths changed. The Vercel preview runs only when the pull request changes the frontend, every container image built and passed its scan (the gate runs after it and ignores its outcome), is updated in place as one PR comment on each new commit, and never blocks.
 2. **Continuous Deployment ([`.github/workflows/cd.yml`](.github/workflows/cd.yml))**:
-   - Triggers on **Push / Merge to `main`**.
-   - Builds production container images with tags (`latest`, `sha-*`) and pushes them to **GitHub Container Registry (GHCR)**.
-   - Verifies deployment readiness against production manifests (`docker-compose.prod.yml`).
+   - Runs on a push to `main` or a release tag (`vX.Y.Z`); manual runs from other branches are refused.
+   - Finds what changed since the last successful CD run, retags the image CI already scanned when the merged tree equals the pull request head (otherwise builds it), and publishes to **GHCR** (`latest`, `sha-*`).
+   - Deploys the backend to **staging**, waits for the new commit, runs the smoke test there, and only then deploys production. Vercel and the AI triage service deploy by their own hooks. A deploy whose secret is missing is shown as skipped. A newer push cancels an older run.
 
 ---
 

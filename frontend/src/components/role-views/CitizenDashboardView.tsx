@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { SiteHeader } from "../Brand";
 import { DisasterCategory } from "../../types/resq";
+import { InformationRequestReply } from "@/components/citizen/InformationRequestReply";
 import * as CitizenApi from "../../services/citizenApi";
 import { LanguageCode, TRANSLATIONS } from "@/lib/citizenI18n";
 import { GUJARAT_CENTER, isInGujarat } from "@/lib/geo";
@@ -39,7 +40,10 @@ function statusBadge(status: string) {
     case "LINKED_TO_INCIDENT":
       return { label: "Help Dispatched", bg: "bg-sky-50 text-sky-700 border-sky-200" };
     case "PENDING":
+    case "SUBMITTED":
       return { label: "Under Review", bg: "bg-amber-50 text-amber-700 border-amber-200" };
+    case "NEEDS_INFORMATION":
+      return { label: "Info Requested", bg: "bg-orange-50 text-orange-700 border-orange-300" };
     case "NEEDS_FIELD_CHECK":
       return { label: "Field Check", bg: "bg-purple-50 text-purple-700 border-purple-200" };
     case "REJECTED":
@@ -151,6 +155,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   const [formLocation, setFormLocation] = useState("");
   const [formLat, setFormLat] = useState(23.0225);
   const [formLon, setFormLon] = useState(72.5714);
+  const [gpsError, setGpsError] = useState<string | null>(null);
   const [formAffected, setFormAffected] = useState(1);
   const [formNeeds, setFormNeeds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -430,6 +435,9 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   }, [publicIncidents]);
 
   // Report Submission Handler
+  // One Idempotency-Key per report draft: retries reuse it, a successful submit starts a new draft.
+  const reportKeyRef = useRef<string>(crypto.randomUUID());
+
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -457,9 +465,10 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
       details: { urgent_needs: formNeeds },
     };
 
-    const res = await CitizenApi.createReport(payload, { idempotencyKey: crypto.randomUUID() });
+    const res = await CitizenApi.createReport(payload, { idempotencyKey: reportKeyRef.current });
 
     if (res.data) {
+      reportKeyRef.current = crypto.randomUUID();
       setSubmitResult({ success: true, reportId: res.data.incident_ref });
       setFormDescription("");
       setFormLocation("");
@@ -1176,26 +1185,34 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            if (navigator.geolocation) {
-                              navigator.geolocation.getCurrentPosition(
-                                (pos) => {
-                                  if (isInGujarat(pos.coords.latitude, pos.coords.longitude)) {
-                                    setFormLat(pos.coords.latitude);
-                                    setFormLon(pos.coords.longitude);
-                                  } else {
-                                    alert("Location detected is outside Gujarat State boundaries.");
-                                  }
-                                },
-                                () => alert("Could not access location."),
-                                { enableHighAccuracy: true, timeout: 5000 }
-                              );
+                            setGpsError(null);
+                            if (!navigator.geolocation) {
+                              setGpsError("This browser cannot share your location. Pick the spot on the map instead.");
+                              return;
                             }
+                            navigator.geolocation.getCurrentPosition(
+                              (pos) => {
+                                if (isInGujarat(pos.coords.latitude, pos.coords.longitude)) {
+                                  setFormLat(pos.coords.latitude);
+                                  setFormLon(pos.coords.longitude);
+                                } else {
+                                  setGpsError("Your location is outside Gujarat State boundaries. Pick the spot on the map instead.");
+                                }
+                              },
+                              () => setGpsError("Could not access your location. Allow location access or pick the spot on the map."),
+                              { enableHighAccuracy: true, timeout: 5000 }
+                            );
                           }}
                           className="text-[10px] text-sky-700 hover:underline font-bold cursor-pointer"
                         >
                           📍 {t.getGpsBtn}
                         </button>
                       </div>
+                      {gpsError && (
+                        <p role="alert" className="mb-1.5 text-[11px] font-semibold text-red-600">
+                          {gpsError}
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           type="number"
@@ -1380,6 +1397,9 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                             <span className="text-xs text-slate-400 font-bold">{isExpanded ? "▲" : "▼"}</span>
                           </div>
                         </div>
+
+                        {/* Reply to a dispatcher's information request (issue #99); shown without expanding */}
+                        <InformationRequestReply report={report} onReplied={handleRefresh} theme="light" className="mx-4 mb-4" />
 
                         {/* Expandable Details */}
                         {isExpanded && (

@@ -23,7 +23,7 @@ export default function HowToPage() {
             "Describe what is happening, how many people are affected and how urgent it is.",
             "Set the location with GPS, by placing a pin inside Gujarat, or by searching an address.",
             "Submit and note your reference number.",
-            "Open My Reports to follow the status. If a dispatcher asks for more information, answer there.",
+            "Open My Reports to follow the status. If a dispatcher asks for more information, reply on that report in My Reports or your dashboard; it then goes back for verification.",
           ]}
         />
       </Section>

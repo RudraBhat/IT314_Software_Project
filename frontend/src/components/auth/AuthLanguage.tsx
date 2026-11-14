@@ -4,8 +4,39 @@ import { createContext, useContext, useEffect, useSyncExternalStore, type ReactN
 
 export type AuthLanguage = "en" | "hi" | "gu";
 
+/**
+ * Languages offered by the selector, in display order. To add one, add its code to AuthLanguage,
+ * an entry here and a full COPY entry below: the selector, search and persistence pick it up.
+ * Only fully translated languages are listed, so a selection never shows a half-English page.
+ */
+export const AUTH_LANGUAGES: { code: AuthLanguage; englishName: string; nativeName: string }[] = [
+  { code: "en", englishName: "English", nativeName: "English" },
+  { code: "hi", englishName: "Hindi", nativeName: "हिन्दी" },
+  { code: "gu", englishName: "Gujarati", nativeName: "ગુજરાતી" },
+];
+
 type AuthCopy = {
   language: string;
+  searchLanguages: string;
+  noLanguageMatch: string;
+  forgotPassword: string;
+  staffInvitationSetup: string;
+  loading: string;
+  createYourAccount: string;
+  signupDescription: string;
+  citizenOnlyNote: string;
+  signInHere: string;
+  fullName: string;
+  phoneNumber: string;
+  phoneHelp: string;
+  choosePassword: string;
+  passwordRules: [string, string, string];
+  ruleDone: string;
+  ruleNotYet: string;
+  checkDetails: string;
+  creatingAccount: string;
+  createAccountArrow: string;
+  alreadyHaveAccount: string;
   skipToForm: string;
   emergencySection: string;
   emergencyMessage: string;
@@ -49,6 +80,26 @@ type AuthCopy = {
 const COPY: Record<AuthLanguage, AuthCopy> = {
   en: {
     language: "Language",
+    searchLanguages: "Search languages",
+    noLanguageMatch: "No language matches your search.",
+    forgotPassword: "Forgot password?",
+    staffInvitationSetup: "Staff invitation setup",
+    loading: "Loading…",
+    createYourAccount: "Create your account",
+    signupDescription: "Free. It lets you report an incident and follow what happens next.",
+    citizenOnlyNote: "Citizen accounts only. Staff and field-team accounts are issued by your administrator –",
+    signInHere: "sign in here",
+    fullName: "Full name",
+    phoneNumber: "Phone number",
+    phoneHelp: "(optional, helps responders reach you)",
+    choosePassword: "Choose a password",
+    passwordRules: ["At least 8 characters", "At least one number", "At least one symbol (for example ! @ # ?)"],
+    ruleDone: "done",
+    ruleNotYet: "not yet",
+    checkDetails: "Check the details below and try again.",
+    creatingAccount: "Creating account…",
+    createAccountArrow: "Create account →",
+    alreadyHaveAccount: "Already have an account?",
     skipToForm: "Skip to form",
     emergencySection: "Emergency numbers",
     emergencyMessage: "In danger? Call now – no sign-in needed.",
@@ -90,6 +141,26 @@ const COPY: Record<AuthLanguage, AuthCopy> = {
   },
   hi: {
     language: "भाषा",
+    searchLanguages: "भाषा खोजें",
+    noLanguageMatch: "आपकी खोज से कोई भाषा मेल नहीं खाती।",
+    forgotPassword: "पासवर्ड भूल गए?",
+    staffInvitationSetup: "स्टाफ आमंत्रण सेटअप",
+    loading: "लोड हो रहा है…",
+    createYourAccount: "अपना खाता बनाएँ",
+    signupDescription: "निःशुल्क। इससे आप घटना की सूचना दे सकते हैं और आगे क्या होता है, यह देख सकते हैं।",
+    citizenOnlyNote: "केवल नागरिक खाते। स्टाफ और फील्ड टीम के खाते आपके प्रशासक द्वारा दिए जाते हैं –",
+    signInHere: "यहाँ साइन इन करें",
+    fullName: "पूरा नाम",
+    phoneNumber: "फ़ोन नंबर",
+    phoneHelp: "(वैकल्पिक, इससे बचाव दल आपसे संपर्क कर सकता है)",
+    choosePassword: "पासवर्ड चुनें",
+    passwordRules: ["कम से कम 8 अक्षर", "कम से कम एक अंक", "कम से कम एक चिह्न (जैसे ! @ # ?)"],
+    ruleDone: "पूरा",
+    ruleNotYet: "अभी नहीं",
+    checkDetails: "नीचे दी गई जानकारी जाँचें और फिर कोशिश करें।",
+    creatingAccount: "खाता बनाया जा रहा है…",
+    createAccountArrow: "खाता बनाएँ →",
+    alreadyHaveAccount: "क्या आपका पहले से खाता है?",
     skipToForm: "फ़ॉर्म पर जाएँ",
     emergencySection: "आपातकालीन नंबर",
     emergencyMessage: "खतरे में हैं? अभी कॉल करें—साइन इन की ज़रूरत नहीं।",
@@ -131,6 +202,26 @@ const COPY: Record<AuthLanguage, AuthCopy> = {
   },
   gu: {
     language: "ભાષા",
+    searchLanguages: "ભાષા શોધો",
+    noLanguageMatch: "તમારી શોધ સાથે કોઈ ભાષા મેળ ખાતી નથી.",
+    forgotPassword: "પાસવર્ડ ભૂલી ગયા?",
+    staffInvitationSetup: "સ્ટાફ આમંત્રણ સેટઅપ",
+    loading: "લોડ થઈ રહ્યું છે…",
+    createYourAccount: "તમારું ખાતું બનાવો",
+    signupDescription: "મફત. તેનાથી તમે ઘટનાની જાણ કરી શકો છો અને આગળ શું થાય છે તે જોઈ શકો છો.",
+    citizenOnlyNote: "ફક્ત નાગરિક ખાતાં. સ્ટાફ અને ફિલ્ડ ટીમનાં ખાતાં તમારા વ્યવસ્થાપક આપે છે –",
+    signInHere: "અહીં સાઇન ઇન કરો",
+    fullName: "પૂરું નામ",
+    phoneNumber: "ફોન નંબર",
+    phoneHelp: "(વૈકલ્પિક, તેનાથી બચાવ ટીમ તમારો સંપર્ક કરી શકે છે)",
+    choosePassword: "પાસવર્ડ પસંદ કરો",
+    passwordRules: ["ઓછામાં ઓછા 8 અક્ષરો", "ઓછામાં ઓછો એક અંક", "ઓછામાં ઓછું એક ચિહ્ન (ઉદાહરણ તરીકે ! @ # ?)"],
+    ruleDone: "પૂર્ણ",
+    ruleNotYet: "હજી નહીં",
+    checkDetails: "નીચેની વિગતો તપાસો અને ફરી પ્રયાસ કરો.",
+    creatingAccount: "ખાતું બની રહ્યું છે…",
+    createAccountArrow: "ખાતું બનાવો →",
+    alreadyHaveAccount: "પહેલેથી ખાતું છે?",
     skipToForm: "ફોર્મ પર જાઓ",
     emergencySection: "કટોકટીના નંબરો",
     emergencyMessage: "જોખમમાં છો? હમણાં કૉલ કરો—સાઇન ઇનની જરૂર નથી.",
@@ -228,7 +319,7 @@ const AuthLanguageContext = createContext<AuthLanguageContextValue>({
 });
 
 function isAuthLanguage(value: string): value is AuthLanguage {
-  return value === "en" || value === "hi" || value === "gu";
+  return AUTH_LANGUAGES.some((language) => language.code === value);
 }
 
 export function AuthLanguageProvider({ children }: { children: ReactNode }) {

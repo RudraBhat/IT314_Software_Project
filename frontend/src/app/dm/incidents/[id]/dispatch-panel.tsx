@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 
 import { PriorityBadge, StatusBadge } from "@/components/badges";
 import { useAction } from "@/components/use-action";
-import { Button, Card, Dialog, EmptyState, Field, Input, Notice, Select, Textarea } from "@/components/ui";
+import { Badge, Button, Card, Dialog, EmptyState, Field, Input, Notice, Select, Textarea } from "@/components/ui";
 import { api, newIdempotencyKey, useQuery } from "@/lib/api";
 import { PRIORITIES, formatDateTime, label, timeAgo } from "@/lib/format";
 import type { Agency, Paged, Resource } from "@/lib/types";
@@ -81,8 +81,13 @@ function CreateDispatch({ incident, onClose, onDone }: { incident: IncidentDetai
       reasons: string;
       score?: number;
       matched_count?: number;
+      is_fallback?: boolean;
     }>;
+    unavailable?: boolean;
+    unavailable_reason?: string | null;
   }>(`incidents/${incident.incident_id}/team-recommendations`);
+  // A failed request or a failed spatial query both mean "no advice": the dispatcher allocates manually.
+  const recommendationsUnavailable = Boolean(recommendations.error || recommendations.data?.unavailable);
   const { run, busy } = useAction();
   const [agencyId, setAgencyId] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -157,7 +162,13 @@ function CreateDispatch({ incident, onClose, onDone }: { incident: IncidentDetai
         </Field>
 
         {/* Suggested Teams (AI / Rule Recommendation) */}
-        {recommendations.data?.recommendations && (
+        {recommendationsUnavailable && (
+          <Notice tone="high">
+            Recommendations unavailable — assign teams manually.
+            {recommendations.data?.unavailable_reason ? ` ${recommendations.data.unavailable_reason}` : ""}
+          </Notice>
+        )}
+        {!recommendationsUnavailable && recommendations.data?.recommendations && (
           recommendations.data.recommendations.length > 0 ? (
             <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3.5 space-y-2">
               <div className="flex items-center justify-between">
@@ -177,6 +188,7 @@ function CreateDispatch({ incident, onClose, onDone }: { incident: IncidentDetai
                             <span className="text-[10px] font-mono text-muted">{rec.distance_km.toFixed(1)} km</span>
                           )}
                           {rec.agency && <span className="text-[10px] text-muted">({rec.agency})</span>}
+                          {rec.is_fallback && <Badge tone="medium">Offline roster — not live availability</Badge>}
                         </div>
                         <p className="text-[11px] text-muted truncate">{rec.reasons}</p>
                         {rec.secondary_match && rec.secondary_match.length > 0 && (

@@ -10,8 +10,10 @@ Core capabilities:
    team that cannot do the job never outranks a capable team further away.
 4. Explanatory reasoning for dispatchers (matched capabilities, distance, nearest capable team).
 5. Offline in-memory fallback using the Gujarat seed teams ONLY when no database connection is
-   passed (no DATABASE_URL). When the database answers with no available team the result is
-   empty: a dispatcher must never be shown teams that do not exist.
+   passed (no DATABASE_URL). Every such candidate is marked is_fallback=True so it can never be
+   mistaken for live availability. When the database answers with no available team the result
+   is empty, and when the spatial query fails the error propagates to the caller (which reports
+   "recommendations unavailable"): a dispatcher must never be shown teams that do not exist.
 
 Recommendations are strictly advisory: nothing in this module reserves or dispatches a team.
 """
@@ -509,6 +511,7 @@ def recommend_candidate_teams(
     The in-memory seed teams are used only when no connection is passed (offline demo mode).
     """
     raw_teams: list[dict[str, Any]] = []
+    is_fallback = conn is None
 
     if conn is not None:
         raw_teams = fetch_available_teams_postgis(conn, latitude, longitude)
@@ -637,6 +640,7 @@ def recommend_candidate_teams(
                 ),
                 status=cand["status"],
                 capabilities=cand["capabilities"],
+                is_fallback=is_fallback,
             )
         )
 

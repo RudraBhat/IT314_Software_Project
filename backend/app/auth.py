@@ -13,7 +13,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app import audit, db
-from app.errors import ApiError
+from app.errors import ApiError, database_unavailable
 from app.security import ACCESS, decode_token
 
 DM_ROLE = "DISASTER_MGMT"
@@ -241,24 +241,8 @@ def require_field(request: Request, principal: CurrentUser) -> FieldPrincipal:
 
     from app.config import get_settings
 
-    settings = get_settings()
-    if not settings.database_url:
-        demo_team_id = uuid.UUID("18e69001-0000-0000-0000-000000000001")
-        return FieldPrincipal(
-            user_id=principal.user_id,
-            email=principal.email,
-            full_name=principal.full_name,
-            role=principal.role,
-            member_id=uuid.UUID("28e69001-0000-0000-0000-000000000001"),
-            team_resource_id=demo_team_id,
-            team_name="Demo Field Unit 1",
-            agency_id=uuid.UUID("08e69001-0000-0000-0000-000000000001"),
-            agency_name="Gujarat Emergency Services",
-            callsign="ECHO-1",
-            is_leader=True,
-            capabilities={"rescue": True, "boat": True},
-            ip=principal.ip,
-        )
+    if not get_settings().database_url:
+        raise database_unavailable()
 
     with db.transaction() as conn:
         row = conn.execute(

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SiteHeader, NavLink } from "@/components/Brand";
 import { useSyncExternalStore, type ReactNode } from "react";
 
-import { useAuthLanguage } from "./AuthLanguage";
+import { AuthLanguageProvider, useAuthLanguage } from "./AuthLanguage";
 
 /** Shared styles so every sign-in / sign-up control is large, high-contrast and thumb-friendly. */
 export const authInput =
@@ -53,14 +53,24 @@ export function ErrorBox({ message, hint }: { message: string; hint?: string }) 
 }
 
 /**
- * Page frame for sign-in and sign-up. The app body is overflow:hidden, so this wrapper
- * owns scrolling; otherwise the form is cut off on small phones and when the keyboard is open.
+ * Page frame for sign-in and sign-up. The page scrolls with the document, so the form stays
+ * reachable on small phones and when the keyboard is open.
+ * It also provides the selected language, so every auth page shows one language at a time and
+ * the choice carries over between pages (issue #95).
  */
 export function AuthShell({ children }: { children: ReactNode }) {
+  return (
+    <AuthLanguageProvider>
+      <AuthFrame>{children}</AuthFrame>
+    </AuthLanguageProvider>
+  );
+}
+
+function AuthFrame({ children }: { children: ReactNode }) {
   const online = useOnline();
   const { copy } = useAuthLanguage();
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-slate-100 font-sans text-slate-900">
+    <div className="min-h-dvh bg-slate-100 font-sans text-slate-900">
       <a
         href="#auth-main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2"

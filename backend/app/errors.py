@@ -25,6 +25,15 @@ def not_found(entity: str) -> ApiError:
     return ApiError(404, "NOT_FOUND", f"{entity} not found")
 
 
+def database_unavailable() -> ApiError:
+    """503 for routes that need the database when DATABASE_URL is not configured.
+
+    Never answer such a request with invented demo data: the operator must see
+    that the system is offline.
+    """
+    return ApiError(503, "DATABASE_UNAVAILABLE", "Database connection required")
+
+
 def conflict(code: str, message: str, details: Any = None) -> ApiError:
     return ApiError(409, code, message, details)
 

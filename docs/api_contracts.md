@@ -258,7 +258,7 @@
 ## 3. Field Team Responder API (Owner: Nisarg)
 
 > [!NOTE]
-> This section is a high-level summary stub retained for Sprint 1 traceability. For the complete, production-grade Sprint 2 API specification — including full request/response contracts, state transition rules, idempotency, isolation guarantees, and error codes — refer to **[Section 5: Field Operations API](#5-field-operations-api-sprint-2--s2-01)**.
+> This section is a high-level summary stub retained for Sprint 1 traceability. For the complete, production-grade Sprint 2 API specification — including full request/response contracts, state transition rules, idempotency, isolation guarantees, and error codes — refer to **[Section 5: Field Operations API](#5-field-operations-api)**.
 
 | Endpoint | Path | Method |
 | :--- | :--- | :--- |
@@ -338,7 +338,7 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
 
 ---
 
-## 5. Field Operations API (Sprint 2 — S2-01)
+## 5. Field Operations API
 
 > [!IMPORTANT]
 > All field endpoints require `Authorization: Bearer <token>` issued to a `FIELD_TEAM` role user. Field users do **not** require TOTP MFA — password authentication only. Every dispatch-specific route enforces strict cross-team isolation: requesting another team's dispatch returns `404 NOT_FOUND` (never `403`) to eliminate enumeration attacks.
@@ -552,7 +552,7 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
 
 ---
 
-## 6. Team Recommendation Engine & Backup Decision API (Sprint 2 — S2-02, tuned in Sprint 3 — S3-14)
+## 6. Team Recommendation Engine & Backup Decision API
 
 > [!NOTE]
 > **Ranking (S3-14):** `Score = (primary capability groups covered × 10) + (secondary capability tags × 3) − (distance km × 0.08)`.
@@ -732,9 +732,11 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
   "amount": 2500.00,
   "currency": "INR",
   "status": "PENDING",
-  "is_sandbox": true
+  "is_sandbox": true,
+  "checkout_key": null
 }
 ```
+* **`checkout_key`:** the public Razorpay key id the browser needs to open Razorpay Checkout; `null` for the mock gateway. It is never a secret. After checkout succeeds, the browser sends Razorpay's `razorpay_payment_id` and `razorpay_signature` to 7.2 as `gateway_payment_id` and `signature`.
 
 * **Gateway:** selected with `PAYMENT_GATEWAY` (`mock` or `razorpay`); `gateway_name` is `MOCK_GATEWAY` or `RAZORPAY`. `is_sandbox` comes from the gateway: always `true` for the mock gateway, `true` for Razorpay test keys, `false` only for `rzp_live` keys.
 * **Errors:** `422 IDEMPOTENCY_KEY_REQUIRED`, `409 IDEMPOTENCY_CONFLICT`, `409 CAMPAIGN_NOT_ACTIVE`, `502 GATEWAY_UNAVAILABLE` (the gateway refused or could not be reached; nothing is stored).
@@ -854,12 +856,12 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
 * **Path:** `GET /health`
 * **Response (200 OK):** `{"status": "ok", "service": "drch-ai-triage"}`
 
-### 8.4 Optional LLM Adapter (`ai-workers/service/llm.py`, S2-08)
+### 8.4 Optional LLM Adapter (`ai-workers/service/llm.py`)
 * Not an HTTP endpoint: a library the triage service can call. **Off by default** (`LLM_ENABLED`); the provider key is read from `LLM_API_KEY` only.
 * `second_opinion` runs only when the rules confidence is below 0.6 and returns `{"scenario", "priority", "source": "llm"}` limited to the allowed labels, otherwise nothing. `english_summary` summarises Hindi or Gujarati text. Replies that are not valid JSON or use other labels are rejected.
 * Only the report text is sent, with emails and phone numbers masked; no reporter identity. The result is advisory and never decides anything.
 
-### 8.5 AI Versus Human Decisions (`GET /api/v1/dm/analytics`, S3-06)
+### 8.5 AI Versus Human Decisions (`GET /api/v1/dm/analytics`)
 * The `ai_by_decision` list counts AI suggestions by `scenario`, `human_action` and `confidence_band` (`n` per row). Filters: `scenario`, `from`, `to`.
 * **Definitions:** `human_action` is what the dispatcher recorded: `ACCEPTED` (suggestion used as given), `MODIFIED` (used with changes) or `REJECTED`; `UNDECIDED` means no decision yet. `confidence_band` is the AI confidence at suggestion time: `HIGH` 0.80 or more, `MEDIUM` 0.60 to 0.79, `LOW` below 0.60, `UNKNOWN` when none was recorded. The same wording is returned in `definitions.confidence_bands`.
 * Suggestions are advisory; this endpoint only counts what humans decided.
