@@ -183,7 +183,7 @@ def test_news_rss_keeps_recent_gujarat_hazard_headlines_only():
     assert row["source_uid"] == signals.stable_uid("gnews", "a1") and len(row["source_uid"]) <= 255
 
 
-def test_bluesky_rows_never_keep_author_identity():
+def test_bluesky_rows_keep_only_approved_did_verification_link():
     from datetime import UTC, datetime
 
     from app.services.ingest import bluesky
@@ -201,7 +201,8 @@ def test_bluesky_rows_never_keep_author_identity():
     rows = bluesky.parse_search_response(body, now=datetime(2026, 11, 5, 12, tzinfo=UTC))
     assert len(rows) == 1
     stored = repr(rows[0])
-    for secret in ("did:plc", "someone", "Some One", "friend.bsky", "at://", "t.co"):
+    assert rows[0]["raw_payload"]["source_url"] == "https://bsky.app/profile/did:plc:abc123/post/xyz"
+    for secret in ("someone", "Some One", "friend.bsky", "at://", "t.co"):
         assert secret not in stored
     assert rows[0]["content_text"] == "Water entering homes in Ahmedabad, flood"
     assert rows[0]["raw_payload"]["kind"] == "social_post"

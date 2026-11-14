@@ -35,10 +35,11 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `MOCK_GATEWAY_SECRET` (S) | when donations are used | - | HMAC key for the sandbox gateway. |
 | `SACHET_FEED_URL` | no | empty | SACHET RSS feed URL (public Gujarat feed: `https://sachet.ndma.gov.in/cap_public_website/rss/rss_gujarat.xml`; the all-India `rss_india.xml` holds only the latest 100 alerts, mostly other states); the adapter fetches linked CAP XML and honors ETags. Empty = adapter disabled. |
 | `NEWS_RSS_ENABLED` | no | `false` | Turns on the `GNEWS` signal adapter: Google News RSS search for Gujarat hazard headlines in English, Gujarati and Hindi. Stores headline, publisher, time and link only. |
-| `BLUESKY_SEARCH_ENABLED` | no | `false` | Turns on the `BLUESKY` signal adapter: public post search for Gujarat hazard posts. Author identity is never stored. |
+| `BLUESKY_SEARCH_ENABLED` | no | `false` | Turns on the free English-only `BLUESKY` pilot for Gujarat hazard posts. The handle is not stored; the public source URL uses the post author's DID. |
 | `BLUESKY_SEARCH_URL` | no | `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts` | Bluesky AppView search endpoint; only `api.bsky.app` and `public.api.bsky.app` over https are accepted. |
 | `SOCIAL_REPLAY_FILE` | no | packaged JSONL replay | Path to the team-authored, sanitised social replay fixture. Replay records are always marked simulated. |
-| `INGEST_INTERVAL_SECONDS` | no | `600` | In-process adapter polling interval. Use a shorter value only for local scheduler checks. |
+| `INGEST_INTERVAL_SECONDS` | no | `900` | Local in-process adapter polling interval (15 minutes). |
+| `INGESTION_WORKER_ENABLED` | no | `true` in development, `false` elsewhere | Runs the in-process poller. Keep it disabled in staging when GitHub Actions owns the schedule. |
 | `GIT_SHA` | no | `dev` | Commit id shown by `/api/v1/health` (CD smoke test). |
 | `RATE_LIMIT_ENABLED` | no | `true` | Set `false` only in automated tests. |
 | `RESQ_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff`. |
@@ -100,21 +101,21 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 
 ## GitHub Actions secrets (CI/CD)
 
-Entered by Siddh under the repository's Settings > Secrets and variables > Actions; the workflows refer to them by name only.
+Entered by Siddh under repository or GitHub environment settings as indicated below; the workflows refer to them by name only.
 
 | Secret | Used by | Purpose |
 |---|---|---|
-| `PROD_BACKEND_URL` | `cd.yml` (production live-commit check), `ingest-cron.yml` | Base URL of the production backend (`https://<backend>.onrender.com`). Unset = the production check is skipped. |
-| `STAGING_BACKEND_URL` | `cd.yml` (staging smoke) | Base URL of the staging backend. Unset = staging deploy and smoke are skipped. |
+| `PROD_BACKEND_URL` | `cd.yml` (production live-commit check) | Base URL of the production backend (`https://<backend>.onrender.com`). Unset = the production check is skipped. |
+| `STAGING_BACKEND_URL` | `cd.yml` (staging smoke), `ingest-cron.yml` | Base URL of the staging backend. Unset = staging deploy, smoke, or scheduled ingestion is skipped. |
 | `RENDER_STAGING_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of the staging backend service; unset = staging is skipped. |
 | `RENDER_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of the production backend `it314-software-project-backend1`; unset = no backend redeploy. |
 | `RENDER_AI_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of `drch-ai-triage`; unset = the AI service is redeployed by hand. |
 | `VERCEL_DEPLOY_HOOK` | `cd.yml` | Vercel deploy hook for the frontend. |
 | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | `ci.yml` | Vercel preview build. |
-| `INGEST_TOKEN` | `ingest-cron.yml` | Same value as the backend's `INGEST_TOKEN`. |
+| `INGEST_TOKEN` | `ingest-cron.yml` | Staging environment secret; same value as the staging backend's `INGEST_TOKEN`. |
 | `SMOKE_STAFF_EMAIL`, `SMOKE_STAFF_PASSWORD`, `SMOKE_STAFF_TOTP_SECRET` | `cd.yml` | Smoke account on the **staging** backend (a `DISASTER_MGMT` user created with `app.cli create-staff` against the staging database). |
 
-`STAGING_BACKEND_URL`, `RENDER_STAGING_DEPLOY_HOOK` and the `SMOKE_*` secrets belong to the GitHub environment `staging`; the production hooks and `PROD_BACKEND_URL` to the environment `production`.
+`STAGING_BACKEND_URL`, staging `INGEST_TOKEN`, `RENDER_STAGING_DEPLOY_HOOK` and the `SMOKE_*` secrets belong to the GitHub environment `staging`; the production hooks and `PROD_BACKEND_URL` belong to the environment `production`. The scheduled ingestion workflow targets staging only.
 
 | Variable (not secret) | Used by | Purpose |
 |---|---|---|

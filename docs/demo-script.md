@@ -39,7 +39,7 @@ Proposed from each member's rehearsal role in the sprint plan; Siddh confirms be
 
 ## 2. Before each run (operator checklist)
 
-- [ ] `GET <backend>/api/v1/health` returns `{"status": "ok", "database": "ok"}` and `version` is the commit or tag being demoed. Open it 2 minutes early: the free Render instance sleeps (the ingest cron keeps it warm every 10 minutes).
+- [ ] `GET <backend>/api/v1/health` returns `{"status": "ok", "database": "ok"}` and `version` is the commit or tag being demoed. Open it 2 minutes early: the free Render instance sleeps (the ingest cron keeps it warm every 15 minutes).
 - [ ] Accounts exist; each command or screen shows the TOTP secret once, so add it to the presenter's authenticator app straight away:
   - dispatcher with `DISPATCH`, `SUPERVISOR` and `CLOSURE` permissions: `python -m app.cli create-staff --email … --name … --permissions DISPATCH,SUPERVISOR,CLOSURE` (password from `RESQ_STAFF_PASSWORD` or the prompt), or **Add Disaster Management Staff** on `/dm/staff` as a supervisor;
   - two field responders on two different TEAM resources (team 1 near Ahmedabad, team 2 elsewhere): `python -m app.cli create-field --email … --name … --team "<team name or resource id>" --callsign …`;

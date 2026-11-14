@@ -2,7 +2,7 @@ name: Ingest Backup Trigger
 
 on:
   schedule:
-    - cron: '3,13,23,33,43,53 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -16,15 +16,16 @@ jobs:
   trigger:
     name: Wake Backend & Trigger Ingest
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    environment: staging
+    timeout-minutes: 20
     steps:
       - name: Wake backend, then trigger ingest
         env:
-          BASE: ${{ secrets.PROD_BACKEND_URL }}
+          BASE: ${{ secrets.STAGING_BACKEND_URL }}
           TOKEN: ${{ secrets.INGEST_TOKEN }}
         run: |
           if [ -z "$BASE" ] || [ -z "$TOKEN" ]; then
-            echo '::warning::secrets PROD_BACKEND_URL or INGEST_TOKEN missing';
+            echo '::warning::staging secrets STAGING_BACKEND_URL or INGEST_TOKEN missing';
             exit 0;
           fi
 
@@ -39,7 +40,7 @@ jobs:
           done
 
           echo "Triggering /api/v1/internal/ingest/run..."
-          code=$(curl -s -o out.json -w '%{http_code}' --max-time 180 \
+          code=$(curl -s -o out.json -w '%{http_code}' --max-time 720 \
             -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \

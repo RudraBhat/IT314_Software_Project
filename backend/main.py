@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from math import ceil
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -90,19 +91,31 @@ async def spatial_boundary_monthly_worker():
         logger.info("Spatial boundary worker stopped gracefully.")
 
 
+def _seconds_until_next_ingestion(interval: int, cycle_started: float, completed: float) -> float:
+    """Keep local polling on a fixed start-to-start cadence without burst catch-up runs."""
+    next_start = cycle_started + interval
+    if next_start <= completed:
+        missed_intervals = ceil((completed - next_start) / interval)
+        next_start += missed_intervals * interval
+    return next_start - completed
+
+
 async def ingestion_background_worker():
     """Poll configured alert and replay sources on the configured interval."""
     interval = get_settings().ingest_interval_seconds
     logger.info("Starting ingestion scheduler (interval=%s seconds)", interval)
+    loop = asyncio.get_running_loop()
     try:
         while True:
+            cycle_started = loop.time()
             if get_settings().database_url:
                 try:
                     from app.services.ingestion import run_ingestion
                     await asyncio.to_thread(run_ingestion, "ALL")
                 except Exception:
                     logger.exception("Ingestion scheduler cycle failed; will retry")
-            await asyncio.sleep(interval)
+            completed = loop.time()
+            await asyncio.sleep(_seconds_until_next_ingestion(interval, cycle_started, completed))
     except asyncio.CancelledError:
         logger.info("Ingestion scheduler stopped gracefully.")
 
@@ -144,12 +157,17 @@ async def lifespan(app: FastAPI):
     # Startup: spawn worker tasks in background
     worker_task = asyncio.create_task(ai_workers_background_consumer())
     spatial_task = asyncio.create_task(spatial_boundary_monthly_worker())
-    ingestion_task = asyncio.create_task(ingestion_background_worker())
+    ingestion_task = None
+    if get_settings().ingestion_worker_enabled:
+        ingestion_task = asyncio.create_task(ingestion_background_worker())
+    else:
+        logger.info("In-process ingestion scheduler is disabled; use the configured external trigger")
     yield
     # Shutdown: cancel worker tasks
     worker_task.cancel()
     spatial_task.cancel()
-    ingestion_task.cancel()
+    if ingestion_task is not None:
+        ingestion_task.cancel()
     try:
         await worker_task
     except asyncio.CancelledError:
@@ -158,10 +176,11 @@ async def lifespan(app: FastAPI):
         await spatial_task
     except asyncio.CancelledError:
         pass
-    try:
-        await ingestion_task
-    except asyncio.CancelledError:
-        pass
+    if ingestion_task is not None:
+        try:
+            await ingestion_task
+        except asyncio.CancelledError:
+            pass
     db.close_pool()
 
 

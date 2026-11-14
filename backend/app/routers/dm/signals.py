@@ -43,7 +43,11 @@ def list_signals(
         return conn.execute(
             """
             SELECT signal_id, source, content_text, language, ai_label, ai_confidence::float AS ai_confidence,
-                   status, latitude::float AS latitude, longitude::float AS longitude, is_simulated, created_at
+                   ai_details,
+                   status, latitude::float AS latitude, longitude::float AS longitude, location_text,
+                   location_precision, source_created_at,
+                   COALESCE(raw_payload->>'source_url', raw_payload->>'link') AS source_url,
+                   is_simulated, created_at
             FROM source_signals
             WHERE (%(status)s::text IS NULL OR status = %(status)s)
             ORDER BY created_at DESC LIMIT %(limit)s
@@ -113,6 +117,43 @@ def promote_signal(signal_id: uuid.UUID, principal: Promoter, body: PromoteReque
                      rationale=f"Promoted to {incident['incident_ref']}", ip=principal.ip)
     return {"signal_id": signal_id, "status": "PROMOTED", "incident_ref": incident["incident_ref"],
             "incident_status": incident["status"]}
+
+
+class DeleteSignalRequest(BaseModel):
+    rationale: str = Rationale
+
+
+@router.delete("/signals/{signal_id}")
+def delete_social_signal(signal_id: uuid.UUID, body: DeleteSignalRequest, principal: DMUser, request: Request):
+    """Manually remove an unpromoted public social/news signal and record the action."""
+    if not principal.has("SUPERVISOR"):
+        raise _deny(principal, request, "PERMISSION_REQUIRED",
+                    "The supervisor permission is required to delete an ingested signal", needed="SUPERVISOR")
+    with db.transaction() as conn:
+        signal = conn.execute(
+            "SELECT source, source_uid, status FROM source_signals WHERE signal_id = %s FOR UPDATE",
+            (signal_id,),
+        ).fetchone()
+        if signal is None:
+            raise not_found("Signal")
+        if signal["source"] not in {"BLUESKY", "GNEWS"}:
+            raise ApiError(422, "SOURCE_NOT_DELETABLE", "Only public social/news signals can be removed here")
+        if signal["status"] == "PROMOTED":
+            raise conflict("SIGNAL_ALREADY_PROMOTED", "The signal is part of an incident and cannot be removed here")
+        conn.execute(
+            """
+            INSERT INTO deleted_social_signal_ids (source, source_uid, deleted_by)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (source, source_uid) DO UPDATE SET deleted_at = now(), deleted_by = EXCLUDED.deleted_by
+            """,
+            (signal["source"], signal["source_uid"], principal.user_id),
+        )
+        audit.record(
+            conn, actor=principal, action="SOCIAL_SIGNAL_DELETED", entity_type="signal", entity_id=signal_id,
+            rationale=body.rationale, ip=principal.ip,
+        )
+        conn.execute("DELETE FROM source_signals WHERE signal_id = %s", (signal_id,))
+    return {"signal_id": signal_id, "deleted": True}
 
 
 class DismissRequest(BaseModel):

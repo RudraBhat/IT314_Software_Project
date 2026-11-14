@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -21,6 +24,13 @@ from app.services.ingest.signals import ReplaySignalAdapter
 
 logger = logging.getLogger("drch.ingest")
 ALLOWED_TRIAGE_LABELS = {"CYCLONE", "INDUSTRIAL_FIRE", "URBAN_FLOODING", "OTHER"}
+SOCIAL_SIGNAL_SOURCES = {"BLUESKY", "GNEWS"}
+MAX_SOCIAL_TRIAGE_PER_RUN = 50
+# Shared by the in-process worker, the protected manual endpoint, and the scheduled
+# GitHub Actions trigger. A session lock spans network fetches and writes, unlike a
+# transaction lock that would be released between the adapter's short DB transactions.
+_INGESTION_LOCK = 314_0041
+SOCIAL_POLL_OVERLAP = timedelta(minutes=5)
 
 
 @dataclass
@@ -56,12 +66,12 @@ def _disabled_reason(adapter: Adapter, settings) -> str | None:
     return None
 
 
-def _prelabel(text: str, settings=None) -> tuple[str | None, float | None]:
+def _prelabel(text: str, settings=None) -> tuple[str | None, float | None, dict[str, Any] | None]:
     """Call the advisory triage service without sending identities or location data."""
     settings = settings or get_settings()
     url = settings.ai_triage_url
     if not url:
-        return None, None
+        return None, None, None
     try:
         headers = {"Authorization": f"Bearer {settings.ai_triage_token}"} if settings.ai_triage_token else {}
         response = httpx.post(
@@ -76,11 +86,36 @@ def _prelabel(text: str, settings=None) -> tuple[str | None, float | None]:
         confidence = float(raw.get("confidence"))
         if label not in ALLOWED_TRIAGE_LABELS or not 0 <= confidence <= 1:
             logger.warning("Triage returned a label outside the allowed set; discarded")
-            return None, None
-        return label, confidence
+            return None, None, None
+        priority = str(raw.get("priority", "")).strip().upper()
+        if priority not in {"CRITICAL", "HIGH", "MEDIUM", "LOW"}:
+            priority = None
+        uncertainty = raw.get("uncertainty")
+        details: dict[str, Any] = {
+            "model": str(raw.get("model", ""))[:100] or None,
+            "priority": priority,
+            "uncertainty": str(uncertainty)[:1000] if uncertainty else None,
+            "factors": [],
+        }
+        raw_factors = raw.get("factors") if isinstance(raw.get("factors"), list) else []
+        for factor in raw_factors[:20]:
+            if not isinstance(factor, dict):
+                continue
+            clean_factor = {
+                "name": str(factor.get("name", ""))[:100],
+                "detail": str(factor.get("detail", ""))[:300],
+            }
+            try:
+                weight = float(factor.get("weight"))
+            except (TypeError, ValueError):
+                weight = None
+            if weight is not None and 0 <= weight <= 1:
+                clean_factor["weight"] = weight
+            details["factors"].append(clean_factor)
+        return label, confidence, details
     except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
         logger.warning("Signal pre-label unavailable (%s); storing without a label", _safe_error_message(exc))
-        return None, None
+        return None, None, None
 
 
 def _safe_error_message(exc: Exception) -> str:
@@ -96,6 +131,100 @@ def _safe_error_message(exc: Exception) -> str:
     if isinstance(exc, FileNotFoundError):
         return "Replay fixture file was not found"
     return f"Ingestion failed ({type(exc).__name__})"
+
+
+def _set_incremental_watermark(adapter: Adapter, settings) -> None:
+    """Search Bluesky from the previous successful poll, with a small retry overlap."""
+    if adapter.name != "BLUESKY" or not settings.database_url:
+        return
+    setter = getattr(adapter, "set_since", None)
+    if not callable(setter):
+        return
+    with db.transaction() as conn:
+        previous = conn.execute(
+            """
+            SELECT started_at FROM ingest_runs
+            WHERE source = %s AND status = 'SUCCESS'
+            ORDER BY started_at DESC LIMIT 1
+            """,
+            (adapter.name,),
+        ).fetchone()
+    setter(previous["started_at"] - SOCIAL_POLL_OVERLAP if previous else None)
+
+
+def _triage_unprocessed_social_signals(sources: list[str], settings) -> int:
+    """Classify a bounded queue of newly stored social signals, at most once per text version."""
+    if not sources or not settings.database_url or not settings.ai_triage_url:
+        return 0
+    with db.transaction() as conn:
+        rows = conn.execute(
+            """
+            SELECT signal_id, content_text FROM source_signals
+            WHERE source = ANY(%s) AND status = 'PENDING'
+              AND ai_triage_attempted_at IS NULL AND ai_label IS NULL
+            ORDER BY COALESCE(source_created_at, created_at), created_at
+            LIMIT %s
+            """,
+            (sources, MAX_SOCIAL_TRIAGE_PER_RUN),
+        ).fetchall()
+
+    processed = 0
+    for row in rows:
+        label, confidence, details = _prelabel(row["content_text"], settings)
+        with db.transaction() as conn:
+            updated = conn.execute(
+                """
+                UPDATE source_signals
+                SET ai_label = %s, ai_confidence = %s, ai_details = %s::jsonb,
+                    ai_triage_attempted_at = now(), updated_at = now()
+                WHERE signal_id = %s AND content_text = %s
+                  AND status = 'PENDING' AND ai_triage_attempted_at IS NULL AND ai_label IS NULL
+                """,
+                (
+                    label,
+                    confidence,
+                    json.dumps(details) if details is not None else None,
+                    row["signal_id"],
+                    row["content_text"],
+                ),
+            )
+            if updated.rowcount > 0:
+                processed += 1
+    return processed
+
+
+@contextmanager
+def _ingestion_run_lock(settings) -> Iterator[bool]:
+    """Prevent multiple schedulers or manual triggers from polling at the same time."""
+    if not settings.database_url:
+        # DB-free preview mode has no shared state to coordinate.
+        yield True
+        return
+
+    with db.get_pool().connection(timeout=10.0) as conn:
+        locked = False
+        try:
+            acquired = conn.execute(
+                "SELECT pg_try_advisory_lock(%s) AS ok",
+                (_INGESTION_LOCK,),
+            ).fetchone()
+            locked = bool(acquired and acquired.get("ok"))
+            conn.commit()
+            yield locked
+        finally:
+            if locked:
+                try:
+                    released = conn.execute(
+                        "SELECT pg_advisory_unlock(%s) AS ok",
+                        (_INGESTION_LOCK,),
+                    ).fetchone()
+                    conn.commit()
+                    if not released or not released.get("ok"):
+                        logger.error("Ingestion advisory lock was not held during release")
+                except Exception:
+                    # Discard a connection that might still own the session-level lock.
+                    logger.exception("Could not release ingestion advisory lock; closing connection")
+                    conn.close()
 
 
 def _store_alerts(items: list[dict[str, Any]]) -> int:
@@ -145,50 +274,86 @@ def _store_alerts(items: list[dict[str, Any]]) -> int:
 def _store_signals(items: list[dict[str, Any]], settings=None) -> int:
     settings = settings or get_settings()
     stored = 0
-    prelabels: dict[tuple[str, str, str], tuple[str | None, float | None]] = {}
+    if items and items[0]["source"] in SOCIAL_SIGNAL_SOURCES:
+        source = items[0]["source"]
+        source_uids = [item["source_uid"] for item in items]
+        with db.transaction() as conn:
+            deleted_rows = conn.execute(
+                "SELECT source_uid FROM deleted_social_signal_ids WHERE source = %s AND source_uid = ANY(%s)",
+                (source, source_uids),
+            ).fetchall()
+        deleted_uids = {row["source_uid"] for row in deleted_rows}
+        items = [item for item in items if item["source_uid"] not in deleted_uids]
+    prelabels: dict[
+        tuple[str, str, str],
+        tuple[str | None, float | None, dict[str, Any] | None, datetime | None],
+    ] = {}
     for item in items:
         source = item["source"]
         source_uid = item["source_uid"]
         content_text = item["content_text"]
         cache_key = (source, source_uid, content_text)
 
-        if cache_key in prelabels:
-            label, confidence = prelabels[cache_key]
+        if source in SOCIAL_SIGNAL_SOURCES:
+            # Live social posts are first stored, then triaged from a bounded queue
+            # after all configured sources have been polled.
+            label = confidence = triage_details = triage_attempted_at = None
+        elif cache_key in prelabels:
+            label, confidence, triage_details, triage_attempted_at = prelabels[cache_key]
         else:
-            label = confidence = None
+            label = confidence = triage_details = triage_attempted_at = None
             if settings.ai_triage_url:
                 with db.transaction() as conn:
                     existing = conn.execute(
                         """
-                        SELECT content_text, ai_label, ai_confidence
+                        SELECT content_text, ai_label, ai_confidence, ai_details, ai_triage_attempted_at
                         FROM source_signals
                         WHERE source = %s AND source_uid = %s
                         """,
                         (source, source_uid),
                     ).fetchone()
-                if (
-                    existing
-                    and existing["content_text"] == content_text
-                    and existing["ai_label"] is not None
-                    and existing["ai_confidence"] is not None
+                if existing and existing["content_text"] == content_text and (
+                    existing.get("ai_triage_attempted_at") is not None or existing.get("ai_label") is not None
                 ):
-                    label = str(existing["ai_label"])
-                    confidence = float(existing["ai_confidence"])
+                    # A repeated poll must not send unchanged posts through the
+                    # classifier again after an attempt. If triage was not configured
+                    # on first ingest, a later configured run gets one first attempt.
+                    label = str(existing["ai_label"]) if existing["ai_label"] is not None else None
+                    confidence = (
+                        float(existing["ai_confidence"])
+                        if existing["ai_confidence"] is not None
+                        else None
+                    )
+                    triage_details = existing.get("ai_details")
+                    triage_attempted_at = existing.get("ai_triage_attempted_at")
                 else:
-                    label, confidence = _prelabel(content_text, settings)
-            prelabels[cache_key] = (label, confidence)
+                    result = _prelabel(content_text, settings)
+                    label, confidence = result[0], result[1]
+                    triage_details = result[2] if len(result) > 2 else None
+                    triage_attempted_at = datetime.now(UTC)
+            prelabels[cache_key] = (label, confidence, triage_details, triage_attempted_at)
 
+        raw_payload = item.get("raw_payload") or {}
+        location_precision = item.get("location_precision") or raw_payload.get("location_precision")
+        if location_precision is None:
+            location_precision = (
+                "EXACT"
+                if item.get("latitude") is not None and item.get("longitude") is not None
+                else "NONE"
+            )
+        location_precision = str(location_precision).upper()
         with db.transaction() as conn:
             conn.execute(
                 """
                 INSERT INTO source_signals (
                     source, source_uid, content_text, language, location_text, latitude, longitude,
-                    geom, ai_label, ai_confidence, is_simulated, raw_payload
+                    geom, ai_label, ai_confidence, is_simulated, raw_payload, source_created_at,
+                    location_precision, ai_details, ai_triage_attempted_at
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s,
                     CASE WHEN %s IS NOT NULL AND %s IS NOT NULL
                          THEN ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography ELSE NULL END,
-                    %s, %s, %s, %s::jsonb
+                    %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s
                 )
                 ON CONFLICT (source, source_uid) DO UPDATE SET
                     content_text = EXCLUDED.content_text,
@@ -208,6 +373,18 @@ def _store_signals(items: list[dict[str, Any]], settings=None) -> int:
                         ELSE COALESCE(EXCLUDED.ai_confidence, source_signals.ai_confidence)
                     END,
                     raw_payload = EXCLUDED.raw_payload,
+                    source_created_at = COALESCE(EXCLUDED.source_created_at, source_signals.source_created_at),
+                    location_precision = EXCLUDED.location_precision,
+                    ai_details = CASE
+                        WHEN source_signals.content_text IS DISTINCT FROM EXCLUDED.content_text
+                        THEN EXCLUDED.ai_details
+                        ELSE COALESCE(EXCLUDED.ai_details, source_signals.ai_details)
+                    END,
+                    ai_triage_attempted_at = CASE
+                        WHEN source_signals.content_text IS DISTINCT FROM EXCLUDED.content_text
+                        THEN EXCLUDED.ai_triage_attempted_at
+                        ELSE COALESCE(EXCLUDED.ai_triage_attempted_at, source_signals.ai_triage_attempted_at)
+                    END,
                     updated_at = now()
                 """,
                 (
@@ -215,7 +392,8 @@ def _store_signals(items: list[dict[str, Any]], settings=None) -> int:
                     item.get("location_text"), item.get("latitude"), item.get("longitude"),
                     item.get("latitude"), item.get("longitude"), item.get("longitude"), item.get("latitude"),
                     label, confidence, bool(item.get("is_simulated", False)),
-                    json.dumps(item.get("raw_payload") or {}),
+                    json.dumps(raw_payload), item.get("source_created_at"), location_precision,
+                    json.dumps(triage_details) if triage_details is not None else None, triage_attempted_at,
                 ),
             )
         stored += 1
@@ -241,18 +419,26 @@ def _run_adapter(adapter: Adapter, settings=None) -> IngestRunResult:
                 )
         return IngestRunResult(str(run_id), adapter.name, 0, 0, "SKIPPED", message)
     try:
+        _set_incremental_watermark(adapter, settings or get_settings())
         items = adapter.fetch()
+        partial_failure = bool(getattr(adapter, "partial_failure", False))
+        message = (
+            "Some Bluesky search queries failed; the last successful watermark will be retried."
+            if adapter.name == "BLUESKY" and partial_failure
+            else None
+        )
         if has_db:
             stored = _store_signals(items, settings) if adapter.kind == "signal" else _store_alerts(items)
         else:
             stored = 0
         result = IngestRunResult(str(run_id), adapter.name, len(items), stored,
-                                 "SUCCESS" if has_db else "PREVIEW")
+                                 "PARTIAL" if has_db and partial_failure else "SUCCESS" if has_db else "PREVIEW",
+                                 message)
         if has_db:
             with db.transaction() as conn:
                 conn.execute(
-                    "UPDATE ingest_runs SET status = 'SUCCESS', items_fetched = %s, items_stored = %s, finished_at = now() WHERE run_id = %s",
-                    (result.items_fetched, result.items_stored, run_id),
+                    "UPDATE ingest_runs SET status = %s, items_fetched = %s, items_stored = %s, error_message = %s, finished_at = now() WHERE run_id = %s",
+                    (result.status, result.items_fetched, result.items_stored, message, run_id),
                 )
         return result
     except Exception as exc:  # noqa: BLE001 - isolate one feed failure from other sources
@@ -279,4 +465,29 @@ def run_ingestion(source: str = "ALL", settings=None) -> list[dict[str, Any]]:
         if not adapters:
             return [IngestRunResult(str(uuid.uuid4()), source, 0, 0, "NOT_CONFIGURED",
                                     f"No adapter is configured for '{source}'.").as_dict()]
-    return [_run_adapter(adapter, settings).as_dict() for adapter in adapters]
+    with _ingestion_run_lock(settings) as acquired:
+        if not acquired:
+            logger.info("Skipping ingestion request for %s; another run is active", source)
+            return [IngestRunResult(
+                str(uuid.uuid4()), source, 0, 0, "SKIPPED",
+                "Another ingestion run is already in progress.",
+            ).as_dict()]
+        results = [_run_adapter(adapter, settings).as_dict() for adapter in adapters]
+        social_sources = []
+        if source == "ALL":
+            if settings.bluesky_search_enabled:
+                social_sources.append("BLUESKY")
+            if settings.news_rss_enabled:
+                social_sources.append("GNEWS")
+        elif source == "BLUESKY" and settings.bluesky_search_enabled:
+            social_sources.append("BLUESKY")
+        elif source == "GNEWS" and settings.news_rss_enabled:
+            social_sources.append("GNEWS")
+        try:
+            triaged = _triage_unprocessed_social_signals(social_sources, settings)
+            if triaged:
+                logger.info("Triaged %s new social signals (limit %s per run)",
+                            triaged, MAX_SOCIAL_TRIAGE_PER_RUN)
+        except Exception:
+            logger.exception("Social triage queue failed; pending signals remain available for review")
+        return results
