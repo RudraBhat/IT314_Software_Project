@@ -113,7 +113,7 @@ Health check endpoints:
 | **Zalak** | Frontend & Backend | Citizen & Public Backend Lead | Citizen auth/register API, incident reporting, timeline, LLM adapter, AI-vs-human analytics. |
 | **Nisarg** | Frontend & Backend | Dispatch & Field Backend Lead | Field team role & assignments API, Gujarat geofencing (`geo.py`), team recommendation engine. |
 | **Shlok** | Frontend & Backend | Payments & Dispatch Refactor | Payment gateway interface & MockGateway, donation APIs, signal promotion, state transitions. |
-| **Rudra** | ML | Ingestion & External Feeds | Official alert adapters (USGS, SACHET CAP), ingestion runs scheduler, AI service skeleton. |
+| **Rudra** | ML | Ingestion & External Feeds | Official alert adapter (SACHET CAP), ingestion runs scheduler, AI service skeleton. |
 | **Neeti** | ML (GenAI) | AI Lead | Dataset design, text classification models, evaluation harness, AI triage integration & guardrails. |
 | **Dhruvil** | ML | Computer Vision & Similarity | Image classification reproduction, duplicate text-similarity model, in-process model provider. |
 | **Janvi** | Frontend & Backend | Frontend Lead (Citizen & Field) | Citizen report forms, My Reports timeline, Field responder dashboards, alerts map layer. |
@@ -122,7 +122,7 @@ Health check endpoints:
 
 ### Ingestion sources
 
-The backend polls the configured SACHET CAP feed and USGS GeoJSON feed every 10 minutes. It also replays team-authored social-style samples into the dispatcher signal queue; replay items are sanitised and clearly marked simulated. Only unexpired alerts from official sources are returned by the public alerts API. Ingested signals never become incidents or public alerts without a human dispatcher workflow. See [the source-access memo](docs/ingestion-sources.md) for access, caching, attribution and deployment checks.
+The backend polls the configured SACHET CAP feed every 10 minutes. It also replays team-authored social-style samples into the dispatcher signal queue; replay items are sanitised and clearly marked simulated. Only unexpired alerts from official sources are returned by the public alerts API. Ingested signals never become incidents or public alerts without a human dispatcher workflow. See [the source-access memo](docs/ingestion-sources.md) for access, caching, attribution and deployment checks.
 
 ---
 

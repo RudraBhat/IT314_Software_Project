@@ -12,11 +12,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Local development: pick up the repository-level .env without overriding
+# Local development: pick up repository-level .env.local or .env without overriding
 # variables already provided by Docker or the host.
-_REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
-if _REPO_ENV.is_file():
-    load_dotenv(_REPO_ENV, override=False)
+_REPO_DIR = Path(__file__).resolve().parents[2]
+for _env_name in (".env.local", ".env"):
+    _f = _REPO_DIR / _env_name
+    if _f.is_file():
+        load_dotenv(_f, override=False)
 
 
 class ConfigError(RuntimeError):
@@ -69,7 +71,6 @@ class Settings:
     razorpay_key_secret: str | None = None
     razorpay_webhook_secret: str | None = None
     sachet_feed_url: str = ""
-    usgs_feed_url: str = ""
     social_replay_file: str = ""
     news_rss_enabled: bool = False
     bluesky_search_enabled: bool = False
@@ -126,10 +127,6 @@ def get_settings() -> Settings:
         razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET") or None,
         razorpay_webhook_secret=os.getenv("RAZORPAY_WEBHOOK_SECRET") or None,
         sachet_feed_url=os.getenv("SACHET_FEED_URL", "").strip(),
-        usgs_feed_url=os.getenv(
-            "USGS_FEED_URL",
-            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=2.5&minlatitude=20.0&maxlatitude=24.7&minlongitude=68.1&maxlongitude=74.6&orderby=time",
-        ).strip(),
         social_replay_file=os.getenv("SOCIAL_REPLAY_FILE", "").strip(),
         news_rss_enabled=_bool("NEWS_RSS_ENABLED", False),
         bluesky_search_enabled=_bool("BLUESKY_SEARCH_ENABLED", False),

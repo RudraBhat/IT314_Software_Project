@@ -8,6 +8,11 @@ bound to the donation's order, amount and currency.
 
 The sandbox endpoint exists only for the mock gateway outside production so the UI and tests can
 complete a payment without a real provider.
+
+Endings (S3-11, app/services/donation_endings.py): an unpaid order becomes FAILED when the donor
+cancels it, when the gateway reports the payment failed, or when it is still unpaid after
+PENDING_TTL. A later verified payment of the right amount still confirms a FAILED donation, so a
+captured payment is never lost.
 """
 
 import logging
@@ -36,6 +41,7 @@ from app.payments import (
     is_sandbox_gateway,
 )
 from app.ratelimit import rate_limit
+from app.services.donation_endings import expire_stale_donations, mark_failed
 
 logger = logging.getLogger("drch.donations")
 
@@ -67,6 +73,7 @@ def _order_body(row: dict) -> dict:
         "amount": row["amount"],
         "currency": row["currency"].strip(),
         "status": row["status"],
+        "failure_reason": row.get("failure_reason"),
         "is_sandbox": is_sandbox_gateway(row["gateway_name"]),
     }
 
@@ -81,6 +88,8 @@ def _confirmed_body(row: dict) -> dict:
 
 
 def _load_for_caller(conn, donation_id: uuid.UUID, user) -> dict:
+    # An unpaid order past its time limit ends as FAILED / EXPIRED before anyone acts on it.
+    expire_stale_donations(conn, donation_id=donation_id)
     row = conn.execute("SELECT * FROM donations WHERE donation_id = %s FOR UPDATE", (donation_id,)).fetchone()
     # A donation tied to an account is visible only to that account; guest donations to whoever holds the id.
     if row is None or (row["donor_id"] is not None and (user is None or row["donor_id"] != user.user_id)):
@@ -97,22 +106,30 @@ def _require_same_gateway(row: dict, gateway: PaymentGateway) -> None:
 
 
 def _confirm(conn, row: dict, payment_id: str, *, actor, via: str, ip: str | None) -> dict:
-    """PENDING -> CONFIRMED with a receipt number, in the caller's transaction (row is locked)."""
+    """PENDING or FAILED -> CONFIRMED with a receipt number, in the caller's transaction (row is locked).
+
+    A FAILED donation is confirmed only here, after the caller verified a payment of the right amount:
+    the money was captured after the order was cancelled, expired or had a failed attempt.
+    """
+    late = row["status"] == "FAILED"
     confirmed = conn.execute(
         """
         UPDATE donations
         SET status = 'CONFIRMED', gateway_payment_id = %s, gateway_txn_ref = %s,
-            confirmed_at = now(), verified_at = now(),
+            confirmed_at = now(), verified_at = now(), failure_reason = NULL, failed_at = NULL,
             receipt_no = 'REC-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('receipt_seq')::text, 6, '0'),
             receipt_issued_at = now()
-        WHERE donation_id = %s AND status = 'PENDING'
+        WHERE donation_id = %s AND status IN ('PENDING', 'FAILED')
         RETURNING *
         """,
         (payment_id, payment_id, row["donation_id"]),
     ).fetchone()
+    rationale = f"Payment {payment_id} verified via {via}"
+    if late:
+        rationale += f" after the donation had failed ({row.get('failure_reason') or 'no reason recorded'})"
     audit.record(
         conn, actor=actor, action="DONATION_CONFIRMED", entity_type="donation", entity_id=row["donation_id"],
-        rationale=f"Payment {payment_id} verified via {via}", after={"receipt_no": confirmed["receipt_no"]}, ip=ip,
+        rationale=rationale, after={"receipt_no": confirmed["receipt_no"]}, ip=ip,
     )
     return confirmed
 
@@ -132,6 +149,7 @@ def create_donation(
         raise ApiError(422, "VALIDATION_FAILED", "Guests must provide guest_email, or donate anonymously")
     gateway = get_gateway()
     with db.transaction() as conn:
+        expire_stale_donations(conn)
         existing = conn.execute("SELECT * FROM donations WHERE idempotency_key = %s", (idempotency_key,)).fetchone()
         if existing:
             same = (
@@ -182,10 +200,14 @@ def sandbox_payment(donation_id: uuid.UUID, user: MaybeUser):
     if settings.payment_gateway != MockGateway.slug or settings.app_env == "production":
         raise not_found("Endpoint")
     gateway = MockGateway()
+    error: ApiError | None = None
     with db.transaction() as conn:
         row = _load_for_caller(conn, donation_id, user)
         if row["status"] != "PENDING":
-            raise conflict("DONATION_NOT_PENDING", f"Donation is {row['status']}")
+            # commit the expiry recorded by _load_for_caller, then fail the request
+            error = conflict("DONATION_NOT_PENDING", f"Donation is {row['status']}")
+    if error:
+        raise error
     payment_id = gateway.new_payment_id()
     signature = gateway.sign(row["gateway_order_id"], payment_id, row["amount"], row["currency"].strip())
     return {"gateway_payment_id": payment_id, "signature": signature}
@@ -213,13 +235,33 @@ def verify_donation(donation_id: uuid.UUID, body: DonationVerify, user: MaybeUse
             # The webhook (or an earlier callback) got here first: same payment -> same receipt.
             if row["gateway_payment_id"] != body.gateway_payment_id:
                 error = conflict("ALREADY_CONFIRMED", "This donation was confirmed with a different payment")
-        elif row["status"] != "PENDING":
+        elif row["status"] not in ("PENDING", "FAILED"):
             error = conflict("DONATION_NOT_PENDING", f"Donation is {row['status']}")
         else:
+            # PENDING, or FAILED with a verified payment arriving late: the money was captured, confirm it.
             row = _confirm(conn, row, body.gateway_payment_id, actor=user, via="callback", ip=ip)
     if error:
         raise error
     return _confirmed_body(row)
+
+
+@router.post("/donations/{donation_id}/cancel")
+def cancel_donation(donation_id: uuid.UUID, user: MaybeUser):
+    """The donor abandons an unpaid order: PENDING -> FAILED (ABANDONED). Idempotent.
+
+    Nothing was charged, so no receipt is issued. If the gateway still captures a payment for this
+    order later, the verified payment confirms the donation as usual.
+    """
+    with db.transaction() as conn:
+        row = _load_for_caller(conn, donation_id, user)
+        if row["status"] == "CONFIRMED":
+            raise conflict("DONATION_ALREADY_CONFIRMED", "A confirmed donation cannot be cancelled")
+        if row["status"] == "PENDING":
+            row = mark_failed(
+                conn, row, "ABANDONED", actor=user, rationale="Donor cancelled the order before paying",
+                ip=user.ip if user else None,
+            )
+    return {"donation_id": row["donation_id"], "status": row["status"], "failure_reason": row["failure_reason"]}
 
 
 # ── Server-to-server webhook ────────────────────────────────────────────
@@ -258,11 +300,7 @@ def _apply_event(conn, gateway: PaymentGateway, event: WebhookEvent) -> tuple[st
 
     if event.is_failure:
         if row["status"] == "PENDING":
-            conn.execute("UPDATE donations SET status = 'FAILED' WHERE donation_id = %s", (row["donation_id"],))
-            audit.record(
-                conn, actor=None, action="DONATION_FAILED", entity_type="donation", entity_id=row["donation_id"],
-                result="FAILURE", rationale=f"Gateway reported {event.event_type}",
-            )
+            row = mark_failed(conn, row, "GATEWAY_DECLINED", actor=None, rationale=f"Gateway reported {event.event_type}")
             return "FAILED", row
         return "IGNORED_NOT_PENDING", row
 
@@ -281,8 +319,9 @@ def _apply_event(conn, gateway: PaymentGateway, event: WebhookEvent) -> tuple[st
     if row["status"] == "CONFIRMED":
         same = row["gateway_payment_id"] == event.payment_id
         return ("ALREADY_CONFIRMED" if same else "PAYMENT_CONFLICT"), row
-    if row["status"] != "PENDING" or not event.payment_id:
+    if row["status"] not in ("PENDING", "FAILED") or not event.payment_id:
         return "IGNORED_NOT_PENDING", row
+    # PENDING, or FAILED (cancelled, expired or an earlier failed attempt): a verified capture confirms it.
     return "CONFIRMED", _confirm(conn, row, event.payment_id, actor=None, via="webhook", ip=None)
 
 
@@ -333,14 +372,15 @@ def my_donations(principal: Citizen, page: Page):
     Guest donations have no account and are not listed; their receipt is returned by /verify.
     """
     with db.transaction() as conn:
+        expire_stale_donations(conn)
         total = conn.execute(
             "SELECT COUNT(*) AS n FROM donations WHERE donor_id = %s", (principal.user_id,)
         ).fetchone()["n"]
         rows = conn.execute(
             """
             SELECT d.donation_id, d.campaign_id, c.title AS campaign_title, d.amount, d.currency, d.status,
-                   d.is_anonymous, d.gateway_name, d.receipt_no, d.receipt_issued_at, d.created_at,
-                   d.confirmed_at
+                   d.failure_reason, d.is_anonymous, d.gateway_name, d.receipt_no, d.receipt_issued_at,
+                   d.created_at, d.confirmed_at
             FROM donations d
             JOIN donation_campaigns c ON c.campaign_id = d.campaign_id
             WHERE d.donor_id = %s

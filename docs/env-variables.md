@@ -37,7 +37,6 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `NEWS_RSS_ENABLED` | no | `false` | Turns on the `GNEWS` signal adapter: Google News RSS search for Gujarat hazard headlines in English, Gujarati and Hindi. Stores headline, publisher, time and link only. |
 | `BLUESKY_SEARCH_ENABLED` | no | `false` | Turns on the `BLUESKY` signal adapter: public post search for Gujarat hazard posts. Author identity is never stored. |
 | `BLUESKY_SEARCH_URL` | no | `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts` | Bluesky AppView search endpoint; only `api.bsky.app` and `public.api.bsky.app` over https are accepted. |
-| `USGS_FEED_URL` | no | Gujarat GeoJSON query | USGS earthquake GeoJSON feed; results are checked against the Gujarat boundary before storage. |
 | `SOCIAL_REPLAY_FILE` | no | packaged JSONL replay | Path to the team-authored, sanitised social replay fixture. Replay records are always marked simulated. |
 | `INGEST_INTERVAL_SECONDS` | no | `600` | In-process adapter polling interval. Use a shorter value only for local scheduler checks. |
 | `GIT_SHA` | no | `dev` | Commit id shown by `/api/v1/health` (CD smoke test). |
@@ -108,7 +107,7 @@ Entered by Siddh under the repository's Settings > Secrets and variables > Actio
 | `PROD_BACKEND_URL` | `cd.yml` (production live-commit check), `ingest-cron.yml` | Base URL of the production backend (`https://<backend>.onrender.com`). Unset = the production check is skipped. |
 | `STAGING_BACKEND_URL` | `cd.yml` (staging smoke) | Base URL of the staging backend. Unset = staging deploy and smoke are skipped. |
 | `RENDER_STAGING_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of the staging backend service; unset = staging is skipped. |
-| `RENDER_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of `drch-backend`; unset = no backend redeploy. |
+| `RENDER_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of the production backend `it314-software-project-backend1`; unset = no backend redeploy. |
 | `RENDER_AI_DEPLOY_HOOK` | `cd.yml` | Render deploy hook of `drch-ai-triage`; unset = the AI service is redeployed by hand. |
 | `VERCEL_DEPLOY_HOOK` | `cd.yml` | Vercel deploy hook for the frontend. |
 | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | `ci.yml` | Vercel preview build. |
@@ -120,6 +119,9 @@ Entered by Siddh under the repository's Settings > Secrets and variables > Actio
 | Variable (not secret) | Used by | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `cd.yml` | Build arguments for the frontend container image (public values embedded in the browser bundle). Set them under Settings > Secrets and variables > Actions > Variables; leave unset if Vercel builds the frontend. |
+| `CD_SKIP_ALLOWED` | `cd.yml` (job `deploy-summary`) | Optional comma-separated list of CD components that may be skipped on purpose: `frontend`, `staging` (staging deploy and smoke test), `backend` (production Render deploy), `ai` (AI triage deploy). Leave it unset in a fully configured repository: any expected deployment that was skipped (usually a missing hook or URL secret) or failed then fails the run, so a green CD run always means everything the change needed was deployed. |
+
+**Render services.** `render.yaml` defines three services: `drch-backend-latest` (staging, `https://drch-backend-latest.onrender.com`, deployed first and smoke-tested; this is `STAGING_BACKEND_URL`), `it314-software-project-backend1` (production, `https://it314-software-project-backend1.onrender.com`, deployed only after the smoke test passed; this is `PROD_BACKEND_URL`) and `drch-ai-triage`. Setup steps: [release-runbook.md](release-runbook.md), "Staging service and secrets". Give the two backends separate databases, `JWT_SECRET` and `MFA_ENCRYPTION_KEY` values. If you run only one backend, point both hook and URL secret pairs at it and put `staging` in `CD_SKIP_ALLOWED`, or accept that its staging smoke gate and production deploy then hit the same service.
 
 `GITHUB_TOKEN` is provided by GitHub and publishes the images to GHCR.
 

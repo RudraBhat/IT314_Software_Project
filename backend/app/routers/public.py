@@ -155,7 +155,7 @@ def list_public_alerts():
                    area_text, ROUND(latitude::numeric, 4)::float AS latitude, ROUND(longitude::numeric, 4)::float AS longitude,
                    is_fallback, effective_at, expires_at
             FROM external_alerts
-            WHERE source IN ('SACHET', 'USGS', 'GDACS', 'IMD')
+            WHERE source IN ('SACHET', 'GDACS', 'IMD')
               AND (expires_at IS NULL OR expires_at > now())
             ORDER BY effective_at DESC NULLS LAST LIMIT 200
             """

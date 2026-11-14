@@ -57,7 +57,6 @@ services:
       - AI_TRIAGE_TOKEN=${AI_TRIAGE_TOKEN:-}
       - INGEST_TOKEN=${INGEST_TOKEN:-}
       - SACHET_FEED_URL=${SACHET_FEED_URL:-}
-      - USGS_FEED_URL=${USGS_FEED_URL:-https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=2.5&minlatitude=20.0&maxlatitude=24.7&minlongitude=68.1&maxlongitude=74.6&orderby=time}
       - SOCIAL_REPLAY_FILE=${SOCIAL_REPLAY_FILE:-}
       - INGEST_INTERVAL_SECONDS=${INGEST_INTERVAL_SECONDS:-600}
       - MOCK_GATEWAY_SECRET=${MOCK_GATEWAY_SECRET:-dev-only-mock-gateway-secret-0123456789}

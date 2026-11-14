@@ -18,7 +18,6 @@ from app.services.ingest.bluesky import BlueskySearchAdapter
 from app.services.ingest.news import GoogleNewsAdapter
 from app.services.ingest.sachet import SachetAdapter
 from app.services.ingest.signals import ReplaySignalAdapter
-from app.services.ingest.usgs import UsgsAdapter
 
 logger = logging.getLogger("drch.ingest")
 ALLOWED_TRIAGE_LABELS = {"CYCLONE", "INDUSTRIAL_FIRE", "URBAN_FLOODING", "OTHER"}
@@ -41,7 +40,6 @@ def registered_adapters(settings=None) -> list[Adapter]:
     settings = settings or get_settings()
     return [
         SachetAdapter(settings.sachet_feed_url),
-        UsgsAdapter(settings.usgs_feed_url),
         ReplaySignalAdapter(settings.social_replay_file),
         GoogleNewsAdapter(),
         BlueskySearchAdapter(settings.bluesky_search_url),
@@ -51,8 +49,6 @@ def registered_adapters(settings=None) -> list[Adapter]:
 def _disabled_reason(adapter: Adapter, settings) -> str | None:
     if adapter.name == "SACHET" and not settings.sachet_feed_url:
         return "SACHET feed URL is not configured."
-    if adapter.name == "USGS" and not settings.usgs_feed_url:
-        return "USGS feed URL is not configured."
     if adapter.name == "GNEWS" and not settings.news_rss_enabled:
         return "GNEWS is disabled (set NEWS_RSS_ENABLED=true)."
     if adapter.name == "BLUESKY" and not settings.bluesky_search_enabled:

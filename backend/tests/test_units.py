@@ -259,13 +259,13 @@ def test_internal_ingest_run_accepts_valid_token(client, monkeypatch):
 
     # Via Bearer auth
     resp = client.post(
-        "/api/v1/internal/ingest/run?source=USGS",
+        "/api/v1/internal/ingest/run?source=SACHET",
         headers={"Authorization": f"Bearer {test_token}"},
     )
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "PREVIEW"
-    assert data["source"] == "USGS"
+    assert data["source"] == "SACHET"
     assert "run_id" in data
 
     # Via X-Ingest-Token

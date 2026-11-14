@@ -634,3 +634,82 @@ jobs:
             echo "::error::Render AI hook responded with HTTP $response. Please check secret RENDER_AI_DEPLOY_HOOK."
             exit 1
           fi
+
+  # ============================================================================
+  # 5. Deployment summary: a skipped deploy must never look like a green run
+  # ============================================================================
+  # The check jobs above turn a missing hook or URL secret into a notice and the deploy jobs into
+  # "Skipped", which GitHub shows as green. This job compares what the change needed with what was
+  # actually deployed and fails the run when something expected did not happen. To allow a component
+  # to be skipped on purpose, list it in the repository variable CD_SKIP_ALLOWED
+  # (comma separated, any of: frontend, staging, backend, ai).
+  deploy-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [detect-changes, check-hooks, deploy-vercel, deploy-staging, smoke, deploy-render, deploy-render-ai]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main'
+    steps:
+      - name: Compare what changed with what was deployed
+        env:
+          ALLOWED: ${{ vars.CD_SKIP_ALLOWED }}
+          EVENT: ${{ github.event_name }}
+          DETECT: ${{ needs.detect-changes.result }}
+          CHANGED_FRONTEND: ${{ needs.detect-changes.outputs.frontend }}
+          CHANGED_BACKEND: ${{ needs.detect-changes.outputs.backend }}
+          CHANGED_AI: ${{ needs.detect-changes.outputs.ai-workers }}
+          R_VERCEL: ${{ needs.deploy-vercel.result }}
+          R_STAGING: ${{ needs.deploy-staging.result }}
+          R_SMOKE: ${{ needs.smoke.result }}
+          R_RENDER: ${{ needs.deploy-render.result }}
+          R_AI: ${{ needs.deploy-render-ai.result }}
+        run: |
+          problems=0
+          allowed=",${ALLOWED// /},"
+          summary="| Component | Result | Note |\n|---|---|---|\n"
+          row() { summary+="| $1 | $2 | $3 |\n"; }
+
+          check() {
+            token="$1"; label="$2"; needed="$3"; result="$4"
+            if [ "$needed" != "true" ]; then
+              row "$label" "➖ not needed" "no matching changes"
+            elif [ "$result" = "success" ]; then
+              row "$label" "✅ deployed" ""
+            elif [[ "$allowed" == *",$token,"* ]]; then
+              row "$label" "⚠️ $result" "allowed by CD_SKIP_ALLOWED"
+              echo "::warning::$label ended as '$result' (allowed by CD_SKIP_ALLOWED=$ALLOWED)."
+            else
+              row "$label" "❌ $result" "a deployment was expected"
+              echo "::error::$label ended as '$result', but this change needed it. Fix the missing secret named in the earlier notice, or add '$token' to the repository variable CD_SKIP_ALLOWED if skipping is intended."
+              problems=$((problems + 1))
+            fi
+          }
+
+          if [ "$DETECT" != "success" ]; then
+            echo "::error::Change detection did not succeed ($DETECT), so nothing can be trusted as deployed."
+            problems=$((problems + 1))
+          fi
+
+          frontend_needed=false; backend_needed=false; ai_needed=false
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            frontend_needed=true; backend_needed=true; ai_needed=true
+          else
+            [ "$CHANGED_FRONTEND" = "true" ] && frontend_needed=true
+            [ "$CHANGED_BACKEND" = "true" ] && backend_needed=true
+            [ "$CHANGED_AI" = "true" ] && ai_needed=true
+          fi
+
+          check frontend "Frontend / Vercel" "$frontend_needed" "$R_VERCEL"
+          check staging "Backend / staging deploy" "$backend_needed" "$R_STAGING"
+          check staging "Backend / staging smoke test" "$backend_needed" "$R_SMOKE"
+          check backend "Backend / production deploy" "$backend_needed" "$R_RENDER"
+          check ai "AI triage / production deploy" "$ai_needed" "$R_AI"
+
+          printf "### Deployment summary\n\n%b" "$summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$problems" -gt 0 ]; then
+            echo "::error::$problems expected deployment step(s) did not run successfully. See the summary above."
+            exit 1
+          fi
+          echo "No expected deployment was skipped or failed."
