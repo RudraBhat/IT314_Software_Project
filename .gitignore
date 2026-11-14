@@ -259,3 +259,7 @@ documents/
 
 # 10. Certain Personal files to keep ignored
 docs/sprints/remaining-work.md
+
+# 11. Database backups (scripts/db_backup.py): they contain personal data, never commit them
+backups/
+*.dump
