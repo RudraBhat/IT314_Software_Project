@@ -3,7 +3,7 @@
 These rules apply to every AI coding agent and assistant working in this repository, whatever the tool. Tool-specific additions live in that tool's own file (for example `CLAUDE.md`).
 
 ## 1. Project Context & Documentation
-- **Platform:** ResQ Disaster Response Coordination Hub for Gujarat (FastAPI + Neon PostgreSQL PostGIS + Next.js 14).
+- **Platform:** ResQ Disaster Response Coordination Hub for Gujarat (FastAPI + Neon PostgreSQL PostGIS + Next.js 16).
 - **Architecture:** Read `docs/ARCHITECTURE.md` before architectural or cross-module changes.
 - **API Contracts:** `docs/api_contracts.md` defines the REST contracts and the standard error format.
 - **Environment Variables:** `docs/env-variables.md` lists supported configuration (names only, never values).

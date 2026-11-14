@@ -19,7 +19,7 @@ export default function HowToPage() {
         <Steps
           items={[
             "Create an account from Sign up, then sign in.",
-            "Choose Report Incident and pick the scenario (cyclone, flood, fire or earthquake).",
+            "Choose Report Incident and pick the scenario (cyclone, urban flooding or industrial fire).",
             "Describe what is happening, how many people are affected and how urgent it is.",
             "Set the location with GPS, by placing a pin inside Gujarat, or by searching an address.",
             "Submit and note your reference number.",

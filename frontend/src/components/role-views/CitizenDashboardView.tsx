@@ -582,7 +582,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
               }`}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${backendOnline ? "bg-emerald-400" : "bg-amber-400"}`} />
-              {backendOnline ? t.backendLive : t.localStorageMode}
+              {backendOnline ? t.backendLive : t.backendUnreachable}
             </span>
           )}
 

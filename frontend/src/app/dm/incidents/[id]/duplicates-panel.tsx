@@ -22,6 +22,8 @@ type Candidate = {
   /** Present when the backend scores candidates (text similarity v2). */
   score?: number | null;
   method?: string | null;
+  /** Plain-language summary of the score; advisory, never a verdict. */
+  explanation?: string | null;
 };
 
 type Action = "LINK" | "MERGE" | "DISMISS";
@@ -99,8 +101,10 @@ export function DuplicatesPanel({ incident, reload }: { incident: IncidentDetail
               <p className="mt-1 text-xs">
                 Match score <strong className="tabular-nums">{Math.round(c.score * 100)}%</strong>
                 {c.method && <span className="text-muted"> · {c.method}</span>}
+                <span className="text-muted"> · advisory, you decide</span>
               </p>
             )}
+            {c.explanation && <p className="mt-1 text-xs text-muted">{c.explanation}</p>}
             <p className="mt-1 text-xs text-muted">Why: {c.rationale}</p>
             <p className="mt-1 line-clamp-2">{c.description_excerpt}</p>
             <div className="mt-2 flex flex-wrap gap-2">

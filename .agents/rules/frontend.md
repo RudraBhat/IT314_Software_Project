@@ -6,7 +6,7 @@ description: Load when creating or modifying frontend pages, React components, h
 # Frontend Engineering Rules
 
 - **Framework & Directory Structure:**
-  - Built with **Next.js 14+ (App Router)**, React 19, TypeScript, and Tailwind CSS.
+  - Built with **Next.js 16 (App Router)**, React 19, TypeScript, and Tailwind CSS.
   - Page routes live in `frontend/src/app/`; reusable components in `frontend/src/components/`.
 - **Reusable Component First:**
   - Inspect `frontend/src/components/ui.tsx` for core UI primitives (Button, Card, Input, Modal, Badge).

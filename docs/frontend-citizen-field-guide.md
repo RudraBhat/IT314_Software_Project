@@ -105,13 +105,11 @@ After an order is created the donation page can end in one of four states. Each 
 | `confirmed` | The server verified the signature and returned a receipt number. | Make another contribution, view the map. |
 | `declined` | The gateway or server rejected the payment: `INVALID_SIGNATURE` or an HTTP 400 or 402 answer. The server's reason is shown. | Retry the payment, or go back and change the details (the form keeps its values). |
 | `timed_out` | A payment call gets no answer within 20 seconds, or the network connection is lost. | Check status and re-verify, or start a new contribution. |
-| `abandoned` | The donor presses "Cancel & Abandon Order". | Resume the contribution or return to the map. |
+| `abandoned` | The donor presses "Cancel & Abandon Order", or closes the Razorpay window without paying. The page tells the server (`POST /api/v1/donations/{id}/cancel`), which records the order as `FAILED` / `ABANDONED`. | Resume the contribution (a new order) or return to the map. |
 
 Other server errors (for example 409 `DONATION_NOT_PENDING` or a 5xx) stay on the order screen as an error message with the server's text.
 
-**Limits to know about**
-- There is no cancel or status endpoint yet, so an abandoned or timed-out order stays `PENDING` on the server. The screens say "no payment is confirmed until the gateway reports it" and do not promise a refund timeline.
-- `GET /me/donations` and the payment webhook are not built yet (see issue #102), so a donor cannot look a receipt up later.
+**How the server ends an order** (contract section 7.5): a donor cancel (`ABANDONED`), a gateway `payment.failed` webhook (`GATEWAY_DECLINED`) or 30 minutes without a verified payment (`EXPIRED`) all end as `FAILED`, and `GET /me/donations` shows the reason. A timed-out order is not cancelled from the browser, because the payment may still complete; if it does not, it expires. A payment the gateway captures later still confirms the donation, which is why the abandoned and timed-out screens say "if you were charged, the donation is confirmed automatically".
 
 **Sandbox preview.** When `NEXT_PUBLIC_PAYMENT_SANDBOX=true` the order screen shows a "Sandbox: preview a payment ending" panel with **Preview Decline** and **Preview Timeout** buttons. They only show the screens; nothing is sent to the gateway, and the screens are labelled "(preview)" with a "SANDBOX PREVIEW" notice. A real decline or timeout is labelled without "(preview)".
 
@@ -153,13 +151,22 @@ npm --prefix frontend run lint
 # 2. Production type-check and route generation (must finish with no errors)
 npm --prefix frontend run build
 
-# 3. Interactive Keyboard Navigation Audit
-# Launch local server
+# 3. Automated keyboard checks (the BFF is mocked, so no backend is needed)
 npm --prefix frontend run dev
+cd frontend && PLAYWRIGHT_BASE_URL=http://localhost:3000 npx playwright test e2e/keyboard-citizen.spec.ts
+
+# 4. Manual keyboard audit for what the spec does not cover
 # Tab through /report, verify focus ring on all scenario buttons, inputs, and submit button.
 # Tab through /my-reports, trigger Timeline View with keyboard Enter key.
 # Tab through /field, open Reject Dialog and close with Escape key.
 ```
+
+`e2e/keyboard-citizen.spec.ts` checks that the report form's scenario and urgency groups have a single tab stop and
+move with the arrow keys (including wrap-around), and that a reply to an information request can be typed and sent
+with the keyboard alone. It runs in CI with the other Playwright specs.
+
+The citizen dashboard shows "Backend Live" when its data loads and "Server unreachable" when it does not. There is no
+offline or local-storage mode: reports are always stored on the server.
 
 ---
 

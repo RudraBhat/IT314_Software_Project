@@ -23,6 +23,9 @@ from app.common import (
     scenario_db,
 )
 from app.errors import ApiError, conflict, not_found
+from app.services.duplicate_similarity import METHOD as SIMILARITY_METHOD
+from app.services.duplicate_similarity import WEIGHTS as SIMILARITY_WEIGHTS
+from app.services.duplicate_similarity import score_candidates
 from app.services.incidents import (
     check_version,
     ensure_open,
@@ -490,7 +493,7 @@ def reopen_incident(
 def duplicate_candidates(incident_id: uuid.UUID, principal: DMUser):
     with db.transaction() as conn:
         base = conn.execute(
-            "SELECT incident_id, canonical_incident_id FROM incidents WHERE incident_id = %s",
+            "SELECT incident_id, canonical_incident_id, description FROM incidents WHERE incident_id = %s",
             (incident_id,),
         ).fetchone()
         if base is None:
@@ -508,7 +511,7 @@ def duplicate_candidates(incident_id: uuid.UUID, principal: DMUser):
             )
             SELECT o.incident_id, o.incident_ref, o.status, lower(o.scenario::text) AS scenario,
                    o.address_text, o.submitted_at, o.people_affected, o.canonical_incident_id,
-                   left(o.description, 280) AS description_excerpt,
+                   left(o.description, 280) AS description_excerpt, o.description,
                    CASE WHEN o.geom IS NOT NULL AND me.geom IS NOT NULL
                         THEN round(ST_Distance(o.geom, me.geom)::numeric) END AS distance_m,
                    round(abs(EXTRACT(EPOCH FROM (o.submitted_at - me.submitted_at))) / 60) AS minutes_apart,
@@ -531,21 +534,32 @@ def duplicate_candidates(incident_id: uuid.UUID, principal: DMUser):
             {"id": incident_id, "window": DUPLICATE_WINDOW_HOURS, "radius": DUPLICATE_RADIUS_M},
         ).fetchall()
 
-    for c in candidates:
+    scored = score_candidates(
+        base["description"], [dict(c) for c in candidates],
+        radius_m=DUPLICATE_RADIUS_M, window_hours=DUPLICATE_WINDOW_HOURS,
+    )
+    for c in scored:
         reasons = ["same scenario", f"reported {c['minutes_apart']} min apart"]
         if c["distance_m"] is not None:
             reasons.append(f"{c['distance_m']} m apart")
         if c["same_address"]:
             reasons.append("same address")
+        reasons.append(f"wording similarity {c['text_similarity']:.2f}")
         c["rationale"] = ", ".join(reasons)
     return {
-        "method": "rules",
+        "method": SIMILARITY_METHOD,
+        "advisory": True,
         "rules": {
             "radius_m": DUPLICATE_RADIUS_M,
             "window_hours": DUPLICATE_WINDOW_HOURS,
-            "note": "Rule-based matching only; AI similarity is not available. A human decides every link.",
+            "weights": SIMILARITY_WEIGHTS,
+            "note": (
+                "Candidates come from the scenario, time and distance or address rules; the score adds "
+                "character-trigram wording similarity. Default weights, not yet tuned on labelled pairs. "
+                "Advisory only: nothing is linked or merged automatically, a human decides every link."
+            ),
         },
-        "candidates": candidates,
+        "candidates": scored,
     }
 
 

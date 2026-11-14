@@ -16,6 +16,7 @@ from app import audit, db
 from app.auth import DMUser
 from app.common import Filters, Page, Rationale, Scenario, page_body, scenario_db
 from app.errors import ApiError, conflict, not_found
+from app.services.donation_endings import expire_stale_donations, ttl_minutes
 
 router = APIRouter()
 
@@ -27,6 +28,8 @@ Qty = Field(gt=0, max_digits=12, decimal_places=2)
 @router.get("/oversight/donations")
 def donation_oversight(principal: DMUser):
     with db.transaction() as conn:
+        # Unpaid orders past their time limit are counted as failed, not as money still to come.
+        expire_stale_donations(conn)
         campaigns = conn.execute(
             """
             SELECT s.campaign_id, s.title, c.status, lower(c.scenario::text) AS scenario, c.currency,
@@ -51,8 +54,14 @@ def donation_oversight(principal: DMUser):
         "oldest_pending_at": oldest_pending,
         "definitions": {
             "confirmed": "Confirmed by the payment gateway callback.",
-            "pending": "Awaiting gateway confirmation or reconciliation; not counted as received.",
-            "failed": "Declined or failed; no receipt is issued.",
+            "pending": (
+                "Awaiting gateway confirmation; not counted as received. "
+                f"Unpaid orders become failed after {ttl_minutes()} minutes."
+            ),
+            "failed": (
+                "Cancelled by the donor, declined by the gateway or expired unpaid; no receipt is issued. "
+                "A payment the gateway still captures later confirms the donation."
+            ),
         },
     }
 

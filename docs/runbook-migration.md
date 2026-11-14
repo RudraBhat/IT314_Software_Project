@@ -24,10 +24,18 @@ Perform these steps on **staging** first before executing on production.
 1. Log in to the [Neon Console](https://console.neon.tech).
 2. Select your DRCH project and create an instantaneous branch or snapshot:
    - Branch Name: `backup-pre-audit-v2-<YYYY-MM-DD>`
-3. Alternatively, take an external logical dump:
+3. Also take a portable logical backup with the backup script (it passes the password through `PGPASSWORD`,
+   never on the command line, and writes to the git-ignored `backups/` folder):
    ```bash
-   pg_dump "$DATABASE_URL" --format=custom --file=drch_backup_pre_v2.dump
+   python scripts/db_backup.py backup --out backups/pre-<release-tag>.dump
    ```
+4. Check that the backup restores: create an empty database whose name ends in `_restore` (a Neon branch or a
+   local PostGIS database) and restore into it. The script refuses any other target name unless `--force` is given.
+   ```bash
+   python scripts/db_backup.py restore --file backups/pre-<release-tag>.dump --target-url "$RESTORE_DATABASE_URL"
+   ```
+   Then run `python -m app.cli verify-audit` against the restored database. Delete old backups when they are no
+   longer needed: they contain personal data.
 
 ### Step 2: Secret Rotation & Environment Configuration
 Set or update the required environment variables across the deployment targets (see [docs/env-variables.md](file:///docs/env-variables.md)):
@@ -110,5 +118,7 @@ Ensure Render web service health check path is configured:
 ## Rollback Procedure
 If a critical blocking issue arises:
 1. Re-deploy the previous known-good backend container tag and frontend deployment.
-2. In Neon console, point connection strings to the backup branch created in Step 1.
+2. In Neon console, point connection strings to the backup branch created in Step 1. Without a Neon branch (for
+   example on the docker-compose fallback), restore the Step 1 backup into the target database as a declared
+   rollback: `python scripts/db_backup.py restore --file backups/pre-<release-tag>.dump --target-url "$DATABASE_URL" --force`.
 3. Notify the incident response lead and log all actions in the operational post-mortem log.

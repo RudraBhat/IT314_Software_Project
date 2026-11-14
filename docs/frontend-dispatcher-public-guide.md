@@ -23,8 +23,15 @@ This manual serves as the definitive operational specification and user runbook 
 | `/login`, `/signup` | All Users | Accessible trilingual authentication (English, Hindi, Gujarati), offline indicator, immediate emergency call buttons, and TOTP staff challenge. | `frontend/src/app/login/page.tsx`, `frontend/src/components/auth/AuthShell.tsx`, `frontend/src/components/auth/AuthLanguage.tsx` |
 | `/dm/incidents/[id]` | Dispatcher / Supervisor | Incident verification, priority assignment, duplicate linking, advisory AI text triage, advisory photo analysis, and team dispatch allocation. | `frontend/src/app/dm/incidents/[id]/page.tsx`, `dispatch-panel.tsx`, `ai-panel.tsx`, `decision-panel.tsx`, `duplicates-panel.tsx` |
 | `/dm/team-requests` | Dispatcher / Lead | Review additional resource requests submitted from field units; approve to generate pre-filled dispatch drafts or decline with rationale. | `frontend/src/app/dm/team-requests/page.tsx` |
-| `/dm/signals` | Dispatcher / Supervisor | Ingested external signals queue (USGS, CAP/SACHET, social alerts); promote signal to verified incident candidate or dismiss with rationale. | `frontend/src/app/dm/signals/page.tsx` |
+| `/dm/signals` | Dispatcher / Supervisor | Ingested external signals queue (CAP/SACHET, social alerts); promote signal to verified incident candidate or dismiss with rationale. | `frontend/src/app/dm/signals/page.tsx` |
 | `/dm/analytics` | SEOC Command Staff | Operational analytics, median time-to-verify/close, AI vs. human decision distribution chart, and confidence band evaluations. | `frontend/src/app/dm/analytics/page.tsx` |
+
+**Duplicates panel.** Each candidate shows the rule reasons ("Why: …"). When the backend scores candidates
+(`"method": "rules+text"`, S2-07) the panel also shows the match score as a percentage, the method, the label
+"advisory, you decide" and the backend's plain-language explanation. The candidates arrive best score first. The
+score is a hint built from wording similarity, distance, time gap and address; Link, Merge and Dismiss still need a
+written rationale from the dispatcher, and nothing is linked or merged automatically. With an older backend that
+returns only rule reasons, the panel shows those alone.
 
 ---
 
@@ -116,7 +123,7 @@ sequenceDiagram
 
 ## 6. External Hazard Signals Queue (`/dm/signals`)
 
-1. **Ingestion Sources:** Automated pipelines ingest real-time seismic events from the USGS API, official weather alerts from SACHET/CAP feeds, and emergency social media posts.
+1. **Ingestion Sources:** Automated pipelines ingest official hazard alerts from SACHET/CAP feeds and emergency social media posts.
 2. **AI Pre-Labeling:** Ingested signals receive pre-triage classification labels and confidence scores to accelerate situational awareness.
 3. **Promotion Protocol:** Authorized operators (`PUBLISHER` or `SUPERVISOR` role) can promote a signal into a `SUBMITTED` incident candidate. A promoted signal remains invisible to the public until formally verified by SEOC dispatchers.
 4. **Dismissal Protocol:** False alarms or duplicate chatter are dismissed with a mandatory rationale.

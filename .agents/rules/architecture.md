@@ -7,7 +7,7 @@ description: Load when changing project structure, system architecture, module b
 
 - **Consult System Architecture:** Review `docs/ARCHITECTURE.md` to understand existing boundaries before proposing changes.
 - **Maintain Tier Separation:**
-  - `frontend/`: Next.js 14 App Router, UI components, client-side session management, Leaflet GIS layers.
+  - `frontend/`: Next.js 16 App Router, UI components, client-side session management, Leaflet GIS layers.
   - `backend/`: FastAPI application, domain services (`app/services/`), routers (`app/routers/`), database access (`app/db.py`).
   - `ai-workers/`: Isolated model execution and training microservices; decouple from core backend request loops.
 - **Service Layer Pattern:**
