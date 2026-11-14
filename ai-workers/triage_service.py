@@ -3,6 +3,10 @@
 POST /triage  - advisory scenario/priority suggestion (contract: docs/api_contracts.md s.7.1)
 GET  /health  - liveness (s.7.2)
 Set AI_TRIAGE_TOKEN to require "Authorization: Bearer <token>" on /triage.
+
+With LLM_ENABLED=true (off by default, S2-08) /triage also returns, beside the unchanged rules result,
+an advisory ``llm_second_opinion`` for low-confidence results and an ``english_summary`` of Hindi or
+Gujarati text. The LLM never replaces the rules result; S3-07 decides whether it stays on.
 """
 
 import hmac
@@ -14,8 +18,27 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from rules import triage
+from service import llm
 
 app = FastAPI(title="DRCH AI Triage", version="1.0.0")
+
+
+def with_llm_opinion(result: dict, description: str, completer: llm.Completer | None = None) -> dict:
+    """Add the optional LLM fields to a rules result without changing any rules field.
+
+    Off unless LLM_ENABLED is set (or a completer is passed, as in tests). A failed, invalid or confident
+    case simply adds nothing, so the response is always the rules result plus optional advisory fields.
+    """
+    if completer is None and not llm.is_enabled():
+        return result
+    extra = {}
+    opinion = llm.second_opinion(description, result, completer)
+    if opinion:
+        extra["llm_second_opinion"] = opinion
+    summary = llm.english_summary(description, completer)
+    if summary:
+        extra["english_summary"] = summary
+    return {**result, **extra}
 
 
 class TriageRequest(BaseModel):
@@ -56,7 +79,7 @@ def triage_endpoint(body: TriageRequest, authorization: str | None = Header(defa
         supplied = (authorization or "")[7:] if (authorization or "").lower().startswith("bearer ") else ""
         if not hmac.compare_digest(supplied, expected):
             raise HTTPException(status_code=401, detail="invalid or missing token")
-    return triage(body.model_dump())
+    return with_llm_opinion(triage(body.model_dump()), body.description)
 
 
 @app.post("/analyze-text")
