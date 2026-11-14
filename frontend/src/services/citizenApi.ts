@@ -461,3 +461,39 @@ export async function fetchMyNotifications(): Promise<ApiResult<{ items: InAppNo
 export async function markNotificationRead(id: string): Promise<ApiResult<{ notification_id: string; read_at: string }>> {
   return apiFetch<{ notification_id: string; read_at: string }>(`/api/citizen/me/notifications/${encodeURIComponent(id)}/read`, undefined, { method: "POST" });
 }
+
+// ── Citizen Donations & Receipts (S3-11) ─────────────────────────
+
+export type DonationFailureReason = "ABANDONED" | "GATEWAY_DECLINED" | "EXPIRED" | null;
+
+export interface DonationRecord {
+  donation_id: string;
+  campaign_id: string;
+  campaign_title: string;
+  amount: string | number;
+  currency: string;
+  status: "PENDING" | "CONFIRMED" | "FAILED";
+  failure_reason: DonationFailureReason;
+  is_anonymous: boolean;
+  receipt_no: string | null;
+  receipt_issued_at: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+  is_sandbox: boolean;
+}
+
+export interface PaginatedDonations {
+  items: DonationRecord[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+export async function fetchMyDonations(
+  page: number = 1,
+  options?: ApiOptions
+): Promise<ApiResult<PaginatedDonations>> {
+  const query = page > 1 ? `?page=${page}` : "";
+  return apiFetch<PaginatedDonations>(`/api/citizen/me/donations${query}`, options);
+}
