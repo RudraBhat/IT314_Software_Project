@@ -277,21 +277,25 @@ export default function MyReportsPage() {
                   </p>
 
                   {/* Citizen Information Response Form (SRS S2-13) */}
-                  {currentStatus === "NEEDS_INFORMATION" && (
+                  {(currentStatus === "NEEDS_INFORMATION" || replySuccess === report.id) && (
                     <section aria-label="Reply to the information request" className="mb-5 p-4 rounded-xl border border-orange-700/60 bg-orange-950/40 text-orange-200">
-                      <div className="flex items-center gap-2 mb-2 font-bold text-xs text-orange-300">
-                        <span aria-hidden="true">⚠️</span>
-                        <span>Action Required: Command Center requested additional information</span>
-                      </div>
-                      {informationRequest ? (
-                        <blockquote className="mb-3 rounded-lg border border-orange-800/70 bg-slate-950/60 px-3 py-2 text-xs text-orange-100">
-                          <span className="sr-only">Dispatcher asked: </span>
-                          {informationRequest}
-                        </blockquote>
-                      ) : (
-                        <p className="text-xs text-orange-200/90 mb-3">
-                          Please clarify situation details, stranded counts, or nearby landmarks to assist response dispatchers.
-                        </p>
+                      {replySuccess !== report.id && (
+                        <>
+                          <div className="flex items-center gap-2 mb-2 font-bold text-xs text-orange-300">
+                            <span aria-hidden="true">⚠️</span>
+                            <span>Action Required: Command Center requested additional information</span>
+                          </div>
+                          {informationRequest ? (
+                            <blockquote className="mb-3 rounded-lg border border-orange-800/70 bg-slate-950/60 px-3 py-2 text-xs text-orange-100">
+                              <span className="sr-only">Dispatcher asked: </span>
+                              {informationRequest}
+                            </blockquote>
+                          ) : (
+                            <p className="text-xs text-orange-200/90 mb-3">
+                              Please clarify situation details, stranded counts, or nearby landmarks to assist response dispatchers.
+                            </p>
+                          )}
+                        </>
                       )}
                       {replySuccess === report.id ? (
                         <div role="status" aria-live="polite" className="text-xs text-emerald-400 font-semibold py-1">
