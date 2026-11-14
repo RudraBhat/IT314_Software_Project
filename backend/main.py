@@ -165,12 +165,21 @@ async def lifespan(app: FastAPI):
     db.close_pool()
 
 
+def api_docs_settings(app_env: str) -> dict:
+    """Interactive API docs (/docs, /redoc, /openapi.json) are off in production (security review F-4).
+
+    Development and staging keep them for reviewers; the contract itself lives in docs/api_contracts.md.
+    """
+    if app_env == "production":
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {}
 
 
 app = FastAPI(
     title="ResQ API Gateway & Workers",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    **api_docs_settings(get_settings().app_env),
 )
 install_error_handlers(app)
 app.include_router(auth.router)

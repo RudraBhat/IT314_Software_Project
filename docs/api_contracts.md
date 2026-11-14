@@ -279,19 +279,19 @@
 ### 4.1 Ingestion Trigger Endpoint
 * **Path:** `POST /api/v1/internal/ingest/run`
 * **Auth:** Header `X-Ingest-Token` or `Authorization: Bearer <INGEST_TOKEN>`
-* **Query Parameters:** `source` *(optional string: `USGS`, `SACHET`, `REPLAY`, `GNEWS`, `BLUESKY`, `ALL`)*
+* **Query Parameters:** `source` *(optional string: `SACHET`, `REPLAY`, `GNEWS`, `BLUESKY`, `ALL`)*
 * **Response (200 OK):** a single run for a named source; an array of per-source runs for `ALL`.
 ```json
 {
   "run_id": "e2f0980c-61cb-4bc1-90a8-bcf6b45a6c02",
-  "source": "USGS",
+  "source": "SACHET",
   "items_fetched": 4,
   "items_stored": 2,
   "status": "SUCCESS"
 }
 ```
 
-The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm/ingestion/poll` starts an immediate poll for staff with `DISPATCH` or `SUPERVISOR`; `GET /api/v1/dm/ingestion/health` returns each source's latest run, 24-hour counts and latest error. Both require an MFA-verified staff session. `REPLAY` rows are always marked simulated; `GNEWS` and `BLUESKY` are live text sources, off unless `NEWS_RSS_ENABLED` / `BLUESKY_SEARCH_ENABLED` is set, and their rows are marked not simulated; the public alerts API returns only unexpired SACHET, USGS, GDACS or IMD alerts and includes the source and fallback flag.
+The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm/ingestion/poll` starts an immediate poll for staff with `DISPATCH` or `SUPERVISOR`; `GET /api/v1/dm/ingestion/health` returns each source's latest run, 24-hour counts and latest error. Both require an MFA-verified staff session. `REPLAY` rows are always marked simulated; `GNEWS` and `BLUESKY` are live text sources, off unless `NEWS_RSS_ENABLED` / `BLUESKY_SEARCH_ENABLED` is set, and their rows are marked not simulated; the public alerts API returns only unexpired SACHET, GDACS or IMD alerts and includes the source and fallback flag.
 
 ### 4.2 Raw Signals Queue (DM Workspace)
 * **Path:** `GET /api/v1/dm/signals`
@@ -335,6 +335,13 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
 * **Query Parameters:** `signal_id` *(optional UUID)*, `limit` *(1-500, default 100)*
 * **Response (200 OK):** `{ method: "heuristic", advisory: true, requires_human_review: true, rules, pairs[], pairs_total, groups[], unlocated[], unlocated_total, truncated }`. Each pair has `signal_a`, `signal_b`, `distance_m`, `minutes_apart`, `label_agreement`, `ranking_score` (0-100 sort hint, not a probability), `reasons[]`, `warnings[]`.
 * Read-only: it never promotes, dismisses, merges or dispatches. Full rules, thresholds, example and limitations: [signal-matching.md](signal-matching.md).
+
+### 4.5 Incident Duplicate Candidates (advisory, S2-07)
+* **Path:** `GET /api/v1/dm/incidents/{id}/duplicates`
+* **Auth:** Staff Session (`DISASTER_MGMT`)
+* **Candidates:** found by the rules (same scenario, within `window_hours` of each other, within `radius_m` or the same address, not closed, not already linked, not dismissed), at most 20.
+* **Response (200 OK):** `{ method: "rules+text", advisory: true, rules: { radius_m, window_hours, weights, note }, candidates[] }`, best score first. Each candidate keeps the earlier fields (`incident_id`, `incident_ref`, `status`, `scenario`, `address_text`, `submitted_at`, `people_affected`, `description_excerpt`, `distance_m`, `minutes_apart`, `same_address`, `rationale`) and adds `text_similarity` (0-1, character-trigram cosine of the two descriptions), `score` (0-1, weighted from wording, distance, time gap and same address), `method` and `explanation`. The full description is never returned.
+* `weights` are reasoned defaults until they are tuned on labelled duplicate pairs. Nothing is linked or merged automatically; the dispatcher decides with `POST /api/v1/dm/incidents/{id}/duplicates/{candidate_id}/decision` (`LINK`, `MERGE` or `DISMISS`, unchanged).
 
 ---
 
@@ -732,6 +739,7 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
   "amount": 2500.00,
   "currency": "INR",
   "status": "PENDING",
+  "failure_reason": null,
   "is_sandbox": true,
   "checkout_key": null
 }
@@ -760,8 +768,17 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
   "receipt_issued_at": "2026-10-24T15:30:00Z"
 }
 ```
-* **Errors:** `400 INVALID_SIGNATURE` (audited; donation stays `PENDING`), `409 ALREADY_CONFIRMED` (confirmed with a different payment), `409 DONATION_NOT_PENDING`, `409 GATEWAY_MISMATCH` (created under another gateway).
+* **Errors:** `400 INVALID_SIGNATURE` (audited; the donation is unchanged), `409 ALREADY_CONFIRMED` (confirmed with a different payment), `409 GATEWAY_MISMATCH` (created under another gateway).
 * **Idempotent:** if the webhook (7.3) confirmed the donation first, the same payment returns `200` with the same receipt.
+* **Late payment:** a `FAILED` donation (cancelled, expired or after a failed attempt, see 7.5) is still confirmed by a valid signature for its order, amount and currency, because the gateway captured the money; the receipt is issued as usual and the confirmation is audited with the earlier reason.
+
+### 7.5 Donation Endings: Cancel and Expiry (S3-11)
+* **Path:** `POST /api/v1/donations/{id}/cancel` (no body)
+* **Auth:** the donor's Bearer Token for a signed-in donation; for a guest donation, whoever holds the id (same rule as 7.2). Another donor gets `404`.
+* **Response (200 OK):** `{"donation_id": "…", "status": "FAILED", "failure_reason": "ABANDONED"}`. Idempotent: cancelling a `FAILED` donation returns its current state and writes no second audit row.
+* **Errors:** `409 DONATION_ALREADY_CONFIRMED`, `404 NOT_FOUND`.
+* **Failure reasons** (`failure_reason`, migration 12; `null` unless `status` is `FAILED`): `ABANDONED` (donor cancelled), `GATEWAY_DECLINED` (webhook `payment.failed`), `EXPIRED` (still unpaid 30 minutes after it was created). Expiry is applied whenever donations are created, read, paid, cancelled or listed for oversight; each one is audited (`DONATION_EXPIRED`).
+* An expired or cancelled order cannot use the sandbox payment step (`409 DONATION_NOT_PENDING`); the donor starts a new order. A real payment captured later still confirms it (7.2, 7.3).
 
 ### 7.3 Payment Webhook (server-to-server)
 * **Path:** `POST /api/v1/payments/webhook/{gateway}` — `{gateway}` is `mock` or `razorpay` and must match `PAYMENT_GATEWAY` (otherwise `404`).
@@ -774,7 +791,7 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
   "payload": {"payment": {"entity": {"id": "pay_123", "order_id": "order_123", "amount": 250000, "currency": "INR"}}}
 }
 ```
-* **Response (200 OK):** `{"received": true, "event_id": "evt_1", "outcome": "CONFIRMED", "donation_id": "…"}`. Every verified event answers 200 so the gateway stops retrying; `outcome` is one of `CONFIRMED`, `ALREADY_CONFIRMED`, `DUPLICATE_EVENT`, `AMOUNT_MISMATCH` (amount in paise or currency differs from the donation; nothing changes, audited), `PAYMENT_CONFLICT`, `FAILED` (`payment.failed` on a `PENDING` donation), `UNKNOWN_ORDER`, `IGNORED_EVENT_TYPE`, `IGNORED_NOT_PENDING`.
+* **Response (200 OK):** `{"received": true, "event_id": "evt_1", "outcome": "CONFIRMED", "donation_id": "…"}`. Every verified event answers 200 so the gateway stops retrying; `outcome` is one of `CONFIRMED` (also for a `FAILED` donation whose payment was captured later), `ALREADY_CONFIRMED`, `DUPLICATE_EVENT`, `AMOUNT_MISMATCH` (amount in paise or currency differs from the donation; nothing changes, audited), `PAYMENT_CONFLICT`, `FAILED` (`payment.failed` on a `PENDING` donation; `failure_reason` `GATEWAY_DECLINED`), `UNKNOWN_ORDER`, `IGNORED_EVENT_TYPE`, `IGNORED_NOT_PENDING`.
 * **Errors:** `400 INVALID_SIGNATURE` (audited, nothing changes).
 
 ### 7.4 My Donations & Receipts
@@ -791,6 +808,7 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
       "amount": 2500.00,
       "currency": "INR",
       "status": "CONFIRMED",
+      "failure_reason": null,
       "is_anonymous": false,
       "is_sandbox": true,
       "receipt_no": "REC-2026-000412",
@@ -857,7 +875,8 @@ The backend scheduler runs configured sources every 10 minutes. `POST /api/v1/dm
 * **Response (200 OK):** `{"status": "ok", "service": "drch-ai-triage"}`
 
 ### 8.4 Optional LLM Adapter (`ai-workers/service/llm.py`)
-* Not an HTTP endpoint: a library the triage service can call. **Off by default** (`LLM_ENABLED`); the provider key is read from `LLM_API_KEY` only.
+* Not an HTTP endpoint: a library called by `/triage` (8.1). **Off by default** (`LLM_ENABLED`); the provider key is read from `LLM_API_KEY` only.
+* When enabled, the `/triage` response is the unchanged rules result plus, only when they apply, `llm_second_opinion` (`{"scenario", "priority", "source": "llm"}`) and `english_summary` (a string). The backend's guardrails ignore both fields until the S3-07 evaluation decides whether the LLM stays on.
 * `second_opinion` runs only when the rules confidence is below 0.6 and returns `{"scenario", "priority", "source": "llm"}` limited to the allowed labels, otherwise nothing. `english_summary` summarises Hindi or Gujarati text. Replies that are not valid JSON or use other labels are rejected.
 * Only the report text is sent, with emails and phone numbers masked; no reporter identity. The result is advisory and never decides anything.
 
