@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { SiteHeader, NavLink } from "@/components/Brand";
 import Link from "next/link";
+import { latestInformationRequest, REPLY_MAX_LENGTH, REPLY_MIN_LENGTH } from "@/components/citizen/InformationRequestReply";
 import { fetchMyReports, replyToInformationRequest, requestWithdrawal, ReportData } from "@/services/citizenApi";
 import { ReportPhotos } from "@/components/ReportPhotos";
 import { isInGujarat } from "@/lib/geo";
@@ -225,6 +226,9 @@ export default function MyReportsPage() {
               const currentStatus = report.status || report.verification_status || "SUBMITTED";
               const statusInfo = getStatusInfo(currentStatus);
               const isSelected = selectedReport?.id === report.id;
+              const informationRequest = latestInformationRequest(report.timeline);
+              const replyLength = (replyText[report.id] || "").trim().length;
+              const hasReplyLocation = Boolean(replyPlace[report.id]);
 
               return (
                 <div
@@ -274,17 +278,24 @@ export default function MyReportsPage() {
 
                   {/* Citizen Information Response Form (SRS S2-13) */}
                   {currentStatus === "NEEDS_INFORMATION" && (
-                    <div className="mb-5 p-4 rounded-xl border border-orange-700/60 bg-orange-950/40 text-orange-200">
+                    <section aria-label="Reply to the information request" className="mb-5 p-4 rounded-xl border border-orange-700/60 bg-orange-950/40 text-orange-200">
                       <div className="flex items-center gap-2 mb-2 font-bold text-xs text-orange-300">
                         <span aria-hidden="true">⚠️</span>
                         <span>Action Required: Command Center requested additional information</span>
                       </div>
-                      <p className="text-xs text-orange-200/90 mb-3">
-                        Please clarify situation details, stranded counts, or nearby landmarks to assist response dispatchers.
-                      </p>
+                      {informationRequest ? (
+                        <blockquote className="mb-3 rounded-lg border border-orange-800/70 bg-slate-950/60 px-3 py-2 text-xs text-orange-100">
+                          <span className="sr-only">Dispatcher asked: </span>
+                          {informationRequest}
+                        </blockquote>
+                      ) : (
+                        <p className="text-xs text-orange-200/90 mb-3">
+                          Please clarify situation details, stranded counts, or nearby landmarks to assist response dispatchers.
+                        </p>
+                      )}
                       {replySuccess === report.id ? (
                         <div role="status" aria-live="polite" className="text-xs text-emerald-400 font-semibold py-1">
-                          ✓ Your response has been submitted to dispatchers.
+                          ✓ Your reply was sent. The report is back in the verification queue.
                         </div>
                       ) : (
                         <form
@@ -309,7 +320,7 @@ export default function MyReportsPage() {
                           className="space-y-2"
                         >
                           <label htmlFor={`reply-text-${report.id}`} className="sr-only">
-                            Additional incident details for dispatchers
+                            Your reply to the dispatcher
                           </label>
                           <textarea
                             id={`reply-text-${report.id}`}
@@ -317,8 +328,9 @@ export default function MyReportsPage() {
                             onChange={(e) => setReplyText((prev) => ({ ...prev, [report.id]: e.target.value }))}
                             placeholder="Provide additional details or landmark info..."
                             rows={2}
+                            maxLength={REPLY_MAX_LENGTH}
                             className="w-full min-h-[60px] rounded-lg bg-slate-900 border border-orange-800/80 p-2.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500"
-                            required={!replyPlace[report.id]}
+                            required={!hasReplyLocation}
                           />
                           <div className="flex flex-wrap items-center gap-2 text-[11px]">
                             <button
@@ -366,15 +378,15 @@ export default function MyReportsPage() {
                           <div className="flex justify-end">
                             <button
                               type="submit"
-                              disabled={replyingId === report.id}
+                              disabled={replyingId === report.id || (!hasReplyLocation && replyLength < REPLY_MIN_LENGTH)}
                               className="min-h-[44px] px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold shadow transition disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
                             >
-                              {replyingId === report.id ? "Submitting..." : "Send Response"}
+                              {replyingId === report.id ? "Sending..." : "Send reply"}
                             </button>
                           </div>
                         </form>
                       )}
-                    </div>
+                    </section>
                   )}
 
                   {/* Visual 4-Stage Progression Timeline */}

@@ -49,7 +49,7 @@ test("citizen sees the dispatcher's question, replies, and the report returns to
   await page.route("**/api/citizen/me/incidents", (route) =>
     route.fulfill({ json: { items: [current], page: 1, limit: 25, total: 1, pages: 1 } }),
   );
-  await page.route(`**/api/citizen/me/incidents/${INCIDENT_ID}/information`, async (route) => {
+  await page.route(`**/api/citizen/me/incidents/${INCIDENT_ID}/information-response`, async (route) => {
     sentBody = route.request().postDataJSON();
     current = incident("SUBMITTED", [
       { status: "SUBMITTED", timestamp: "2026-11-12T10:10:00Z", message: "Reporter reply: Near the temple gate" },
@@ -79,7 +79,7 @@ test("a backend refusal is shown inline and the form stays usable", async ({ pag
   await page.route("**/api/citizen/me/incidents", (route) =>
     route.fulfill({ json: { items: [incident("NEEDS_INFORMATION")], page: 1, limit: 25, total: 1, pages: 1 } }),
   );
-  await page.route(`**/api/citizen/me/incidents/${INCIDENT_ID}/information`, (route) =>
+  await page.route(`**/api/citizen/me/incidents/${INCIDENT_ID}/information-response`, (route) =>
     route.fulfill({
       status: 409,
       json: { error: { code: "NOT_AWAITING_INFORMATION", message: "No information has been requested for this report", details: null } },
