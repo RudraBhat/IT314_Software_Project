@@ -14,7 +14,7 @@ from typing import Any
 
 # --------------------------------------------------------------------------- thresholds
 MATCH_RADIUS_M = 1000  # two signals are "nearby" when their points are within 1 km
-MATCH_WINDOW_HOURS = 6  # ...and "recent" when received within 6 h of each other (source_signals.created_at)
+MATCH_WINDOW_HOURS = 6  # ...and "recent" within 6 h by source time, falling back to receipt time
 MIN_TEXT_JACCARD = 0.25  # wording counts as similar from this Jaccard overlap of content words...
 MIN_SHARED_WORDS = 2  # ...and only with at least this many shared content words
 CONFLICT_MIN_TEXT_JACCARD = 0.5  # when both labels are set and differ, wording must be much closer
@@ -33,7 +33,7 @@ TEXT_FULL_CREDIT_JACCARD = 0.5  # text weight is fully earned at this overlap
 RULES: dict[str, Any] = {
     "radius_m": MATCH_RADIUS_M,
     "window_hours": MATCH_WINDOW_HOURS,
-    "time_basis": "received_at (source_signals.created_at, when the platform stored the signal)",
+    "time_basis": "source_created_at when present; otherwise received_at (source_signals.created_at)",
     "min_text_jaccard": MIN_TEXT_JACCARD,
     "min_shared_words": MIN_SHARED_WORDS,
     "conflict_min_text_jaccard": CONFLICT_MIN_TEXT_JACCARD,
@@ -50,7 +50,7 @@ RULES: dict[str, Any] = {
         "group's largest pairwise distance is <= radius_m and its time span is <= window_hours"
     ),
     "group_location": "centre = mean of member coordinates; spread = largest pairwise distance between members",
-    "group_time_range": "earliest to latest received_at among members",
+    "group_time_range": "earliest to latest matching timestamp among members",
 }
 NOTE = (
     "Advisory only. ranking_score (0-100) orders suggestions by shared evidence; it is not a probability "
@@ -122,14 +122,20 @@ def score_pair(distance_m: float, minutes_apart: float, jaccard: float, agreemen
 
 
 def _summary(row: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    received_at = row[f"{prefix}created_at"]
+    source_created_at = row.get(f"{prefix}source_created_at")
     return {
         "signal_id": row[f"{prefix}signal_id"],
         "source": row[f"{prefix}source"],
         "content_text": (row[f"{prefix}content_text"] or "")[:500],
-        "received_at": row[f"{prefix}created_at"],
+        "received_at": received_at,
+        "source_created_at": source_created_at,
+        "match_time": source_created_at or received_at,
+        "match_time_basis": "source" if source_created_at else "received_fallback",
         "latitude": row[f"{prefix}latitude"],
         "longitude": row[f"{prefix}longitude"],
         "location_text": row.get(f"{prefix}location_text"),
+        "location_precision": row.get(f"{prefix}location_precision", "EXACT"),
         "ai_label": row[f"{prefix}ai_label"],
         "is_simulated": row[f"{prefix}is_simulated"],
     }
@@ -142,9 +148,13 @@ def evaluate_pair(a: dict[str, Any], b: dict[str, Any], distance_m: float) -> di
     """
     if any(s["latitude"] is None or s["longitude"] is None for s in (a, b)):
         return None  # never match automatically without coordinates
+    if any(s.get("location_precision", "EXACT") != "EXACT" for s in (a, b)):
+        return None  # candidate/approximate points remain visible but never drive grouping
     if distance_m > MATCH_RADIUS_M:
         return None
-    minutes_apart = abs((b["received_at"] - a["received_at"]).total_seconds()) / 60
+    a_time = a.get("match_time") or a["received_at"]
+    b_time = b.get("match_time") or b["received_at"]
+    minutes_apart = abs((b_time - a_time).total_seconds()) / 60
     if minutes_apart > MATCH_WINDOW_HOURS * 60:
         return None
 
@@ -155,9 +165,14 @@ def evaluate_pair(a: dict[str, Any], b: dict[str, Any], distance_m: float) -> di
     if agreement != "match" and not wording_similar:
         return None  # nearby and recent alone is not enough
 
+    a_basis = a.get("match_time_basis") or ("source" if a.get("source_created_at") else "received_fallback")
+    b_basis = b.get("match_time_basis") or ("source" if b.get("source_created_at") else "received_fallback")
+    time_word = "posted" if a_basis == b_basis == "source" else "timestamped"
     reasons = [f"{round(distance_m)} m apart (limit {MATCH_RADIUS_M} m)",
-               f"received {round(minutes_apart)} min apart (limit {MATCH_WINDOW_HOURS * 60} min)"]
+               f"{time_word} {round(minutes_apart)} min apart (limit {MATCH_WINDOW_HOURS * 60} min)"]
     warnings: list[str] = []
+    if "received_fallback" in {a_basis, b_basis}:
+        warnings.append("one or both timestamps use platform receipt time because source time is unavailable")
     if agreement == "match":
         reasons.append(f"same disaster label ({a['ai_label']})")
     elif agreement == "unknown":
@@ -223,7 +238,7 @@ def build_groups(pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for members in groups:
         member_set = set(members)
         rows = [signals[m] for m in members]
-        times = sorted(r["received_at"] for r in rows)
+        times = sorted(r.get("match_time") or r["received_at"] for r in rows)
         lat = sum(r["latitude"] for r in rows) / len(rows)
         lon = sum(r["longitude"] for r in rows) / len(rows)
         out.append({
@@ -243,33 +258,40 @@ def build_groups(pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 _PAIR_SQL = """
-SELECT a.signal_id, a.source, a.content_text, a.created_at, a.latitude::float AS latitude,
-       a.longitude::float AS longitude, a.location_text, a.ai_label, a.is_simulated,
+SELECT a.signal_id, a.source, a.content_text, a.created_at, a.source_created_at,
+       a.latitude::float AS latitude, a.longitude::float AS longitude, a.location_text,
+       a.location_precision, a.ai_label, a.is_simulated,
        b.signal_id AS b_signal_id, b.source AS b_source, b.content_text AS b_content_text,
-       b.created_at AS b_created_at, b.latitude::float AS b_latitude, b.longitude::float AS b_longitude,
-       b.location_text AS b_location_text, b.ai_label AS b_ai_label, b.is_simulated AS b_is_simulated,
+       b.created_at AS b_created_at, b.source_created_at AS b_source_created_at,
+       b.latitude::float AS b_latitude, b.longitude::float AS b_longitude,
+       b.location_text AS b_location_text, b.location_precision AS b_location_precision,
+       b.ai_label AS b_ai_label, b.is_simulated AS b_is_simulated,
        ST_Distance(a.geom, b.geom) AS distance_m
 FROM source_signals a
 JOIN source_signals b
   ON a.signal_id < b.signal_id
  AND b.status = 'PENDING'
  AND b.geom IS NOT NULL
+ AND b.location_precision = 'EXACT'
  AND ST_DWithin(a.geom, b.geom, %(radius)s)
- AND b.created_at BETWEEN a.created_at - make_interval(hours => %(window)s)
-                      AND a.created_at + make_interval(hours => %(window)s)
-WHERE a.status = 'PENDING' AND a.geom IS NOT NULL
+ AND COALESCE(b.source_created_at, b.created_at)
+     BETWEEN COALESCE(a.source_created_at, a.created_at) - make_interval(hours => %(window)s)
+         AND COALESCE(a.source_created_at, a.created_at) + make_interval(hours => %(window)s)
+WHERE a.status = 'PENDING' AND a.geom IS NOT NULL AND a.location_precision = 'EXACT'
   AND (%(signal_id)s::uuid IS NULL OR a.signal_id = %(signal_id)s OR b.signal_id = %(signal_id)s)
-ORDER BY ST_Distance(a.geom, b.geom), a.created_at
+ORDER BY ST_Distance(a.geom, b.geom), COALESCE(a.source_created_at, a.created_at)
 LIMIT %(cap)s
 """
 
 _UNLOCATED_SQL = """
-SELECT signal_id, source, content_text, created_at, latitude::float AS latitude, longitude::float AS longitude,
-       location_text, ai_label, is_simulated, count(*) OVER () AS total
+SELECT signal_id, source, content_text, created_at, source_created_at,
+       latitude::float AS latitude, longitude::float AS longitude, location_text,
+       location_precision, ai_label, is_simulated, count(*) OVER () AS total
 FROM source_signals
-WHERE status = 'PENDING' AND (geom IS NULL OR latitude IS NULL OR longitude IS NULL)
+WHERE status = 'PENDING'
+  AND (geom IS NULL OR latitude IS NULL OR longitude IS NULL OR location_precision <> 'EXACT')
   AND (%(signal_id)s::uuid IS NULL OR signal_id = %(signal_id)s)
-ORDER BY created_at DESC LIMIT %(limit)s
+ORDER BY COALESCE(source_created_at, created_at) DESC LIMIT %(limit)s
 """
 
 
@@ -283,7 +305,7 @@ def find_related_signals(conn, signal_id=None, limit: int = 100) -> dict[str, An
         first, second = _summary(row), _summary(row, "b_")
         # signal_a is the "original": the selected signal when signal_id is given, otherwise the earlier one
         if (signal_id is not None and second["signal_id"] == signal_id) or (
-            signal_id is None and second["received_at"] < first["received_at"]
+            signal_id is None and second["match_time"] < first["match_time"]
         ):
             first, second = second, first
         suggestion = evaluate_pair(first, second, float(row["distance_m"]))
@@ -302,8 +324,17 @@ def find_related_signals(conn, signal_id=None, limit: int = 100) -> dict[str, An
         "pairs": pairs[:limit],
         "pairs_total": len(pairs),
         "groups": build_groups(pairs),
-        "unlocated": [{**_summary(r), "location_missing": True,
-                       "note": "No coordinates, so it is not matched automatically; review it manually."}
+        "unlocated": [{
+            **_summary(r),
+            "location_missing": r["latitude"] is None or r["longitude"] is None,
+            "location_approximate": r["location_precision"] != "EXACT"
+            and r["latitude"] is not None and r["longitude"] is not None,
+            "note": (
+                "Approximate or unverified coordinates are not used for grouping; review the location manually."
+                if r["latitude"] is not None and r["longitude"] is not None
+                else "No coordinates, so it is not matched automatically; review it manually."
+            ),
+        }
                       for r in unlocated],
         "unlocated_total": unlocated_total,
         "truncated": truncated,

@@ -87,6 +87,8 @@ def parse_news_rss(xml_text: str, query_lang: str, now: datetime | None = None) 
             "location_text": location["location_text"],
             "latitude": location["latitude"],
             "longitude": location["longitude"],
+            "source_created_at": published,
+            "location_precision": "DISTRICT_CENTROID" if location["district"] else "NONE",
             "is_simulated": False,
             "raw_payload": {
                 "kind": "news_headline",

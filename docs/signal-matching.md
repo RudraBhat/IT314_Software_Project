@@ -13,9 +13,11 @@ Code: `backend/app/services/signal_matching.py` (rules and scoring), `GET /signa
 
 Two `PENDING` signals are suggested together when **all** of these hold:
 
-1. **Location:** both have coordinates and are within **1 km** (PostGIS `ST_DWithin` on `source_signals.geom`).
-2. **Time:** their `received_at` (`source_signals.created_at`, when the platform stored the signal) differ by
-   at most **6 hours**. The time the author posted it is not stored, so it is not used.
+1. **Location:** both have exact coordinates and are within **1 km** (PostGIS `ST_DWithin` on `source_signals.geom`).
+   District-centroid and unknown-precision points stay visible as candidates but are never grouped by proximity.
+2. **Time:** use `source_created_at` when the source provides it; otherwise use `received_at`
+   (`source_signals.created_at`) and mark that fallback in the suggestion. Matching timestamps must differ by
+   at most **6 hours**.
 3. **Evidence** (at least one):
    - the same disaster label (`ai_label`), or
    - similar wording: Jaccard overlap of content words >= **0.25** with at least **2** shared words.
@@ -23,7 +25,8 @@ Two `PENDING` signals are suggested together when **all** of these hold:
 
 Consequences:
 
-- A signal **without coordinates is never matched**. It is listed under `unlocated` and shown as "Missing GPS".
+- A signal without coordinates or without an exact location is never matched. It is listed under `unlocated`
+  with either missing-location or approximate-location provenance.
 - A **missing label** on one side is allowed only if the wording is similar; the suggestion is flagged.
 - Nearby and recent alone is not enough, so a fire and a flood on the same street are not suggested.
 - Promoted and dismissed signals are ignored.
@@ -42,9 +45,9 @@ It is not a probability and not proof that two alerts are the same event.**
 ### Groups (no chaining)
 
 Groups use **complete linkage**: a signal joins a group only if it is a suggested match of *every* member.
-So a group's largest pairwise distance is <= 1 km and its time span is <= 6 h; alerts at the edges of a chain
+So a group's largest pairwise distance is <= 1 km and its matching-time span is <= 6 h; alerts at the edges of a chain
 (A near B, B near C, A far from C) are not merged into one group. Each group reports `centre` (mean of member
-coordinates), `max_pairwise_distance_m` (its spread) and `time_range` (earliest to latest `received_at`).
+coordinates), `max_pairwise_distance_m` (its spread) and `time_range` (earliest to latest matching timestamp).
 Groups are capped at 10 signals and are suggestions only: nothing is stored.
 
 ## Thresholds
@@ -59,7 +62,7 @@ All are constants at the top of `backend/app/services/signal_matching.py`; chang
 | `CONFLICT_MIN_TEXT_JACCARD` | 0.5 | Wording needed when labels differ |
 | `MAX_GROUP_SIZE` | 10 | Largest suggested group |
 | `MAX_CANDIDATE_PAIRS` | 5000 | Safety cap on candidate pairs; response says `truncated: true` if hit |
-| `UNLOCATED_LIMIT` | 50 | Coordinate-less signals listed |
+| `UNLOCATED_LIMIT` | 50 | Missing or approximate-location candidates listed |
 | `WEIGHT_*`, `LABEL_CONFLICT_PENALTY` | 30/20/30/20, 10 | Ranking weights |
 
 ## API
@@ -82,13 +85,14 @@ signal. Response (abridged):
   "pairs": [
     {
       "signal_a": { "signal_id": "…", "source": "REPLAY", "content_text": "…", "received_at": "2026-11-08T11:10:00Z",
+                    "source_created_at": null, "match_time_basis": "received_fallback",
                     "latitude": 21.196, "longitude": 72.793, "location_text": "Adajan Patiya, Surat",
                     "ai_label": "URBAN_FLOODING", "is_simulated": true },
       "signal_b": { "…": "same fields" },
       "distance_m": 440, "minutes_apart": 30, "shared_words": ["adajan", "patiya", "road"],
       "text_similarity": 0.39, "label_agreement": "match",
       "ranking_score": 78.5,
-      "reasons": ["440 m apart (limit 1000 m)", "received 30 min apart (limit 360 min)", "same disaster label (URBAN_FLOODING)"],
+      "reasons": ["440 m apart (limit 1000 m)", "timestamped 30 min apart (limit 360 min)", "same disaster label (URBAN_FLOODING)"],
       "warnings": ["includes simulated data"]
     }
   ],
@@ -96,7 +100,8 @@ signal. Response (abridged):
   "groups": [ { "group_id": "G1", "signal_ids": ["…", "…"], "size": 2, "centre": { "latitude": 21.1977, "longitude": 72.794 },
                 "max_pairwise_distance_m": 440, "time_range": { "start": "…", "end": "…", "span_minutes": 30 },
                 "top_ranking_score": 78.5 } ],
-  "unlocated": [ { "signal_id": "…", "location_missing": true, "note": "No coordinates, so it is not matched automatically; …" } ],
+  "unlocated": [ { "signal_id": "…", "location_missing": false, "location_approximate": true,
+                   "note": "Approximate or unverified coordinates are not used for grouping; …" } ],
   "unlocated_total": 1,
   "truncated": false
 }
@@ -141,7 +146,7 @@ Tests: `python -m pytest backend/tests/test_signal_matching.py -v` (the pure-rul
 
 - Heuristic only: shared words and a shared label can both be coincidence, and genuine reports can be worded
   very differently. Dispatchers must read the messages.
-- Time uses when the platform stored the signal, not when it was posted.
+- Source timestamps can be missing or stale; receipt time is used as a visible fallback in that case.
 - Wording is bag-of-words: no translation, spelling correction, synonyms or location-name resolution, so
   English and Gujarati messages about one event do not match on wording. Place names shared by unrelated alerts
   slightly raise wording similarity.
@@ -149,7 +154,8 @@ Tests: `python -m pytest backend/tests/test_signal_matching.py -v` (the pure-rul
   similar wording to be suggested.
 - Fixed radius of 1 km: no adjustment for dense cities versus rural areas, GPS error or reports about a
   large area (e.g. a river).
-- Signals without coordinates are not geocoded or matched; a dispatcher must place them.
+- Text-only locations can be displayed as district-centroid candidates, but those points are never used for
+  proximity matching. Signals without coordinates are not geocoded further; a dispatcher must place them.
 - Suggestions are computed on request and not stored; dismissing a suggestion is not recorded (a dismissed or
   promoted signal simply leaves the pending set).
 - Scale: one indexed query, measured at about 2 s for 20,000 pending synthetic signals on a development machine;

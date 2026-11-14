@@ -90,7 +90,7 @@ IT314_Software_Project/
 │   ├── workflows/
 │   │   ├── ci.yml              # PR validation (Lint, SAST, PostGIS DB tests, Quality Gate)
 │   │   ├── cd.yml              # CD pipeline (GHCR container publish, Vercel/Render deploy, smoke gate)
-│   │   └── ingest-cron.yml     # 10-minute scheduled backup ingestion runner
+│   │   └── ingest-cron.yml     # 15-minute staging ingestion trigger
 │   ├── CODEOWNERS              # Pull request review assignment rules
 │   └── PULL_REQUEST_TEMPLATE.md# Team PR template with verification checklist
 ├── ai-workers/                 # Standalone AI workers and model evaluation
@@ -322,7 +322,7 @@ To maintain factual engineering clarity, capabilities in the repository are cata
 | **English Crisis Text Model** | **Experimental / Optional** | Real-data event-held-out baseline at `ai-workers/text_model`; separate `/analyze-text` endpoint, not connected to ingestion |
 | **Image Disaster Classifier** | **Prototype / Isolated** | PyTorch service in `ai-workers/model/app.py`, evaluated offline on split data |
 | **Payment Gateway Integration** | **Simulated (Sandbox)** | Sandbox `MockGateway` only; live Razorpay/Stripe integration is planned |
-| **External Alert & Signal Ingestion** | **Implemented (Real feeds) + Replay** | USGS and SACHET CAP adapters (`app/services/ingest/`) run on the scheduler and the `ingest-cron.yml` workflow; social posts are a replay fixture; `GNEWS` and `BLUESKY` adapters exist but are off by default (`NEWS_RSS_ENABLED`, `BLUESKY_SEARCH_ENABLED`); fallback alerts stay labelled `is_fallback = TRUE` |
+| **External Alert & Signal Ingestion** | **Implemented (Real feeds) + Replay** | USGS and SACHET CAP adapters (`app/services/ingest/`) run on the scheduler and the `ingest-cron.yml` workflow; an English-only Bluesky social pilot is implemented but opt-in (`BLUESKY_SEARCH_ENABLED`); GNEWS remains off (`NEWS_RSS_ENABLED`); live social triage is bounded to 50 new signals per run; fallback alerts stay labelled `is_fallback = TRUE` |
 | **Simulated Demo Incidents** | **Simulated** | 4 seeded Gujarat demo incidents flagged with `is_simulated = TRUE` |
 
 ---
@@ -340,7 +340,7 @@ flowchart LR
     CD -->|hook, sha image| AI["Render<br/>drch-ai-triage (advisory)"]
     CD -->|deploy hook| Vercel["Vercel<br/>Next.js frontend + BFF"]
     Render --> Neon[("Neon PostgreSQL 16 + PostGIS")]
-    Cron["ingest-cron.yml<br/>every 10 min: wake + ingest"] --> Render
+    Cron["ingest-cron.yml<br/>every 15 min: wake + ingest"] --> Render
     Tag["git tag vX.Y.Z[-rcN]"] --> CDTag["cd.yml (tag build)"] --> GHCRv[("GHCR images tagged vX.Y.Z")]
 ```
 
@@ -351,7 +351,7 @@ flowchart LR
 | Migrations | Forward-only SQL files applied by `python -m app.migrate` (also at backend start-up) under an advisory lock; a Neon branch is taken before each release | [runbook-migration.md](runbook-migration.md) |
 | Continuous deployment | `cd.yml` runs only on `main` or a release tag (a release tag must point at a commit on `main`); the `main` branch ruleset already requires a pull request with the `Pipeline Status / Quality Gate` check green and the branch up to date, so CD does not re-run CI. CD compares each commit with the last CD run that succeeded (not just its parent), so a run cancelled by a newer merge, or one that failed, does not lose its changes. Vercel starts without waiting for any image build, and each Render job waits only for its own image. A merge to `main` publishes the changed images: when the merged tree equals the pull request head, CD retags the image CI already built and scanned (`ci-<head sha>` to `latest` and `sha-<short>`) instead of rebuilding it, and falls back to a normal build otherwise. It then deploys the backend image for that commit to staging, waits for its `GIT_SHA` on `/api/v1/health` and runs the smoke test there. Production (Render) deploys only if that passes, then waits for the same `GIT_SHA`. Vercel and the AI triage service deploy by their own hooks. A deploy whose hook secret is missing is shown as skipped, not successful. A newer push cancels an older CD run | `.github/workflows/cd.yml` |
 | Releases and rollback | A `vX.Y.Z` / `vX.Y.Z-rcN` tag builds all images from that commit with the version as the image tag; releases are deployed and rolled back by pointing Render at a version (or `sha-`) tag | [release-runbook.md](release-runbook.md) §2, §4 |
-| Cold start | Render free instances sleep; `ingest-cron.yml` wakes the backend every 10 minutes; open `/api/v1/health` before a demo | [release-runbook.md](release-runbook.md) §1 |
+| Cold start | Render free instances sleep; `ingest-cron.yml` wakes the backend every 15 minutes; open `/api/v1/health` before a demo | [release-runbook.md](release-runbook.md) §1 |
 | Fallback hosting | `docker-compose.prod.yml` runs the same images (PostGIS, backend, frontend, AI workers) on any Docker host; it needs an explicit `IMAGE_TAG` (a release or `sha-` tag, never `latest`), binds the app ports to localhost behind a TLS reverse proxy, and refuses to start when a required secret is missing | `docker-compose.prod.yml` |
 | Backups | Neon branches before releases; `pg_dump` / `pg_restore` for a portable copy | [runbook-migration.md](runbook-migration.md) |
 | Demo and rehearsal | Roles, script, on-stage fallbacks and rehearsal log | [demo-script.md](demo-script.md) |

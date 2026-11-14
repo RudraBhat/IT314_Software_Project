@@ -13,9 +13,19 @@ interface SignalItem {
   language: string | null;
   ai_label: string | null;
   ai_confidence: number | null;
+  ai_details: {
+    model?: string | null;
+    priority?: string | null;
+    uncertainty?: string | null;
+    factors?: Array<{ name?: string; detail?: string; weight?: number }>;
+  } | null;
   status: "PENDING" | "PROMOTED" | "DISMISSED";
   latitude: number | null;
   longitude: number | null;
+  location_text: string | null;
+  location_precision: string;
+  source_created_at: string | null;
+  source_url: string | null;
   is_simulated: boolean;
   created_at: string;
 }
@@ -29,6 +39,7 @@ const SCENARIO_OPTIONS = [
 export default function SignalsPage() {
   const { can } = useStaff();
   const canPromote = can("PUBLISHER") || can("SUPERVISOR");
+  const canDelete = can("SUPERVISOR");
 
   const [filterStatus, setFilterStatus] = useState<"PENDING" | "PROMOTED" | "DISMISSED">("PENDING");
   const { data: signals, error, reload, loading } = useQuery<SignalItem[]>("signals", {
@@ -57,6 +68,11 @@ export default function SignalsPage() {
   const [dismissRationale, setDismissRationale] = useState("");
   const [dismissBusy, setDismissBusy] = useState(false);
   const [dismissError, setDismissError] = useState<string | null>(null);
+
+  const [deletingSignal, setDeletingSignal] = useState<SignalItem | null>(null);
+  const [deleteRationale, setDeleteRationale] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleOpenPromote = (sig: SignalItem) => {
     setPromoteError(null);
@@ -116,6 +132,29 @@ export default function SignalsPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deletingSignal) return;
+    if (deleteRationale.trim().length < 3) {
+      setDeleteError("Enter a brief deletion reason (at least 3 characters).");
+      return;
+    }
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api(`signals/${deletingSignal.signal_id}`, {
+        method: "DELETE",
+        body: { rationale: deleteRationale.trim() },
+      });
+      setDeletingSignal(null);
+      setDeleteRationale("");
+      reloadAll();
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete signal");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -167,7 +206,7 @@ export default function SignalsPage() {
               <tr>
                 <th className="px-4 py-3">Source & Time</th>
                 <th className="px-4 py-3">Content</th>
-                <th className="px-4 py-3">AI Analysis</th>
+                <th className="px-4 py-3">Advisory Triage</th>
                 <th className="px-4 py-3">Location</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -178,8 +217,19 @@ export default function SignalsPage() {
                   <td className="px-4 py-3 align-top whitespace-nowrap">
                     <div className="font-semibold text-foreground">{sig.source}</div>
                     <div className="text-xs text-muted">
-                      {new Date(sig.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {sig.source_created_at ? "Posted " : "Received "}
+                      {new Date(sig.source_created_at ?? sig.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </div>
+                    {sig.source_created_at && (
+                      <div className="text-[10px] text-muted">
+                        Received {new Date(sig.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    )}
+                    {sig.source_url?.startsWith("https://") && (
+                      <a className="mt-1 block text-[11px] text-sky-600 hover:underline" href={sig.source_url} target="_blank" rel="noreferrer">
+                        View source
+                      </a>
+                    )}
                     {sig.is_simulated && (
                       <span className="mt-1 inline-block rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-mono text-amber-500">
                         SIMULATED
@@ -212,14 +262,24 @@ export default function SignalsPage() {
                     ) : (
                       <span className="text-xs text-muted">—</span>
                     )}
+                    {sig.ai_details?.priority && (
+                      <div className="mt-1"><Badge tone="high">Priority: {sig.ai_details.priority}</Badge></div>
+                    )}
+                    {sig.ai_details?.uncertainty && (
+                      <p className="mt-1 max-w-48 whitespace-normal text-[11px] text-muted">{sig.ai_details.uncertainty}</p>
+                    )}
                   </td>
                   <td className="px-4 py-3 align-top whitespace-nowrap">
+                    {sig.location_text && <div className="mb-1 max-w-48 whitespace-normal text-xs text-foreground">{sig.location_text}</div>}
                     {sig.latitude !== null && sig.longitude !== null ? (
                       <div className="font-mono text-xs text-muted">
                         {sig.latitude.toFixed(4)}, {sig.longitude.toFixed(4)}
                       </div>
                     ) : (
                       <span className="text-xs text-critical">Missing GPS</span>
+                    )}
+                    {sig.location_precision === "DISTRICT_CENTROID" && (
+                      <div className="mt-1"><Badge tone="medium">Approximate · excluded from grouping</Badge></div>
                     )}
                   </td>
                   <td className="px-4 py-3 align-top text-right whitespace-nowrap">
@@ -251,6 +311,17 @@ export default function SignalsPage() {
                     )}
                     {sig.status === "DISMISSED" && (
                       <Badge tone="neutral">DISMISSED</Badge>
+                    )}
+                    {canDelete && ["BLUESKY", "GNEWS"].includes(sig.source) && sig.status !== "PROMOTED" && (
+                      <div className="mt-2 flex justify-end">
+                        <Button size="sm" variant="danger" onClick={() => {
+                          setDeleteError(null);
+                          setDeleteRationale("");
+                          setDeletingSignal(sig);
+                        }}>
+                          Delete source data
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -284,6 +355,11 @@ export default function SignalsPage() {
               Promoting creates a new incident with status <strong>SUBMITTED</strong>. It will <strong>NOT</strong> appear on the public map until verified by a dispatcher.
             </p>
             {promoteError && <p className="text-xs text-critical font-medium">{promoteError}</p>}
+            {promotingSignal.location_precision !== "EXACT" && (
+              <p className="rounded-md border border-high/30 bg-high/5 p-3 text-xs text-high">
+                This signal has an approximate candidate location. Confirm the real incident location before promotion; the centroid is excluded from related-alert grouping.
+              </p>
+            )}
 
             <div className="rounded-lg bg-surface-muted p-3 text-xs">
               <span className="font-semibold text-foreground">Content: </span>
@@ -343,6 +419,39 @@ export default function SignalsPage() {
                   value={dismissRationale}
                   onChange={(e) => setDismissRationale(e.target.value)}
                   placeholder="e.g. Out of jurisdiction, duplicate chatter, or test signal..."
+                />
+              )}
+            </Field>
+          </div>
+        </Dialog>
+      )}
+
+      {deletingSignal && (
+        <Dialog
+          open={Boolean(deletingSignal)}
+          onClose={() => setDeletingSignal(null)}
+          title="Delete social signal data"
+          footer={
+            <div className="flex gap-2">
+              <Button onClick={() => setDeletingSignal(null)}>Cancel</Button>
+              <Button variant="danger" busy={deleteBusy} onClick={handleDelete}>Delete source data</Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-sm">
+            <p className="text-muted">
+              This removes the stored post text, source link, and location evidence. A hashed source ID remains to prevent the next poll from reimporting it, and the deletion is recorded in the audit log. Promoted signals remain with their incident record.
+            </p>
+            {deleteError && <p className="text-xs text-critical font-medium">{deleteError}</p>}
+            <Field label="Deletion reason" hint="Do not include the post text or personal information.">
+              {(id) => (
+                <Textarea
+                  id={id}
+                  rows={3}
+                  required
+                  value={deleteRationale}
+                  onChange={(e) => setDeleteRationale(e.target.value)}
+                  placeholder="e.g. Source deletion request"
                 />
               )}
             </Field>

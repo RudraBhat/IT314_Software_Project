@@ -13,6 +13,7 @@ interface SourceHealth {
   finished_at: string | null;
   runs_24h: number;
   successes_24h: number;
+  partials_24h: number;
   failures_24h: number;
   last_error: string | null;
   last_error_at: string | null;
@@ -45,7 +46,7 @@ export default function IngestionHealthPage() {
     setPollSummary(null);
     try {
       const results = await api<PollResult[]>("ingestion/poll", { method: "POST" });
-      setPollSummary(results.map((r) => `${r.source}: ${r.status} (${r.items_stored}/${r.items_fetched})`).join(" · "));
+      setPollSummary(results.map((r) => `${r.source}: ${r.status} (${r.items_stored}/${r.items_fetched})${r.message ? ` — ${r.message}` : ""}`).join(" · "));
       await reload();
     } catch (err) {
       setPollError(err instanceof Error ? err.message : "The poll could not be started.");
@@ -58,7 +59,7 @@ export default function IngestionHealthPage() {
     <div className="space-y-6">
       <PageHeader
         title="Ingestion health"
-        description="Recent official alert and simulated replay runs. Polling never publishes an incident; dispatch review is still required."
+        description="Recent official alert, enabled live text feed, and simulated replay runs. Polling never publishes an incident; dispatch review is still required."
         actions={<Button onClick={pollNow} busy={polling}>Poll now</Button>}
       />
       {pollSummary && <p role="status" className="rounded-lg border border-border bg-surface p-3 text-sm text-foreground">{pollSummary}</p>}
@@ -80,7 +81,7 @@ export default function IngestionHealthPage() {
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div><dt className="text-xs text-muted">Fetched / stored</dt><dd className="mt-1 font-medium">{source.items_fetched} / {source.items_stored}</dd></div>
-                <div><dt className="text-xs text-muted">Runs in 24 hours</dt><dd className="mt-1 font-medium">{source.runs_24h} <span className="text-xs text-muted">({source.successes_24h} ok, {source.failures_24h} failed)</span></dd></div>
+                <div><dt className="text-xs text-muted">Runs in 24 hours</dt><dd className="mt-1 font-medium">{source.runs_24h} <span className="text-xs text-muted">({source.successes_24h} ok, {source.partials_24h} partial, {source.failures_24h} failed)</span></dd></div>
               </dl>
               {source.last_error && <div className="mt-4 rounded-md border border-critical/30 bg-critical/5 p-3 text-xs"><p className="font-semibold text-critical">Last error</p><p className="mt-1 break-words text-foreground">{source.last_error}</p></div>}
             </Card>

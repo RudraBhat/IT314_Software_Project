@@ -74,7 +74,8 @@ class Settings:
     news_rss_enabled: bool = False
     bluesky_search_enabled: bool = False
     bluesky_search_url: str = ""
-    ingest_interval_seconds: int = 600
+    ingest_interval_seconds: int = 900
+    ingestion_worker_enabled: bool = True
 
     def require(self, name: str) -> str:
         value = getattr(self, name)
@@ -134,7 +135,10 @@ def get_settings() -> Settings:
         news_rss_enabled=_bool("NEWS_RSS_ENABLED", False),
         bluesky_search_enabled=_bool("BLUESKY_SEARCH_ENABLED", False),
         bluesky_search_url=os.getenv("BLUESKY_SEARCH_URL", "").strip(),
-        ingest_interval_seconds=max(1, _int("INGEST_INTERVAL_SECONDS", 600)),
+        ingest_interval_seconds=max(1, _int("INGEST_INTERVAL_SECONDS", 900)),
+        # The local backend owns polling in development; staging/production use the
+        # external scheduled trigger unless an operator explicitly enables this worker.
+        ingestion_worker_enabled=_bool("INGESTION_WORKER_ENABLED", app_env == "development"),
     )
 
 

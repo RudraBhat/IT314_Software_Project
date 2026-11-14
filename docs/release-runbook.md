@@ -16,7 +16,7 @@ GitHub Actions secrets used by the workflows are listed in [env-variables.md](en
 
 Order: (1) create the Neon branch `backup-pre-<tag>` (see [runbook-migration.md](runbook-migration.md) Step 1); (2) apply migrations with `python -m app.migrate` against the production-like database; (3) set Render variables, deploy the backend, wait for `/api/v1/health`; (4) set Vercel variables and deploy the frontend; (5) create staff accounts with `python -m app.cli create-staff`; (6) run `scripts/smoke.py` against the backend.
 
-Cold start: Render free instances sleep. `.github/workflows/ingest-cron.yml` calls `/api/v1/health` every 10 minutes and retries up to 9 times before ingesting, which keeps the backend warm. Before a demo, open `/api/v1/health` once manually.
+Cold start: Render free instances sleep. `.github/workflows/ingest-cron.yml` targets staging, calls `/api/v1/health` every 15 minutes and retries up to 9 times before ingesting, which keeps the staging backend warm. It uses `STAGING_BACKEND_URL` and the staging GitHub environment's `INGEST_TOKEN`; production is not polled by this workflow. Before a demo, open `/api/v1/health` once manually.
 
 Done when a person who did not write these steps can deploy a fresh environment in 30 minutes or less (Dhruv's timed clean-deploy run).
 

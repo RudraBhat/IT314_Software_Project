@@ -37,14 +37,15 @@ def ingestion_health(user: DMUser) -> dict[str, Any]:
                 SELECT source,
                        COUNT(*) FILTER (WHERE started_at >= now() - interval '24 hours') AS runs_24h,
                        COUNT(*) FILTER (WHERE started_at >= now() - interval '24 hours' AND status = 'SUCCESS') AS successes_24h,
+                       COUNT(*) FILTER (WHERE started_at >= now() - interval '24 hours' AND status = 'PARTIAL') AS partials_24h,
                        COUNT(*) FILTER (WHERE started_at >= now() - interval '24 hours' AND status = 'FAILED') AS failures_24h
                 FROM ingest_runs GROUP BY source
             ), last_error AS (
                 SELECT DISTINCT ON (source) source, error_message, started_at
-                FROM ingest_runs WHERE status = 'FAILED' ORDER BY source, started_at DESC
+                FROM ingest_runs WHERE status IN ('FAILED', 'PARTIAL') ORDER BY source, started_at DESC
             )
             SELECT l.source, l.status, l.items_fetched, l.items_stored, l.started_at, l.finished_at,
-                   r.runs_24h, r.successes_24h, r.failures_24h, e.error_message AS last_error,
+                   r.runs_24h, r.successes_24h, r.partials_24h, r.failures_24h, e.error_message AS last_error,
                    e.started_at AS last_error_at
             FROM last_run l
             LEFT JOIN rollup r USING (source)

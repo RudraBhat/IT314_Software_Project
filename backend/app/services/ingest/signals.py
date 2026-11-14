@@ -185,7 +185,12 @@ class ReplaySignalAdapter(Adapter):
                     "location_text": str(row.get("location") or "")[:200] or None,
                     "latitude": float(lat) if lat is not None else None,
                     "longitude": float(lon) if lon is not None else None,
+                    "location_precision": "EXACT" if lat is not None and lon is not None else "NONE",
                     "is_simulated": True,
-                    "raw_payload": {"dataset": "social_replay", "synthetic": True},
+                    "raw_payload": {
+                        "dataset": "social_replay",
+                        "synthetic": True,
+                        "location_precision": "exact" if lat is not None and lon is not None else "none",
+                    },
                 })
         return items

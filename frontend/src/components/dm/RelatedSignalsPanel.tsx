@@ -7,9 +7,12 @@ export interface RelatedSignal {
   source: string;
   content_text: string;
   received_at: string;
+  source_created_at?: string | null;
+  match_time_basis?: "source" | "received_fallback";
   latitude: number | null;
   longitude: number | null;
   location_text: string | null;
+  location_precision?: string;
   ai_label: string | null;
   is_simulated: boolean;
 }
@@ -40,6 +43,11 @@ export interface RelatedSignalsResponse {
   pairs: RelatedPair[];
   pairs_total: number;
   groups: RelatedGroup[];
+  unlocated: Array<RelatedSignal & {
+    location_missing: boolean;
+    location_approximate: boolean;
+    note: string;
+  }>;
   unlocated_total: number;
   truncated: boolean;
 }
@@ -50,15 +58,16 @@ function SignalSummary({ title, signal }: { title: string; signal: RelatedSignal
       <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
         <span className="font-semibold uppercase tracking-wider text-muted">{title}</span>
         <span className="font-semibold text-foreground">{signal.source}</span>
-        <span className="text-muted">{new Date(signal.received_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</span>
+        <span className="text-muted">{new Date(signal.source_created_at ?? signal.received_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</span>
         {signal.is_simulated && <Badge tone="medium">SIMULATED</Badge>}
+        {signal.match_time_basis === "received_fallback" && <Badge tone="medium">Receipt time fallback</Badge>}
         {signal.ai_label ? <Badge tone="info">{signal.ai_label}</Badge> : <span className="text-muted">No label</span>}
       </div>
       <p className="line-clamp-3 text-sm text-foreground">{signal.content_text}</p>
       <p className="mt-1 font-mono text-[11px] text-muted">
         {signal.location_text ? `${signal.location_text} · ` : ""}
         {signal.latitude !== null && signal.longitude !== null
-          ? `${signal.latitude.toFixed(4)}, ${signal.longitude.toFixed(4)}`
+          ? `${signal.latitude.toFixed(4)}, ${signal.longitude.toFixed(4)}${signal.location_precision === "DISTRICT_CENTROID" ? " (approximate)" : ""}`
           : "Location missing"}
       </p>
     </div>
@@ -87,16 +96,31 @@ export function RelatedSignalsPanel({
   return (
     <Card
       title="Possibly related alerts"
-      subtitle={`Advisory only: pending alerts within ${data.rules.radius_m} m and ${data.rules.window_hours} h of each other. A dispatcher decides what, if anything, they mean.`}
+      subtitle={`Advisory only: pending alerts with precise locations within ${data.rules.radius_m} m and ${data.rules.window_hours} h of each other. A dispatcher decides what, if anything, they mean.`}
       actions={<Badge tone="ai">Heuristic ranking</Badge>}
     >
       <div className="space-y-4">
         <p className="text-xs text-muted">{data.note}</p>
 
         {data.unlocated_total > 0 && (
-          <p className="text-xs text-critical">
-            {data.unlocated_total} pending alert{data.unlocated_total === 1 ? "" : "s"} have no location (&quot;Missing GPS&quot; below) and are never matched automatically.
-          </p>
+          <div className="space-y-2 rounded-lg border border-border bg-surface-muted/30 p-3">
+            <p className="text-xs text-critical">
+              {data.unlocated_total} pending alert{data.unlocated_total === 1 ? "" : "s"} have no precise point or only an approximate candidate location. They are never grouped by proximity.
+            </p>
+            <ul className="space-y-2">
+              {data.unlocated.slice(0, 10).map((signal) => (
+                <li key={signal.signal_id} className="rounded-md border border-border bg-surface p-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-foreground">{signal.source}</span>
+                    {signal.location_approximate && <Badge tone="medium">Approximate location</Badge>}
+                    {signal.location_missing && <Badge tone="high">Missing location</Badge>}
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-foreground">{signal.content_text}</p>
+                  <p className="mt-1 text-muted">{signal.location_text ?? signal.note}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {data.pairs.length === 0 && <p className="text-sm text-muted">No related pending alerts found right now.</p>}
@@ -106,7 +130,7 @@ export function RelatedSignalsPanel({
             {data.groups.slice(0, 6).map((g) => (
               <li key={g.group_id} className="rounded-md border border-border px-2 py-1 text-muted">
                 <span className="font-semibold text-foreground">{g.group_id}</span> · {g.size} alerts · all within {g.max_pairwise_distance_m} m
-                · received over {g.time_range.span_minutes} min
+                · timestamped over {g.time_range.span_minutes} min
               </li>
             ))}
           </ul>
