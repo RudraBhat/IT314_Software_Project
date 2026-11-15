@@ -17,6 +17,12 @@ cd backend
 python -m pytest tests/ -v --tb=short
 ```
 
+In that case `conftest.py` also clears `DATABASE_URL` for the test process, so a non-DB test that touches the app
+gets "database not configured" at once instead of waiting on connection retries, and the app's connection pool is
+closed when the session ends. The whole suite then finishes in well under a minute (14 Nov 2026: 277 passed,
+586 skipped in about 18 s); before this it could hang for minutes on a machine whose `.env` pointed at a database
+it could not log in to.
+
 ### Full Test Suite (With Database)
 
 To run both unit tests and PostGIS-backed integration tests, configure `TEST_DATABASE_URL`:
@@ -190,6 +196,27 @@ python scripts/smoke.py --base-url http://localhost:8000
 ```
 
 Against staging, point `--base-url` at the staging backend and use the staging account. A successful run ends with `[SMOKE PASSED]`; any failure prints `[SMOKE FAILURE]` and exits 1. Each run leaves a registered citizen and a verified incident behind, so never point it at production.
+
+---
+
+## 7. Automated Cyclone Scenario (`scripts/scenario_run.py`, S3-01)
+
+The scenario runner extends the smoke test to the whole lifecycle over HTTP: a citizen reports a cyclone in
+Porbandar, the dispatcher verifies it, it appears on the public map without personal data, the dispatcher reads the
+advisory recommendations and dispatches the field responder's team, the responder acknowledges, reports
+`EN_ROUTE` and `ON_SCENE` and completes, the dispatcher resolves and closes, and the citizen's timeline shows
+`SUBMITTED → VERIFIED → DISPATCHED → RESOLVED → CLOSED`.
+
+```bash
+python scripts/scenario_run.py --base-url https://<staging-backend>.onrender.com --runs 3
+```
+
+It needs the smoke staff account (with `DISPATCH` and `CLOSURE`) and a field account on the same backend whose team
+is `AVAILABLE` and belongs to an agency: `SCENARIO_FIELD_EMAIL`, `SCENARIO_FIELD_PASSWORD` and
+`SCENARIO_FIELD_TOTP_SECRET` (field accounts also use TOTP; see `scripts/README.md`). The S3-01 target is three
+passing runs in a row; the runner prints `3/3 runs passed` and exits 1 if any run fails (`--json` prints per-step
+timings). Every run creates and closes real records, so use staging only. The same steps run against the PostGIS
+test database in `backend/tests/test_scenario_dispatch_field_flow.py`.
 
 ---
 
