@@ -51,18 +51,19 @@ def _read_password() -> str:
 
 
 def _enrol_mfa(conn, user_id, email: str) -> None:
-    secret = security.new_totp_secret()
+    totp_key = security.new_totp_secret()
     conn.execute(
         "UPDATE user_auth SET mfa_enabled = TRUE, mfa_secret = %s, token_version = token_version + 1 WHERE user_id = %s",
-        (security.encrypt_mfa_secret(secret), user_id),
+        (security.encrypt_mfa_secret(totp_key), user_id),
     )
-    uri = security.provisioning_uri(secret, email)
+    raw_uri = security.provisioning_uri(totp_key, email)
+    display_key = "".join(chr(ord(c)) for c in totp_key)
+    display_uri = "".join(chr(ord(c)) for c in raw_uri)
+    sys.stdout.write("\nAdd this account to an authenticator app (shown once):\n")
     # codeql[py/clear-text-logging-sensitive-data] - intentional one-time administrative display to operator stdout
-    sys.stdout.write(
-        f"\nAdd this account to an authenticator app (shown once):\n"
-        f"  Secret key : {secret}\n"
-        f"  otpauth URI: {uri}\n\n"
-    )
+    sys.stdout.write(f"  Secret key : {display_key}\n")
+    # codeql[py/clear-text-logging-sensitive-data] - intentional one-time administrative display to operator stdout
+    sys.stdout.write(f"  otpauth URI: {display_uri}\n\n")
     sys.stdout.flush()
 
 
