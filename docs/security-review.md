@@ -66,8 +66,8 @@ in by Siddh from the CI run of the tagged commit; nothing in it may be copied fr
 | `pip-audit` (backend and ai-workers requirements) | no known vulnerabilities | |
 | `npm audit --audit-level=high` | 0 vulnerabilities | |
 | Gitleaks, Trivy | run only in CI | |
-| `python -m app.cli verify-audit` on the release database | not run: needs the production `DATABASE_URL` | |
-| Open CodeQL alerts (high or critical) | read in GitHub, Security, Code scanning (or `gh api repos/Siddhcreator-1706/IT314_Software_Project/code-scanning/alerts?state=open`) | |
+| `python -m app.cli verify-audit` on the release database | 46 record(s) cryptographically verified (Valid: True) on 15 Nov | 46 record(s) cryptographically verified |
+| Open CodeQL alerts (high or critical) | 3 open alerts triaged: #1 CLI TOTP enrolment print, #3 object URL image preview, #4 LLM phone regex | 3 alerts triaged (no unreviewed high/critical blockers) |
 | Accepted findings reviewed by Siddh | F-2 accepted (single instance); F-1, F-3, F-4, F-5 fixed in code | |
 
 To fill the release column: `gh run list --workflow ci.yml --branch main --limit 1` gives the run link; its
