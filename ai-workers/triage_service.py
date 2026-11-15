@@ -7,6 +7,10 @@ Set AI_TRIAGE_TOKEN to require "Authorization: Bearer <token>" on /triage.
 With LLM_ENABLED=true (off by default, S2-08) /triage also returns, beside the unchanged rules result,
 an advisory ``llm_second_opinion`` for low-confidence results and an ``english_summary`` of Hindi or
 Gujarati text. The LLM never replaces the rules result; S3-07 decides whether it stays on.
+
+With TRIAGE_MODEL_DIR pointing at a trained scenario model (S2-05/S2-06, service/scenario_model.py) the model's
+scenario and confidence replace the rules' ones; priority always follows the written rules
+(docs/ai/triage-rules.md). Without a usable artifact /triage stays on the rules; GET /health says which.
 """
 
 import hmac
@@ -18,7 +22,7 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from rules import triage
-from service import llm
+from service import llm, scenario_model
 
 app = FastAPI(title="DRCH AI Triage", version="1.0.0")
 
@@ -69,7 +73,8 @@ class TextAnalysisRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "drch-ai-triage"}
+    return {"status": "ok", "service": "drch-ai-triage",
+            "triage_engine": scenario_model.engine_name(scenario_model.configured_model())}
 
 
 @app.post("/triage")
@@ -79,7 +84,9 @@ def triage_endpoint(body: TriageRequest, authorization: str | None = Header(defa
         supplied = (authorization or "")[7:] if (authorization or "").lower().startswith("bearer ") else ""
         if not hmac.compare_digest(supplied, expected):
             raise HTTPException(status_code=401, detail="invalid or missing token")
-    return with_llm_opinion(triage(body.model_dump()), body.description)
+    payload = body.model_dump()
+    result = scenario_model.apply_model(triage(payload), payload, scenario_model.configured_model())
+    return with_llm_opinion(result, body.description)
 
 
 @app.post("/analyze-text")

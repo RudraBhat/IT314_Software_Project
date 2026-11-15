@@ -79,6 +79,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | Variable | Required | Purpose |
 |---|---|---|
 | `AI_TRIAGE_TOKEN` (S) | recommended | If set, `POST /triage` requires `Authorization: Bearer <token>`. |
+| `TRIAGE_MODEL_DIR` | no | Directory with a trained scenario model for `/triage` (`scenario_model.joblib` plus `metadata.json` holding its SHA-256; contract in `ai-workers/service/scenario_model.py`). Unset, missing or failing its checks = `/triage` uses the rules baseline; `GET /health` reports which (`triage_engine`). Never commit the artifact. |
 | `LLM_ENABLED` | no | `true` turns on the optional LLM adapter (`service/llm.py`). Off by default. |
 | `LLM_PROVIDER` | if enabled | `groq`, `gemini` or `ollama`. |
 | `LLM_API_KEY` (S) | if enabled | Provider key (not needed for `ollama`). Set in the hosting environment only, never in git. |
