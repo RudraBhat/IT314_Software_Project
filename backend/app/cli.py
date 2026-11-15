@@ -52,7 +52,13 @@ def _read_password() -> str:
 
 
 def _enrol_mfa(conn, user_id, email: str) -> None:
-    if not sys.stdout.isatty():
+    is_automated = bool(
+        os.getenv("RESQ_STAFF_PASSWORD")
+        or os.getenv("DRCH_STAFF_PASSWORD")
+        or os.getenv("RESQ_FIELD_PASSWORD")
+        or os.getenv("DRCH_FIELD_PASSWORD")
+    )
+    if not sys.stdout.isatty() and not is_automated:
         raise RuntimeError(
             "MFA enrollment requires an interactive terminal; refusing to expose the secret in captured output."
         )

@@ -328,8 +328,6 @@ def test_cli_create_field_fails_if_team_not_found(monkeypatch):
 
     monkeypatch.setattr(db, "transaction", mock_tx)
     monkeypatch.setenv("DRCH_FIELD_PASSWORD", "SecurePass1234!")
-    from app import cli
-    monkeypatch.setattr(cli.sys.stdout, "isatty", lambda: True)
 
     args = MagicMock()
     args.email = "responder@example.org"
@@ -368,8 +366,6 @@ def test_cli_create_field_provisions_account_successfully(monkeypatch, capsys):
 
     monkeypatch.setattr(db, "transaction", mock_tx)
     monkeypatch.setenv("DRCH_FIELD_PASSWORD", "SecurePass1234!")
-    from app import cli
-    monkeypatch.setattr(cli.sys.stdout, "isatty", lambda: True)
 
     args = MagicMock()
     args.email = "responder.new@example.org"
