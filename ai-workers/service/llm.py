@@ -31,8 +31,8 @@ MAX_TEXT_CHARS = 1500
 MAX_SUMMARY_CHARS = 400
 TIMEOUT_SECONDS = 15
 
-# Email regex: linear-time pattern with no nested quantifiers (CWE-1333/CWE-400 protection).
-_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+# Unicode-aware, linear-time pattern with no nested quantifiers; input is capped before substitution.
+_EMAIL = re.compile(r"\b[\w.%+-]+@[\w.-]+\.[^\W\d_]{2,}\b")
 _PHONE = re.compile(r"(?<!\w)\+?\d[\d\s\-]{7,}\d(?!\w)")
 
 # A completer takes a prompt and returns the model's raw text. Tests pass a stub; production uses a provider.
