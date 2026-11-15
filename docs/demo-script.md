@@ -177,7 +177,7 @@ Built and on `main` since the 11 Nov version of this list: the payment webhook (
 | Social posts | Replayed fixture (`social_replay.jsonl`), labelled as replay |
 | Demo incidents from the seed | `is_simulated = TRUE`, hidden from the public map outside development |
 | AI triage | Rules baseline, advisory only |
-| Photo analysis | Advisory only; works only when the image service is deployed |
+| Photo analysis | Advisory only; the image classifier is not deployed for this release, so step 7c shows the labelled "unavailable" path. Citizen photos themselves are stored in the database and work |
 | Payments | Sandbox mock gateway on staging (Razorpay test mode only if its keys are set); no real money |
 
 ---
