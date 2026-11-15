@@ -239,8 +239,8 @@ def _store_alerts(items: list[dict[str, Any]]) -> int:
                     effective_at, expires_at, raw_payload
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    CASE WHEN %s IS NOT NULL AND %s IS NOT NULL
-                         THEN ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography ELSE NULL END,
+                    CASE WHEN %s::double precision IS NOT NULL AND %s::double precision IS NOT NULL
+                         THEN ST_SetSRID(ST_MakePoint(%s::double precision, %s::double precision), 4326)::geography ELSE NULL::geography END,
                     %s, %s, %s, %s::jsonb
                 )
                 ON CONFLICT (source, source_uid) DO UPDATE SET
@@ -351,8 +351,8 @@ def _store_signals(items: list[dict[str, Any]], settings=None) -> int:
                     location_precision, ai_details, ai_triage_attempted_at
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s,
-                    CASE WHEN %s IS NOT NULL AND %s IS NOT NULL
-                         THEN ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography ELSE NULL END,
+                    CASE WHEN %s::double precision IS NOT NULL AND %s::double precision IS NOT NULL
+                         THEN ST_SetSRID(ST_MakePoint(%s::double precision, %s::double precision), 4326)::geography ELSE NULL::geography END,
                     %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s
                 )
                 ON CONFLICT (source, source_uid) DO UPDATE SET
