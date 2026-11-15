@@ -291,7 +291,7 @@
 }
 ```
 
-The configured scheduler targets a 15-minute cadence. Local development uses the backend poller; staging uses the GitHub Actions trigger with the backend poller disabled. `POST /api/v1/dm/ingestion/poll` starts an immediate poll for staff with `DISPATCH` or `SUPERVISOR`; `GET /api/v1/dm/ingestion/health` returns each source's latest run, 24-hour counts and latest error. Both require an MFA-verified staff session. `REPLAY` rows are always marked simulated; `GNEWS` and `BLUESKY` are live text sources, off unless `NEWS_RSS_ENABLED` / `BLUESKY_SEARCH_ENABLED` is set, and their rows are marked not simulated. Bluesky is the selected free English-language pilot; it uses `/triage` once for each new or changed signal. `/triage` is the rules baseline, not the trained English classifier. The public alerts API returns only unexpired SACHET, GDACS or IMD alerts and includes the source and fallback flag.
+The configured scheduler targets a 15-minute cadence. Local development uses the backend poller; staging uses the GitHub Actions trigger with the backend poller disabled. `POST /api/v1/dm/ingestion/poll` starts an immediate poll for staff with `DISPATCH` or `SUPERVISOR`; `GET /api/v1/dm/ingestion/health` returns each source's latest run, 24-hour counts and latest error. Both require an MFA-verified staff session. `REPLAY` rows are always marked simulated; `GNEWS` and `BLUESKY` are live text sources, off unless `NEWS_RSS_ENABLED` / `BLUESKY_SEARCH_ENABLED` is set, and their rows are marked not simulated. Bluesky is the selected free English-language pilot; it uses `/triage` once for each new or changed signal. `/triage` is the rules baseline unless a trained scenario model is configured (section 8.1); it is not the English relevance model of section 8.2. The public alerts API returns only unexpired SACHET, GDACS or IMD alerts and includes the source and fallback flag.
 
 ### 4.2 Raw Signals Queue (DM Workspace)
 * **Path:** `GET /api/v1/dm/signals`
@@ -863,6 +863,8 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
   ]
 }
 ```
+* **Which engine answers (S2-06):** by default the rules baseline (`model` = `drch-triage-v1-rules`). When `TRIAGE_MODEL_DIR` holds a checked scenario model (`ai-workers/service/scenario_model.py`), `model` is that model's name, `scenario` and `confidence` come from it, its first factor is `{"name": "text_model", "detail": "<dataset label> (<probability>)"}` and the rules' `scenario_keywords` factor is dropped. `priority` and its factors always come from the written priority rules ([ai/triage-rules.md](ai/triage-rules.md)). Labels `earthquake`, `other_disaster` and `not_disaster` are returned as `OTHER`. A missing, unchecked or failing model leaves the rules answer in place. The backend guardrails (`backend/app/services/ai_provider.py`) treat both engines alike: confidence below `AI_LOW_CONFIDENCE_THRESHOLD` (default 0.6) is stored as `LOW_CONFIDENCE`, `OTHER` as out of scope.
+
 ### 8.2 English Text Analysis (Experimental Advisory Endpoint)
 * **Path:** `POST /analyze-text`
 * **Auth:** Optional `Authorization: Bearer <AI_TRIAGE_TOKEN>` when the worker token is configured.
@@ -882,7 +884,7 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 
 ### 8.3 AI Service Health
 * **Path:** `GET /health`
-* **Response (200 OK):** `{"status": "ok", "service": "drch-ai-triage"}`
+* **Response (200 OK):** `{"status": "ok", "service": "drch-ai-triage", "triage_engine": "rules"}`. `triage_engine` is `rules`, or `model:<model name>` when a checked scenario model is loaded (8.1).
 
 ### 8.4 Optional LLM Adapter (`ai-workers/service/llm.py`)
 * Not an HTTP endpoint: a library called by `/triage` (8.1). **Off by default** (`LLM_ENABLED`); the provider key is read from `LLM_API_KEY` only.

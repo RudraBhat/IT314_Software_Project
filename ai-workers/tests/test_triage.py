@@ -36,7 +36,7 @@ def test_mismatch_lowers_confidence():
 
 
 def test_http_contract_and_auth(monkeypatch):
-    assert client.get("/health").json() == {"status": "ok", "service": "drch-ai-triage"}
+    assert client.get("/health").json() == {"status": "ok", "service": "drch-ai-triage", "triage_engine": "rules"}
     body = {"reported_scenario": "industrial_fire", "description": "factory fire, workers trapped", "people_affected": 12}
     assert client.post("/triage", json=body).status_code == 200
     monkeypatch.setenv("AI_TRIAGE_TOKEN", "s3cret-token")
