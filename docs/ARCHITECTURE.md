@@ -50,7 +50,8 @@ flowchart TD
     end
 
     subgraph AIService["AI & Triage Services"]
-        InProcessAI["In-Process Rule-Based Classifier<br/>Guarded Keyword Triage"]
+        InProcessAI["Backend AI boundary<br/>ai_provider.py guardrails"]
+        TriageAI["drch-ai-triage /triage<br/>rules baseline, optional trained model"]
         TextAI["Optional English Text Classifier<br/>/analyze-text (advisory; event-held-out baseline)"]
         VisionAI["PyTorch Vision Microservice<br/>ai-workers/model (timm backbone)"]
     end
@@ -70,6 +71,7 @@ flowchart TD
     DMRouters --> GeoService
     DMRouters --> AuditService
     DMRouters --> InProcessAI
+    InProcessAI -->|HTTP, AI_TRIAGE_URL| TriageAI
 
     DispatchService --> NeonDB
     GeoService --> NeonDB
@@ -116,7 +118,7 @@ IT314_Software_Project/
 │   │   ├── schemas/            # Pydantic data transfer models
 │   │   │   └── citizen.py      # Citizen report, incident, and alert schemas
 │   │   ├── services/           # Reusable domain business logic
-│   │   │   ├── ai_provider.py      # Triage provider abstraction & in-process classifier
+│   │   │   ├── ai_provider.py      # Triage provider boundary: HTTP call, PII scrub, guardrails
 │   │   │   ├── dispatch.py         # Shared dispatch transitions & overdue escalation
 │   │   │   ├── incidents.py        # Incident status validation & notification hooks
 │   │   │   ├── recommendations.py  # Spatial team proximity & recommendation ranking
@@ -231,10 +233,13 @@ IT314_Software_Project/
 
 ### 4.3 AI Workers & Models Architecture
 
-- **In-Process Advisory Classifier ([`backend/app/services/ai_provider.py`](file:///c:/Users/shahs/OneDrive/Desktop/My%20Folder/DAIICT/Sem5/Software/IT314_Software_Project/backend/app/services/ai_provider.py)):**
-  - Active default triage provider for the backend API.
-  - Applies deterministic keyword heuristics, confidence scoring, and strict prompt-injection guardrails.
-  - Results are marked advisory; stored in `triage_results` and never automatically alter incident states.
+- **Backend AI boundary ([`backend/app/services/ai_provider.py`](../backend/app/services/ai_provider.py)):**
+  - Calls the triage service at `AI_TRIAGE_URL` (`HttpTriageProvider`); without it, or when the call fails, the result is `UNAVAILABLE` and staff triage manually. The backend has no classifier of its own.
+  - Removes emails, phone numbers and id numbers before sending, then validates every answer (`apply_guardrails`): invalid output becomes `UNSAFE_OUTPUT`, unsupported scenarios are out of scope, confidence below `AI_LOW_CONFIDENCE_THRESHOLD` becomes `LOW_CONFIDENCE`.
+  - Results are advisory, stored in `ai_recommendations`, and never alter an incident; the human decision is recorded separately.
+- **Triage service ([`ai-workers/triage_service.py`](../ai-workers/triage_service.py)):**
+  - `POST /triage` answers with the keyword and points rules ([docs/ai/triage-rules.md](ai/triage-rules.md)); when `TRIAGE_MODEL_DIR` holds a checked trained scenario model (`service/scenario_model.py`) its scenario and confidence are used instead, and priority still follows the rules. `GET /health` reports which engine is active.
+  - The optional LLM second opinion (`service/llm.py`) is off by default. Model card and evaluation: [docs/ai/model-card.md](ai/model-card.md), [docs/ai/evaluation-report.md](ai/evaluation-report.md).
 - **English Text Analysis ([`ai-workers/text_model/`](../ai-workers/text_model/)):**
   - Optional `/analyze-text` endpoint trained on an openly licensed, event-held-out English crisis-message corpus.
   - Predicts disaster relevance, help request/offer, direct reports, and available humanitarian information categories.
@@ -318,7 +323,7 @@ To maintain factual engineering clarity, capabilities in the repository are cata
 | **Gujarat Boundary Geofencing** | **Implemented (Real)** | PostGIS `ST_Contains` spatial checks, RAM caching, Nominatim/Google fallback |
 | **Team Recommendation Engine** | **Implemented (Real)** | PostGIS proximity sorting, capability scoring, tested in `test_recommendations.py` |
 | **Internal Ingestion Runner** | **Implemented (Real)** | Advisory lock protected `/api/v1/internal/ingest/run` & cron workflow |
-| **Advisory Text AI Triage** | **Implemented (Real)** | In-process rule-based classifier with guardrails (`app.services.ai_provider`) |
+| **Advisory Text AI Triage** | **Implemented (Real), rules baseline** | `drch-ai-triage` `/triage` keyword rules behind backend guardrails (`app.services.ai_provider`); a trained scenario model plugs in through `TRIAGE_MODEL_DIR` once S2-05 delivers one |
 | **English Crisis Text Model** | **Experimental / Optional** | Real-data event-held-out baseline at `ai-workers/text_model`; separate `/analyze-text` endpoint, not connected to ingestion |
 | **Image Disaster Classifier** | **Prototype / Isolated** | PyTorch service in `ai-workers/model/app.py`, evaluated offline on split data; not deployed for this release, so photo analysis answers `503 AI_PHOTO_UNAVAILABLE` |
 | **Citizen Photo Storage** | **Implemented (Real), database** | Bytes in PostgreSQL `evidence_blobs` (migration 11), metadata and moderation in `evidence_files`; Cloudinary is planned later (see "Photo storage" in section 8) |
