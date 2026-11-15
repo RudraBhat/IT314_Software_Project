@@ -16,7 +16,8 @@ from app import audit, db
 from app.auth import DMUser
 from app.common import Filters, Page, Rationale, Scenario, page_body, scenario_db
 from app.errors import ApiError, conflict, not_found
-from app.services.donation_endings import expire_stale_donations, ttl_minutes
+from app.payments import get_gateway, is_sandbox_gateway
+from app.services.donation_endings import FAILURE_REASONS, expire_stale_donations, ttl_minutes
 
 router = APIRouter()
 
@@ -44,6 +45,25 @@ def donation_oversight(principal: DMUser):
         oldest_pending = conn.execute(
             "SELECT MIN(created_at) AS t FROM donations WHERE status = 'PENDING'"
         ).fetchone()["t"]
+        failed_rows = conn.execute(
+            """
+            SELECT COALESCE(failure_reason, 'UNKNOWN') AS reason,
+                   COUNT(*) AS count,
+                   COALESCE(SUM(amount), 0) AS amount
+            FROM donations
+            WHERE status = 'FAILED'
+            GROUP BY 1
+            """
+        ).fetchall()
+        failed_by_reason = {
+            reason: {"count": 0, "amount": Decimal(0)}
+            for reason in (*FAILURE_REASONS, "UNKNOWN")
+        }
+        for r in failed_rows:
+            failed_by_reason[r["reason"]] = {
+                "count": int(r["count"]),
+                "amount": r["amount"],
+            }
     totals = {
         key: sum((c[key] for c in campaigns), Decimal(0))
         for key in ("confirmed_amount", "pending_amount", "failed_amount")
@@ -52,6 +72,9 @@ def donation_oversight(principal: DMUser):
         "campaigns": campaigns,
         "totals": totals,
         "oldest_pending_at": oldest_pending,
+        "failed_by_reason": failed_by_reason,
+        "pending_timeout_minutes": ttl_minutes(),
+        "is_sandbox": is_sandbox_gateway(get_gateway().name),
         "definitions": {
             "confirmed": "Confirmed by the payment gateway callback.",
             "pending": (
@@ -61,6 +84,10 @@ def donation_oversight(principal: DMUser):
             "failed": (
                 "Cancelled by the donor, declined by the gateway or expired unpaid; no receipt is issued. "
                 "A payment the gateway still captures later confirms the donation."
+            ),
+            "failed_by_reason": (
+                "Failed donations broken down by why they did not complete "
+                "(abandoned by donor, declined by gateway, expired unpaid, or unclassified)."
             ),
         },
     }

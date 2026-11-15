@@ -871,10 +871,16 @@ export default function DonatePage() {
                       Make Another Contribution
                     </button>
                     <Link
+                      href="/my-donations"
+                      className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition text-center"
+                    >
+                      My Donations &amp; Receipts
+                    </Link>
+                    <Link
                       href="/"
                       className="flex-1 rounded-lg bg-sky-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-sky-500 transition text-center"
                     >
-                      View Live Operations Map
+                      Live Operations Map
                     </Link>
                   </div>
                 </div>

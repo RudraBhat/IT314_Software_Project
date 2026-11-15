@@ -196,3 +196,61 @@ def test_the_database_refuses_a_failure_reason_on_a_pending_donation(campaign, s
             "VALUES (%s, 10, 'PENDING', TRUE, %s, 'EXPIRED')",
             (campaign["campaign_id"], f"chk-{uuid.uuid4()}"),
         )
+
+
+def test_oversight_failed_donations_breakdown(client, campaign, make, sql):
+    from app.services.donation_endings import ttl_minutes
+
+    staff = make.staff()
+    baseline = client.get("/api/v1/dm/oversight/donations", headers=staff["headers"]).json()
+    assert baseline["pending_timeout_minutes"] == ttl_minutes()
+    assert "is_sandbox" in baseline
+    assert isinstance(baseline["is_sandbox"], bool)
+    base_fbr = baseline["failed_by_reason"]
+    for r in ("ABANDONED", "GATEWAY_DECLINED", "EXPIRED", "UNKNOWN"):
+        assert r in base_fbr
+        assert base_fbr[r]["count"] >= 0
+        assert float(base_fbr[r]["amount"]) >= 0.0
+
+    # 1. Cancelled donation -> ABANDONED
+    order_cancel = _create(client, campaign, amount=1200)
+    client.post(f"{BASE}/{order_cancel['donation_id']}/cancel")
+
+    # 2. Gateway declined donation -> GATEWAY_DECLINED
+    order_declined = _create(client, campaign, amount=1500)
+    _webhook(
+        client,
+        order_declined["gateway_order_id"],
+        f"pay_mock_dec_{uuid.uuid4().hex[:8]}",
+        event="payment.failed",
+    )
+
+    # 3. Expired donation -> EXPIRED (simulated via past created_at; expire_stale_donations will sweep it)
+    order_expired = _create(client, campaign, amount=1800)
+    sql.execute(
+        "UPDATE donations SET created_at = now() - INTERVAL '35 minutes' WHERE donation_id = %s",
+        (order_expired["donation_id"],),
+    )
+
+    # 4. FAILED donation with failure_reason IS NULL (legacy row) -> UNKNOWN
+    legacy_key = f"legacy-{uuid.uuid4().hex[:8]}"
+    sql.execute(
+        "INSERT INTO donations (campaign_id, amount, status, is_anonymous, idempotency_key, failure_reason) "
+        "VALUES (%s, 2200, 'FAILED', TRUE, %s, NULL)",
+        (campaign["campaign_id"], legacy_key),
+    )
+
+    over = client.get("/api/v1/dm/oversight/donations", headers=staff["headers"]).json()
+    fbr = over["failed_by_reason"]
+
+    assert fbr["ABANDONED"]["count"] == base_fbr["ABANDONED"]["count"] + 1
+    assert float(fbr["ABANDONED"]["amount"]) == float(base_fbr["ABANDONED"]["amount"]) + 1200.0
+
+    assert fbr["GATEWAY_DECLINED"]["count"] == base_fbr["GATEWAY_DECLINED"]["count"] + 1
+    assert float(fbr["GATEWAY_DECLINED"]["amount"]) == float(base_fbr["GATEWAY_DECLINED"]["amount"]) + 1500.0
+
+    assert fbr["EXPIRED"]["count"] == base_fbr["EXPIRED"]["count"] + 1
+    assert float(fbr["EXPIRED"]["amount"]) == float(base_fbr["EXPIRED"]["amount"]) + 1800.0
+
+    assert fbr["UNKNOWN"]["count"] == base_fbr["UNKNOWN"]["count"] + 1
+    assert float(fbr["UNKNOWN"]["amount"]) == float(base_fbr["UNKNOWN"]["amount"]) + 2200.0
