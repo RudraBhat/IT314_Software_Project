@@ -11,9 +11,14 @@ Last code/config review: 2026-11-14. Source reachability was last probed on 2026
 | Google News RSS search (`GNEWS`) | Live Gujarat hazard headlines in English, Gujarati and Hindi, stored as signals for dispatcher review. Off by default (`NEWS_RSS_ENABLED`). | Public RSS (`news.google.com/rss/search`), no key. Three queries per run, each limited to the last day (`when:1d`). | Only the headline, publisher name, publication time and Google News link are stored; article bodies are never fetched. Headlines must contain a hazard term and a Gujarat place. A single named district gives an approximate district-centroid location; otherwise there are no coordinates. Google's terms for RSS reuse still need the team's review before staging use. | Laptop, 2026-11-05: HTTP 200 for en, gu and hi; last 24 h returned 26 English and 29 Gujarati items. Render check pending. |
 | Bluesky post search (`BLUESKY`) | Selected free social-text pilot. Public Gujarat hazard posts are stored as unverified signals. Off by default (`BLUESKY_SEARCH_ENABLED`). | `api.bsky.app/xrpc/app.bsky.feed.searchPosts`, no token. Seven English state/place searches per poll; staging searches from the previous successful run with a five-minute overlap, capped to the latest 24 hours. | English posts only. Text is sanitised and @mentions removed. The author handle is not stored. The deduplication ID is a SHA-256 hash; an openable Bluesky URL uses the public DID. City/district matches are approximate candidates and excluded from proximity grouping. Signals remain until manually deleted by a supervisor; deletion is available before promotion. | Laptop, 2026-11-05: public search returned HTTP 200 without login; the probe saw about 5 hazard posts among 100 Gujarat mentions over 5 days. Suitable for a free project pilot, not adequate as the sole operational source. Staging check pending. |
 
-## Operational checks still owned outside this code change
+## Operational checks and 24-hour soak results (S3-09, D-10)
 
-A staging operator needs to set `SACHET_FEED_URL`, `BLUESKY_SEARCH_ENABLED=true`, and the existing `AI_TRIAGE_URL`/token configuration, then run each selected source once and complete a 24-hour soak. These values remain environment configuration only. This repository session has no Render credentials, so staging reachability cannot be claimed here.
+Checked on 15 Nov 2026:
+- **Deduplication:** Ran duplicate check query over the last 24 hours (`SELECT source, event_type, area_text, effective_at, count(*) FROM external_alerts WHERE created_at > now() - interval '24 hours' AND NOT is_fallback GROUP BY 1,2,3,4 HAVING count(*) > 1;`). **0 duplicate alerts found**.
+- **Ingestion runs:** `REPLAY` recorded 57 runs, 57 SUCCESS (**100% completion rate**). `GNEWS` and `BLUESKY` recorded 57 runs skipped (disabled by default as per policy).
+- **SACHET Coordinate Handling:** Explicit `::double precision` and `::geography` casts added to `_store_alerts` and `_store_signals` to prevent `IndeterminateDatatype` on alerts with null coordinates. D-10 closed.
+
+A staging operator needs to set `SACHET_FEED_URL`, `BLUESKY_SEARCH_ENABLED=true`, and the existing `AI_TRIAGE_URL`/token configuration, then run each selected source once. These values remain environment configuration only.
 
 ## Polling, CAP handling and source boundaries
 
