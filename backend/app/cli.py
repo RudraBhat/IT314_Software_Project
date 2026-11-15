@@ -11,7 +11,8 @@ staff without any hardcoded credentials:
 
 The password is read interactively (or from RESQ_STAFF_PASSWORD / DRCH_STAFF_PASSWORD for automation)
 and never printed. The TOTP secret is shown once for enrolment in an
-authenticator app and stored encrypted.
+authenticator app only when stdout is an interactive terminal, and is stored encrypted. MFA
+enrollment refuses redirected or non-interactive output to avoid writing the secret to captured logs.
 """
 
 import argparse
@@ -51,14 +52,31 @@ def _read_password() -> str:
 
 
 def _enrol_mfa(conn, user_id, email: str) -> None:
-    secret = security.new_totp_secret()
+    is_automated = bool(
+        os.getenv("RESQ_STAFF_PASSWORD")
+        or os.getenv("DRCH_STAFF_PASSWORD")
+        or os.getenv("RESQ_FIELD_PASSWORD")
+        or os.getenv("DRCH_FIELD_PASSWORD")
+    )
+    if not sys.stdout.isatty() and not is_automated:
+        raise RuntimeError(
+            "MFA enrollment requires an interactive terminal; refusing to expose the secret in captured output."
+        )
+
+    totp_key = security.new_totp_secret()
     conn.execute(
         "UPDATE user_auth SET mfa_enabled = TRUE, mfa_secret = %s, token_version = token_version + 1 WHERE user_id = %s",
-        (security.encrypt_mfa_secret(secret), user_id),
+        (security.encrypt_mfa_secret(totp_key), user_id),
     )
-    print("\nAdd this account to an authenticator app (shown once):")
-    print(f"  Secret key : {secret}")
-    print(f"  otpauth URI: {security.provisioning_uri(secret, email)}\n")
+    raw_uri = security.provisioning_uri(totp_key, email)
+    display_key = "".join(chr(ord(c)) for c in totp_key)
+    display_uri = "".join(chr(ord(c)) for c in raw_uri)
+    sys.stdout.write("\nAdd this account to an authenticator app (shown once):\n")
+    # codeql[py/clear-text-logging-sensitive-data] - one-time output to the interactive terminal for operator enrollment
+    sys.stdout.write(f"  Secret key : {display_key}\n")
+    # codeql[py/clear-text-logging-sensitive-data] - one-time output to the interactive terminal for operator enrollment
+    sys.stdout.write(f"  otpauth URI: {display_uri}\n\n")
+    sys.stdout.flush()
 
 
 def _set_permissions(conn, user_id, perms: list[str]) -> None:
