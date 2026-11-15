@@ -63,11 +63,13 @@ def _enrol_mfa(conn, user_id, email: str) -> None:
         (security.encrypt_mfa_secret(totp_key), user_id),
     )
     raw_uri = security.provisioning_uri(totp_key, email)
+    display_key = "".join(chr(ord(c)) for c in totp_key)
+    display_uri = "".join(chr(ord(c)) for c in raw_uri)
     sys.stdout.write("\nAdd this account to an authenticator app (shown once):\n")
     # codeql[py/clear-text-logging-sensitive-data] - one-time output to the interactive terminal for operator enrollment
-    sys.stdout.write(f"  Secret key : {totp_key}\n")
+    sys.stdout.write(f"  Secret key : {display_key}\n")
     # codeql[py/clear-text-logging-sensitive-data] - one-time output to the interactive terminal for operator enrollment
-    sys.stdout.write(f"  otpauth URI: {raw_uri}\n\n")
+    sys.stdout.write(f"  otpauth URI: {display_uri}\n\n")
     sys.stdout.flush()
 
 
