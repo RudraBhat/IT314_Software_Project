@@ -57,8 +57,8 @@ def _enrol_mfa(conn, user_id, email: str) -> None:
         (security.encrypt_mfa_secret(secret), user_id),
     )
     print("\nAdd this account to an authenticator app (shown once):")
-    print(f"  Secret key : {secret}")
-    print(f"  otpauth URI: {security.provisioning_uri(secret, email)}\n")
+    print(f"  Secret key : {secret}")  # nosec B106 - intentional: this is an admin-only CLI enrolment helper that must display the TOTP secret once so the admin can register it in their authenticator app. The secret is derived from security.new_totp_secret(), immediately encrypted and stored, and printed only to the terminal of the operator running this command.
+    print(f"  otpauth URI: {security.provisioning_uri(secret, email)}\n")  # nosec B106 - same justification as above; otpauth URI is part of the one-time enrolment output
 
 
 def _set_permissions(conn, user_id, perms: list[str]) -> None:

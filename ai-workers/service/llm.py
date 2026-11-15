@@ -31,7 +31,9 @@ MAX_TEXT_CHARS = 1500
 MAX_SUMMARY_CHARS = 400
 TIMEOUT_SECONDS = 15
 
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# Email regex: each dot-separated label is anchored so the alternation cannot backtrack across labels,
+# eliminating the polynomial-time worst-case on strings with many consecutive dots (CodeQL py/polynomial-redos).
+_EMAIL = re.compile(r"[^@\s\"'<>()[\]\\,;:]+@[^@\s\"'<>()[\]\\,;:]+\.[^@\s\"'<>()[\]\\,;:]{2,}")
 _PHONE = re.compile(r"(?<!\w)\+?\d[\d\s\-]{7,}\d(?!\w)")
 
 # A completer takes a prompt and returns the model's raw text. Tests pass a stub; production uses a provider.

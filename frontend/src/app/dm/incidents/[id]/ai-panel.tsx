@@ -326,6 +326,7 @@ function PhotoAnalyseSection({ incidentId }: { incidentId: string }) {
       {preview && !result && (
         <div className="mt-3 space-y-2">
           <div className="flex items-center gap-3">
+            {/* codeql[js/xss-through-dom] preview is always a blob: URL created by URL.createObjectURL from a user-selected File; it is never derived from DOM text or external input, so there is no XSS risk here. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={preview} alt="Selected photo" className="h-16 w-16 rounded object-cover border border-border" />
             <div className="min-w-0 flex-1 text-xs">
