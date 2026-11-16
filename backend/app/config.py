@@ -66,6 +66,12 @@ class Settings:
     frontend_url: str = "http://localhost:3000"
     invitation_token_hours: int = 48
     password_reset_token_minutes: int = 15
+    refresh_idle_hours_staff: int = 48
+    refresh_max_hours_staff: int = 168
+    refresh_idle_hours_citizen: int = 720
+    refresh_max_hours_citizen: int = 2160
+    max_active_sessions: int = 5
+    refresh_reuse_grace_seconds: int = 10
     google_client_id: str | None = None
     razorpay_key_id: str | None = None
     razorpay_key_secret: str | None = None
@@ -95,7 +101,7 @@ def get_settings() -> Settings:
         mfa_encryption_key=os.getenv("MFA_ENCRYPTION_KEY"),
         ai_triage_url=os.getenv("AI_TRIAGE_URL") or None,
         ai_triage_token=os.getenv("AI_TRIAGE_TOKEN") or None,
-        access_token_minutes=_int("ACCESS_TOKEN_MINUTES", 60),
+        access_token_minutes=_int("ACCESS_TOKEN_MINUTES", 15),
         mfa_token_minutes=_int("MFA_TOKEN_MINUTES", 5),
         login_max_attempts=_int("LOGIN_MAX_ATTEMPTS", 5),
         lockout_minutes=_int("LOGIN_LOCKOUT_MINUTES", 15),
@@ -123,6 +129,12 @@ def get_settings() -> Settings:
         frontend_url=os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/"),
         invitation_token_hours=_int("INVITATION_TOKEN_HOURS", 48),
         password_reset_token_minutes=_int("PASSWORD_RESET_TOKEN_MINUTES", 15),
+        refresh_idle_hours_staff=_int("REFRESH_IDLE_HOURS_STAFF", 48),
+        refresh_max_hours_staff=_int("REFRESH_MAX_HOURS_STAFF", 168),
+        refresh_idle_hours_citizen=_int("REFRESH_IDLE_HOURS_CITIZEN", 720),
+        refresh_max_hours_citizen=_int("REFRESH_MAX_HOURS_CITIZEN", 2160),
+        max_active_sessions=_int("MAX_ACTIVE_SESSIONS", 5),
+        refresh_reuse_grace_seconds=_int("REFRESH_REUSE_GRACE_SECONDS", 10),
         google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
         razorpay_key_id=os.getenv("RAZORPAY_KEY_ID") or None,
         razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET") or None,
