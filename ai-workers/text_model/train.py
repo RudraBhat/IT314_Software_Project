@@ -306,7 +306,12 @@ def _abstention_metrics(
 
 
 def _fit_binary_classifier(features, labels: np.ndarray) -> LogisticRegression:
-    model = LogisticRegression(C=2.0, max_iter=1000, solver="liblinear", random_state=17)
+    # "balanced" weights stop rare categories (e.g. floods, medical_help) from being drowned out by the many
+    # negative rows. Unweighted heads rarely reached the 0.5 threshold, so 14 of 24 heads scored F1 = 0
+    # on the Hurricane Sandy test event; see the README section on class balancing.
+    model = LogisticRegression(
+        C=2.0, max_iter=1000, solver="liblinear", random_state=17, class_weight="balanced"
+    )
     return model.fit(features, labels)
 
 
@@ -482,6 +487,7 @@ def train(data_dir: Path, output_dir: Path, report_path: Path) -> dict:
         "training": {
             "vectorizer": "word TF-IDF uni/bi-grams + character 3-5 grams",
             "classifier": "scikit-learn logistic regression",
+            "category_class_weight": "balanced",
             "runtime_versions": {
                 "python": platform.python_version(),
                 "scikit_learn": sklearn.__version__,
