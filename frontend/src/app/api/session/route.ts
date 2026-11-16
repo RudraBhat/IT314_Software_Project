@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { API_URL, currentUser, cookieOptions, REFRESH_COOKIE, SESSION_COOKIE } from "@/lib/session";
+import { API_URL, currentUser, cookieOptions, REFRESH_COOKIE, SESSION_COOKIE, SessionUnavailableError } from "@/lib/session";
 
 function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
@@ -20,7 +20,17 @@ function sameOrigin(request: Request): boolean {
  * DELETE: Clears the session cookies for logout.
  */
 export async function GET() {
-  const user = await currentUser();
+  let user;
+  try {
+    user = await currentUser();
+  } catch (error) {
+    if (!(error instanceof SessionUnavailableError)) throw error;
+    // Say "try again", not "signed out": the session is untouched.
+    return Response.json(
+      { error: { code: "SESSION_UNAVAILABLE", message: error.message } },
+      { status: 503, headers: { "cache-control": "no-store" } },
+    );
+  }
   const dm = user !== null && user.role === "DISASTER_MGMT" && user.mfa_verified;
   const citizen = user !== null && user.role === "NORMAL_USER";
   return Response.json(

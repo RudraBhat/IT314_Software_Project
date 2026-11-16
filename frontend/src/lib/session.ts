@@ -71,30 +71,48 @@ export async function sessionToken(): Promise<string | null> {
   return (await cookies()).get(SESSION_COOKIE)?.value ?? null;
 }
 
+/** The backend could not be asked (slow, down or erroring). That is not the same as being signed out. */
+export class SessionUnavailableError extends Error {
+  constructor() {
+    super("The sign-in service did not answer. Try again in a moment.");
+    this.name = "SessionUnavailableError";
+  }
+}
+
+// A slow database must not look like a sign-out, so wait longer and retry once before giving up.
+const ME_TIMEOUT_MS = 15000;
+const ME_ATTEMPTS = 2;
+
+function fetchMe(path: string, token: string): Promise<Response> {
+  return fetch(`${API_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(ME_TIMEOUT_MS),
+  });
+}
+
+/**
+ * The signed-in user, or null when there is no session or the backend refused the token (401/403).
+ * Throws SessionUnavailableError when the backend could not be reached or kept erroring, so a slow
+ * moment never sends a signed-in person to the login page.
+ */
 export async function currentUser(): Promise<CurrentUser | null> {
   const token = await sessionToken();
   if (!token) return null;
 
-  try {
-    let response = await fetch(`${API_URL}/api/v1/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (response.status === 404) {
-      response = await fetch(`${API_URL}/api/v1/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-        signal: AbortSignal.timeout(5000),
-      });
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < ME_ATTEMPTS; attempt++) {
+    try {
+      response = await fetchMe("/api/v1/auth/me", token);
+      if (response.status === 404) response = await fetchMe("/api/v1/me", token);
+      if (response.status < 500) break;
+    } catch {
+      response = null;
     }
-
-    if (!response.ok) return null;
-
-    const user: unknown = await response.json();
-    return isCurrentUser(user) ? user : null;
-  } catch {
-    return null;
   }
+  if (response === null || response.status >= 500) throw new SessionUnavailableError();
+  if (!response.ok) return null;
+
+  const user: unknown = await response.json().catch(() => null);
+  return isCurrentUser(user) ? user : null;
 }

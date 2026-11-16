@@ -19,7 +19,8 @@ async function post(path: string, body: unknown, token?: string) {
       },
       body: JSON.stringify(body),
       cache: "no-store",
-      signal: AbortSignal.timeout(10000),
+      // Sign-in is several database round trips, which can take a few seconds on a remote database.
+      signal: AbortSignal.timeout(20000),
     });
     const data = res.status === 204 ? {} : await res.json().catch(() => ({}));
     return { ok: res.ok, status: res.status, data };
