@@ -972,6 +972,19 @@ Staff accounts (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`) are never created wit
 * **Enable:** an account that had finished setup becomes `ACTIVE` and any lockout is cleared; one that never finished setup goes back to `PENDING_SETUP` and needs a new invitation link (resend it from the pending list). Old sessions stay ended. Returns `{"user_id", "status"}`. Audit action `ACCOUNT_ENABLED`.
 * **Errors:** `409 CANNOT_DISABLE_SELF`, `409 LAST_ADMIN` (the last active administrator cannot be disabled), `409 ALREADY_DISABLED`, `409 NOT_DISABLED`, `404` for a citizen or unknown account.
 
+#### Reset a person's sign-in
+* **Path:** `POST /api/v1/admin/accounts/{user_id}/reset-credentials`. Same authentication and rate limit as disable. Body `{"reason": "..."}`, 5 to 500 characters, audited.
+* **Effect:** for an `ACTIVE` staff account whose person lost their phone or password. The account goes back to `PENDING_SETUP`, the password stays but the authenticator is removed, sessions end, lockout and any pending password reset are cleared, and a single-use setup link (same expiry as invitations) is emailed to them. They choose a new password and enrol a new authenticator on `/setup-account`. The administrator never sees the link, a password or an authenticator secret. Returns `{"user_id", "status": "PENDING_SETUP", "invitation_expires_at", "email_configured"}`; `email_configured` is false when no SMTP host is set, so no email left the server. Audit action `ACCOUNT_CREDENTIALS_RESET`.
+* **Errors:** `409 CANNOT_RESET_SELF`, `409 ACCOUNT_DISABLED` (enable it first), `409 ALREADY_PENDING` (resend its invitation instead), `409 LAST_ADMIN` (the only active administrator cannot be reset), `404` for a citizen or unknown account.
+
+#### Audit log
+* **Path:** `GET /api/v1/admin/audit`. Same authentication as the directory (`APP_MGMT` with verified MFA).
+* **Scope:** account and security entries only: entity `user` (account changes, sign-ins, registrations), `route` (denied requests) and `audit` (chain checks). Operational entries (incidents, dispatches, donations, evidence and so on) are never returned, because administrators have no operational access.
+* **Query:** `q` (part of a staff name or email, or of an action; it never matches a citizen), `action` (exact), `result` (`SUCCESS`, `FAILURE` or `DENIED`), `user_id` (entries made by or about one account), `from` and `to` (dates, inclusive; a start after the end is `422`), `page`, `limit` (1–100, default 25). Newest first.
+* **Response (200):** `{"items", "page", "limit", "total", "pages", "facets": {"actions": [...]}}`. Each item has `audit_id`, `occurred_at`, `action`, `entity_type`, `entity_id`, `result`, `rationale`, `actor` and `target` (`{user_id, role, name, email}` or `null` for the system), `ip`, `before` and `after`.
+* **Privacy:** when the actor or target is a citizen only their role is returned (no name, email or id), and a citizen actor's `ip`, `before` and `after` are `null`.
+* **Verify the chain:** `POST /api/v1/admin/audit/verify` checks the SHA-256 hash chain (the same check as `python -m app.cli verify-audit`) and returns `{"valid", "records", "mismatches", "message", "verified_at"}`. The check is recorded as `AUDIT_CHAIN_VERIFIED` (result `FAILURE` when tampering is found). Rate limited to 6 per hour because it reads the whole table.
+
 ---
 
 ## 10. Owner Sign-Off Matrix

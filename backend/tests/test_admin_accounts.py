@@ -1,7 +1,10 @@
 """Administrator staff account directory: GET /api/v1/admin/accounts."""
 
+import re
 import uuid
+from datetime import UTC, datetime, timedelta
 
+import pyotp
 import pytest
 
 pytestmark = pytest.mark.db
@@ -251,4 +254,124 @@ def test_only_an_mfa_verified_administrator_can_disable_or_enable(make, client):
         assert action(client, make.citizen()["headers"], target["user_id"]).status_code == 403
         assert action(client, make.field_team_user()["headers"], target["user_id"]).status_code == 403
         assert action(client, make.staff("SUPERVISOR")["headers"], target["user_id"]).status_code == 403
+    assert client.get("/api/v1/dm/dashboard", headers=target["headers"]).status_code == 200  # nothing changed
+
+
+# --------------------------------------------------------------------------- reset a person's sign-in
+
+NEW_PASSWORD = "Brand-New-Passw0rd!"
+RESET_REASON = {"reason": "Lost their phone, authenticator no longer available"}
+
+
+def _reset(client, headers, user_id, body=RESET_REASON):
+    return client.post(f"{URL}/{user_id}/reset-credentials", headers=headers, json=body)
+
+
+def _setup_token(email: str) -> str:
+    from app.services import email as email_service
+
+    mails = [m for m in email_service.get_outbox() if m["to"] == email and "reset" in m["subject"].lower()]
+    assert mails, "the reset email must have been sent"
+    return re.search(r"token=([\w-]+)", mails[-1]["text"]).group(1)
+
+
+def test_reset_clears_the_sign_in_ends_sessions_and_is_audited(make, client, sql):
+    admin, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    assert client.get("/api/v1/dm/dashboard", headers=staff["headers"]).status_code == 200
+
+    r = _reset(client, headers, staff["user_id"])
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"user_id", "status", "invitation_expires_at", "email_configured"}, "no secret or link in the response"
+    assert body["status"] == "PENDING_SETUP"
+
+    assert client.get("/api/v1/dm/dashboard", headers=staff["headers"]).status_code == 401  # session ended
+    login = client.post("/api/v1/auth/login", json={"email": staff["email"], "password": staff["password"]})
+    assert login.status_code == 403 and login.json()["error"]["code"] == "ACCOUNT_NOT_SETUP"
+    auth = sql.execute("SELECT mfa_enabled, mfa_secret FROM user_auth WHERE user_id = %s", (staff["user_id"],)).fetchone()
+    assert auth["mfa_enabled"] is False and auth["mfa_secret"] is None
+    assert _find(client, headers, q=staff["email"])["items"][0]["status"] == "PENDING_SETUP"
+
+    entry = sql.execute(
+        "SELECT actor_id, rationale, before_state, after_state FROM audit_logs WHERE entity_id = %s AND action = 'ACCOUNT_CREDENTIALS_RESET'",
+        (staff["user_id"],),
+    ).fetchone()
+    assert entry["actor_id"] == admin["user_id"] and entry["rationale"] == RESET_REASON["reason"]
+    assert entry["before_state"]["mfa_enabled"] is True and entry["after_state"]["status"] == "PENDING_SETUP"
+
+
+def test_the_person_recovers_with_the_emailed_link(make, client):
+    _, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    assert _reset(client, headers, staff["user_id"]).status_code == 200
+    token = _setup_token(staff["email"])
+
+    assert client.get("/api/v1/auth/invitation/verify", params={"token": token}).json()["valid"] is True
+    accepted = client.post("/api/v1/auth/invitation/accept", json={"token": token, "password": NEW_PASSWORD})
+    assert accepted.status_code == 200, accepted.text
+    secret = accepted.json()["mfa_secret"]
+    activated = client.post(
+        "/api/v1/auth/invitation/verify-totp",
+        json={"mfa_setup_token": accepted.json()["mfa_setup_token"], "code": pyotp.TOTP(secret).now()},
+    )
+    assert activated.status_code == 200, activated.text
+
+    assert client.post("/api/v1/auth/login", json={"email": staff["email"], "password": staff["password"]}).status_code == 401  # old password
+    first = client.post("/api/v1/auth/login", json={"email": staff["email"], "password": NEW_PASSWORD})
+    assert first.status_code == 200 and first.json()["mfa_required"] is True
+    later_code = pyotp.TOTP(secret).at(datetime.now(UTC) + timedelta(seconds=30))
+    verified = client.post("/api/v1/auth/mfa/verify", json={"mfa_token": first.json()["mfa_token"], "code": later_code})
+    assert verified.status_code == 200, verified.text
+    assert client.get("/api/v1/dm/dashboard", headers={"Authorization": f"Bearer {verified.json()['access_token']}"}).status_code == 200
+    # the link works only once
+    assert client.post("/api/v1/auth/invitation/accept", json={"token": token, "password": NEW_PASSWORD}).status_code == 400
+
+
+def test_the_email_says_what_happened_and_the_link_is_the_only_secret(make, client):
+    from app.services import email as email_service
+
+    _, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    _reset(client, headers, staff["user_id"])
+    mail = [m for m in email_service.get_outbox() if m["to"] == staff["email"]][-1]
+    assert "reset" in mail["subject"].lower() and "administrator reset" in mail["text"]
+    assert "/setup-account?token=" in mail["text"] and "expires in" in mail["text"]
+
+
+def test_an_administrator_can_reset_another_administrator(make, client):
+    _, headers = _admin(make)
+    other = make.user("APP_MGMT")
+    assert _reset(client, headers, other["user_id"]).status_code == 200
+    assert client.get(URL, headers=make.token(other)).status_code == 401
+
+
+def test_reset_guards(make, client):
+    admin, headers = _admin(make)
+    me = _reset(client, headers, admin["user_id"])
+    assert me.status_code == 409 and me.json()["error"]["code"] == "CANNOT_RESET_SELF"
+    assert _reset(client, headers, make.citizen()["user_id"]).status_code == 404
+    assert _reset(client, headers, uuid.uuid4()).status_code == 404
+
+    staff = make.staff("DISPATCH")
+    assert client.post(f"{URL}/{staff['user_id']}/disable", headers=headers, json=REASON).status_code == 200
+    disabled = _reset(client, headers, staff["user_id"])
+    assert disabled.status_code == 409 and disabled.json()["error"]["code"] == "ACCOUNT_DISABLED"
+
+    other = make.staff("DISPATCH")
+    assert _reset(client, headers, other["user_id"]).status_code == 200
+    again = _reset(client, headers, other["user_id"])
+    assert again.status_code == 409 and again.json()["error"]["code"] == "ALREADY_PENDING"
+    for bad in ({}, {"reason": "no"}):
+        assert _reset(client, headers, make.staff("DISPATCH")["user_id"], bad).status_code == 422
+
+
+def test_only_an_mfa_verified_administrator_can_reset_a_sign_in(make, client):
+    target = make.staff("DISPATCH")
+    admin = make.user("APP_MGMT")
+    assert _reset(client, {}, target["user_id"]).status_code == 401
+    assert _reset(client, make.token(admin, mfa=False), target["user_id"]).status_code == 401
+    assert _reset(client, make.citizen()["headers"], target["user_id"]).status_code == 403
+    assert _reset(client, make.field_team_user()["headers"], target["user_id"]).status_code == 403
+    assert _reset(client, make.staff("SUPERVISOR")["headers"], target["user_id"]).status_code == 403
     assert client.get("/api/v1/dm/dashboard", headers=target["headers"]).status_code == 200  # nothing changed

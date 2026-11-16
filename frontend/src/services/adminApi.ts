@@ -81,3 +81,62 @@ export const disableAccount = (userId: string, reason: string) =>
 /** Switch a disabled account back on (an unfinished invitation returns to awaiting setup). */
 export const enableAccount = (userId: string, reason: string) =>
   request<StatusChangeResult>(`accounts/${encodeURIComponent(userId)}/enable`, { method: "POST", body: { reason } });
+
+export type AuditResult = "SUCCESS" | "FAILURE" | "DENIED";
+
+export type AuditPerson = { user_id?: string | null; role: string | null; name: string | null; email: string | null };
+
+export type AuditEntry = {
+  audit_id: number;
+  occurred_at: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  result: AuditResult;
+  rationale: string | null;
+  actor: AuditPerson | null;
+  target: AuditPerson | null;
+  ip: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+};
+
+export type AuditPage = {
+  items: AuditEntry[];
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  facets: { actions: string[] };
+};
+
+export type AuditQuery = { q?: string; action?: string; result?: AuditResult | ""; from?: string; to?: string; page?: number };
+
+export async function listAudit(query: AuditQuery): Promise<AuditPage> {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.action) params.set("action", query.action);
+  if (query.result) params.set("result", query.result);
+  if (query.from) params.set("from", query.from);
+  if (query.to) params.set("to", query.to);
+  params.set("page", String(query.page ?? 1));
+  params.set("limit", "20");
+  return request<AuditPage>(`audit?${params.toString()}`);
+}
+
+export type AuditVerification = {
+  valid: boolean;
+  records: number | null;
+  mismatches: number | null;
+  message: string;
+  verified_at: string;
+};
+
+/** Check the audit log's hash chain. The check is itself recorded in the log. */
+export const verifyAudit = () => request<AuditVerification>("audit/verify", { method: "POST", body: {} });
+
+export type ResetResult = { user_id: string; status: AccountStatus; invitation_expires_at: string; email_configured: boolean };
+
+/** Clear a person's password and authenticator and email them a one-time setup link. Reason is audited. */
+export const resetCredentials = (userId: string, reason: string) =>
+  request<ResetResult>(`accounts/${encodeURIComponent(userId)}/reset-credentials`, { method: "POST", body: { reason } });
