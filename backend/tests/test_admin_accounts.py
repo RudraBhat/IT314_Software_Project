@@ -119,3 +119,136 @@ def test_only_an_mfa_verified_administrator_can_open_it(make, client):
     assert client.get(URL, headers=make.staff("DISPATCH")["headers"]).status_code == 403
     supervisor = make.staff("SUPERVISOR")
     assert client.get(URL, headers=supervisor["headers"]).status_code == 403  # dispatch supervisors do not get the directory
+
+
+# --------------------------------------------------------------------------- disable / enable
+
+REASON = {"reason": "Left the organisation; access no longer needed"}
+
+
+def _disable(client, headers, user_id, body=REASON):
+    return client.post(f"{URL}/{user_id}/disable", headers=headers, json=body)
+
+
+def _enable(client, headers, user_id, body=REASON):
+    return client.post(f"{URL}/{user_id}/enable", headers=headers, json=body)
+
+
+def test_disable_blocks_sign_in_ends_sessions_and_is_audited(make, client, sql):
+    admin, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    assert client.get("/api/v1/dm/dashboard", headers=staff["headers"]).status_code == 200
+
+    r = _disable(client, headers, staff["user_id"])
+    assert r.status_code == 200 and r.json() == {"user_id": str(staff["user_id"]), "status": "DISABLED"}
+
+    assert client.get("/api/v1/dm/dashboard", headers=staff["headers"]).status_code == 401  # session ended
+    login = client.post("/api/v1/auth/login", json={"email": staff["email"], "password": staff["password"]})
+    assert login.status_code == 401 and login.json()["error"]["code"] == "INVALID_CREDENTIALS"
+    assert _find(client, headers, q=staff["email"])["items"][0]["status"] == "DISABLED"
+
+    row = sql.execute(
+        "SELECT actor_id, rationale, before_state, after_state FROM audit_logs "
+        "WHERE entity_id = %s AND action = 'ACCOUNT_DISABLED'",
+        (staff["user_id"],),
+    ).fetchone()
+    assert row["actor_id"] == admin["user_id"] and row["rationale"] == REASON["reason"]
+    assert row["before_state"]["status"] == "ACTIVE" and row["after_state"]["status"] == "DISABLED"
+
+
+def test_enable_restores_access_but_not_the_old_session(make, client):
+    _, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    _disable(client, headers, staff["user_id"])
+    r = _enable(client, headers, staff["user_id"], {"reason": "Returned from leave"})
+    assert r.status_code == 200 and r.json()["status"] == "ACTIVE"
+    login = client.post("/api/v1/auth/login", json={"email": staff["email"], "password": staff["password"]})
+    assert login.status_code == 200 and login.json()["mfa_required"] is True
+    assert client.get("/api/v1/dm/dashboard", headers=staff["headers"]).status_code == 401  # old token stays dead
+
+
+def test_enable_clears_a_lockout(make, client, sql):
+    _, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    sql.execute("UPDATE user_auth SET locked_until = now() + interval '1 hour', failed_login_count = 5 WHERE user_id = %s", (staff["user_id"],))
+    _disable(client, headers, staff["user_id"])
+    _enable(client, headers, staff["user_id"])
+    row = sql.execute("SELECT locked_until, failed_login_count FROM user_auth WHERE user_id = %s", (staff["user_id"],)).fetchone()
+    assert row["locked_until"] is None and row["failed_login_count"] == 0
+
+
+def test_account_that_never_finished_setup_returns_to_pending_setup(make, client, sql):
+    _, headers = _admin(make)
+    invited = make.user("DISASTER_MGMT", mfa=False)
+    sql.execute("UPDATE users SET status = 'DISABLED' WHERE user_id = %s", (invited["user_id"],))
+    r = _enable(client, headers, invited["user_id"])
+    assert r.status_code == 200 and r.json()["status"] == "PENDING_SETUP"
+
+
+def test_an_administrator_can_disable_another_administrator(make, client):
+    _, headers = _admin(make)
+    other = make.user("APP_MGMT")
+    assert _disable(client, headers, other["user_id"]).status_code == 200
+    assert client.get(URL, headers=make.token(other)).status_code == 401
+
+
+def test_you_cannot_disable_yourself(make, client):
+    admin, headers = _admin(make)
+    r = _disable(client, headers, admin["user_id"])
+    assert r.status_code == 409 and r.json()["error"]["code"] == "CANNOT_DISABLE_SELF"
+    assert client.get(URL, headers=headers).status_code == 200
+
+
+def test_citizens_and_unknown_accounts_cannot_be_managed(make, client):
+    _, headers = _admin(make)
+    assert _disable(client, headers, make.citizen()["user_id"]).status_code == 404
+    assert _disable(client, headers, uuid.uuid4()).status_code == 404
+    assert _enable(client, headers, uuid.uuid4()).status_code == 404
+
+
+def test_state_conflicts_and_reason_rules(make, client):
+    _, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    not_disabled = _enable(client, headers, staff["user_id"])
+    assert not_disabled.status_code == 409 and not_disabled.json()["error"]["code"] == "NOT_DISABLED"
+    assert _disable(client, headers, staff["user_id"]).status_code == 200
+    again = _disable(client, headers, staff["user_id"])
+    assert again.status_code == 409 and again.json()["error"]["code"] == "ALREADY_DISABLED"
+    for bad in ({}, {"reason": "no"}, {"reason": "x" * 501}):
+        assert _enable(client, headers, staff["user_id"], bad).status_code == 422
+
+
+def test_the_last_active_administrator_is_protected():
+    from app.errors import ApiError
+    from app.routers.admin import _ensure_another_active_admin
+
+    class Result:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def fetchall(self):
+            return self.rows
+
+    class Conn:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def execute(self, *_a, **_k):
+            return Result(self.rows)
+
+    with pytest.raises(ApiError) as exc:
+        _ensure_another_active_admin(Conn([]), uuid.uuid4())
+    assert exc.value.status == 409 and exc.value.code == "LAST_ADMIN"
+    _ensure_another_active_admin(Conn([{"user_id": uuid.uuid4()}]), uuid.uuid4())  # another admin exists: allowed
+
+
+def test_only_an_mfa_verified_administrator_can_disable_or_enable(make, client):
+    target = make.staff("DISPATCH")
+    admin = make.user("APP_MGMT")
+    for action in (_disable, _enable):
+        assert action(client, {}, target["user_id"]).status_code == 401
+        assert action(client, make.token(admin, mfa=False), target["user_id"]).status_code == 401
+        assert action(client, make.citizen()["headers"], target["user_id"]).status_code == 403
+        assert action(client, make.field_team_user()["headers"], target["user_id"]).status_code == 403
+        assert action(client, make.staff("SUPERVISOR")["headers"], target["user_id"]).status_code == 403
+    assert client.get("/api/v1/dm/dashboard", headers=target["headers"]).status_code == 200  # nothing changed
