@@ -36,7 +36,10 @@ build `54007f9`. What is left is configuration in the consoles (values never go 
    `python -m app.cli create-staff --email smoke-staff@<your domain> --name "Smoke Staff" --permissions DISPATCH,CLOSURE,PUBLISHER,MODERATOR`
    for the smoke test, and
    `python -m app.cli create-field --email scenario-field@<your domain> --name "Scenario Field" --team "<an AVAILABLE team name>" --leader`
-   for `scripts/scenario_run.py`.
+   for `scripts/scenario_run.py`. The first administrator (who then invites the others from `/admin`) is created with
+   `python -m app.cli create-admin --email admin@<your domain> --name "<full name>"`; the same password rules apply
+   and the TOTP secret is printed once. An administrator who loses their authenticator is recovered with
+   `python -m app.cli reset-mfa --email admin@<your domain>`.
 3. **GitHub, environment `staging`** (Settings, Environments). With the GitHub CLI each command prompts for the value,
    so it is never typed on the command line: `gh secret set STAGING_BACKEND_URL --env staging` (value
    `https://drch-backend-latest.onrender.com`), `gh secret set RENDER_STAGING_DEPLOY_HOOK --env staging`,
