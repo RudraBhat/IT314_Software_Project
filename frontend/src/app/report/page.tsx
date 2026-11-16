@@ -14,6 +14,7 @@ import {
 } from "@/services/citizenApi";
 import { findNearbyIncidents } from "@/services/duplicateDetection";
 import { URGENT_NEEDS, preTriage } from "@/services/preTriage";
+import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
 
 /** ARIA radio pattern: arrow keys move the selection and focus inside a group; only one option is a tab stop. */
 function moveRadioSelection(
@@ -56,7 +57,6 @@ const DRAFT_STORAGE_KEY = "resq_incident_report_draft";
 export default function ReportIncidentPage() {
   // Session State
   const [session, setSession] = useState<SessionInfo | null>(null);
-  const [sessionLoading, setSessionLoading] = useState(true);
 
   // Form State
   const [scenario, setScenario] = useState("urban_flooding");
@@ -117,8 +117,7 @@ export default function ReportIncidentPage() {
           setSession({ authenticated: false, role: null, name: null });
         }
       })
-      .catch(() => setSession({ authenticated: false, role: null, name: null }))
-      .finally(() => setSessionLoading(false));
+      .catch(() => setSession({ authenticated: false, role: null, name: null }));
 
     // Restore draft if saved (sessionStorage is client-only, so this has to run after mount)
     try {
@@ -506,15 +505,9 @@ export default function ReportIncidentPage() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 md:p-8">
-        {sessionLoading ? (
-          <div role="status" aria-label="Loading incident reporting" className="space-y-4 max-w-4xl mx-auto py-8">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 animate-pulse space-y-4">
-              <div className="h-6 w-48 bg-slate-800 rounded" />
-              <div className="h-4 w-72 bg-slate-800/60 rounded" />
-              <div className="h-40 w-full bg-slate-950/60 rounded-xl border border-slate-800/40" />
-            </div>
-          </div>
-        ) : session?.authenticated && session.role !== "NORMAL_USER" ? (
+        {/* The form shows while the session check runs (it can take ~30s on a slow backend); only a
+            confirmed staff session swaps it for the notice below. */}
+        {session?.authenticated && session.role && session.role !== "NORMAL_USER" ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-10 shadow-xl max-w-2xl mx-auto my-6 text-center space-y-5">
             <div role="alert" aria-live="assertive" className="p-4 bg-red-950/60 border border-red-700/60 rounded-xl text-red-200 text-sm flex items-center justify-center gap-2">
               <span className="text-lg" aria-hidden="true">⚠️</span>
@@ -525,8 +518,8 @@ export default function ReportIncidentPage() {
                 Emergency Reporting Restricted
               </h1>
               <p className="text-slate-300 text-sm max-w-lg mx-auto leading-relaxed">
-                Emergency incident reporting is exclusively reserved for citizen accounts (<code className="text-xs bg-slate-800 text-sky-300 px-1.5 py-0.5 rounded font-mono">NORMAL_USER</code>).
-                You are currently signed in with a staff operational role (<strong className="text-white">{session.role}</strong>).
+                Emergency incident reporting is for citizen accounts. You are signed in as{" "}
+                <strong className="text-white">{ROLE_LABEL[session.role as InvitableRole] ?? "a staff member"}</strong>.
               </p>
             </div>
             <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-400 max-w-md mx-auto">

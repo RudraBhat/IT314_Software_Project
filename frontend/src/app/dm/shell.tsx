@@ -78,7 +78,7 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
   return (
     <UserContext.Provider value={user}>
       <ToastProvider>
-        <div className="dm-theme app-screen fixed inset-0 flex flex-col font-sans overflow-hidden">
+        <div className="dm-theme app-screen flex flex-col font-sans">
           {/* Same top banner as the ResQ login page */}
           <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-[#093554] bg-[#0c4a75] px-4 text-white shadow-md sm:px-6">
             <button className="rounded-md p-2 text-sky-100 hover:bg-white/10 lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">

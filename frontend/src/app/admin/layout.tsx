@@ -33,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <ToastProvider>
-      <div className="dm-theme app-screen fixed inset-0 flex flex-col font-sans overflow-hidden">
+      <div className="dm-theme app-screen flex flex-col font-sans">
         <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-[#093554] bg-[#0c4a75] px-4 text-white shadow-md sm:px-6">
           <Brand href="/admin" subtitle="Administration" size="sm" />
           <span className="hidden rounded-full border border-sky-300/40 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-100 md:inline">
