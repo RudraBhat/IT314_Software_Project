@@ -958,6 +958,13 @@ Staff accounts (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`) are never created wit
 | `GOOGLE_STAFF_NOT_ALLOWED` | 403 | Google sign-in attempted for a staff account |
 | `RATE_LIMITED` | 429 | Too many requests from this IP |
 
+### 9.5 Administrator: Staff Account Directory
+* **Path:** `GET /api/v1/admin/accounts`
+* **Auth:** Bearer token of an `APP_MGMT` administrator with verified MFA. Dispatch supervisors, dispatchers, field teams and citizens get `403`; no token or no MFA gets `401`.
+* **Query:** `q` (part of a name or email, case-insensitive, `%` and `_` are literal; up to 100 characters), `role` (`DISASTER_MGMT`, `FIELD_TEAM` or `APP_MGMT`), `status` (`ACTIVE`, `PENDING_SETUP`, `DISABLED`, `LOCKED` or `PENDING_VERIFICATION`), `page`, `limit` (1–100, default 25). Anything else is `422`.
+* **Response (200):** `{"items": [...], "page", "limit", "total", "pages", "summary": {"total", "by_role", "by_status"}}`, newest account first. Each item has `user_id`, `email`, `full_name`, `role`, `designation`, `status`, `mfa_enabled`, `last_login_at`, `is_locked` (temporary lockout after failed sign-ins), `permissions` (sorted names), `team_name` (field responders), `created_at` and `is_you`. `summary` counts all staff accounts and ignores the filters.
+* **Privacy:** only staff accounts are listed; citizens never appear. No phone number, password hash, MFA secret or session detail is returned.
+
 ---
 
 ## 10. Owner Sign-Off Matrix
