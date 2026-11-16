@@ -107,7 +107,7 @@ export default function AccountPage() {
       <SiteHeader subtitle="My Account" maxWidth="max-w-3xl">
         <NavLink href="/my-reports">My Reports</NavLink>
         <NavLink href="/my-donations">My Donations</NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">Dashboard</NavLink>
+        <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
       </SiteHeader>
 
       <main className="mx-auto w-full max-w-3xl flex-1 space-y-6 p-4 sm:p-6">

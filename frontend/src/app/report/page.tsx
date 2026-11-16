@@ -14,6 +14,7 @@ import {
 } from "@/services/citizenApi";
 import { findNearbyIncidents } from "@/services/duplicateDetection";
 import { URGENT_NEEDS, preTriage } from "@/services/preTriage";
+import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
 
 /** ARIA radio pattern: arrow keys move the selection and focus inside a group; only one option is a tab stop. */
 function moveRadioSelection(
@@ -502,40 +503,77 @@ export default function ReportIncidentPage() {
       <SiteHeader subtitle="Citizen Emergency Dispatch" maxWidth="max-w-5xl">
         {!session?.authenticated && <NavLink href="/login?next=/report">Sign In</NavLink>}
         <NavLink href="/my-reports">My Reports</NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">Dashboard</NavLink>
+        <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
         <NavLink href="/" hideBelow="sm">Public Map</NavLink>
       </SiteHeader>
 
       {/* Main Container */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 md:p-8">
-        {/* Guest Warning if not authenticated */}
-        {session && !session.authenticated && (
-          <div className="mb-6 p-4 bg-sky-50 border border-sky-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs md:text-sm shadow-xs">
-            <div className="flex items-start gap-2.5">
-              <span className="text-xl">ℹ️</span>
-              <div>
-                <strong className="text-sky-900">You are browsing as a guest.</strong>
-                <p className="text-slate-600 text-xs mt-0.5">
-                  Your drafted inputs are saved locally. Please sign in or create an account so emergency responders can verify and track your report.
-                </p>
-              </div>
+        {/* The form shows while the session check runs (it can take ~30s on a slow backend); only a
+            confirmed staff session swaps it for the notice below. */}
+        {session?.authenticated && session.role && session.role !== "NORMAL_USER" ? (
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 shadow-xs max-w-2xl mx-auto my-6 text-center space-y-5">
+            <div role="alert" aria-live="assertive" className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm flex items-center justify-center gap-2">
+              <span className="text-lg" aria-hidden="true">⚠️</span>
+              <span className="font-semibold">Citizen role required</span>
             </div>
-            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">
+                Emergency Reporting Restricted
+              </h1>
+              <p className="text-slate-600 text-sm max-w-lg mx-auto leading-relaxed">
+                Emergency incident reporting is for citizen accounts. You are signed in as{" "}
+                <strong className="text-slate-900">{ROLE_LABEL[session.role as InvitableRole] ?? "a staff member"}</strong>.
+              </p>
+            </div>
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 max-w-md mx-auto">
+              Staff members triage, verify, and dispatch emergency incidents from the operational workspaces rather than submitting public citizen reports.
+            </div>
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
               <Link
-                href="/login?next=/report"
-                className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-xs transition shadow-xs"
+                href="/dashboard"
+                className="min-h-[44px] bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold px-6 py-2.5 rounded-xl shadow-md shadow-sky-600/20 transition flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
               >
-                Sign In
+                Go to Operational Dashboard →
               </Link>
               <Link
-                href="/signup"
-                className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold rounded-lg text-xs transition"
+                href="/"
+                className="min-h-[44px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-sm font-medium px-5 py-2.5 rounded-xl transition flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
               >
-                Register
+                Public Map
               </Link>
             </div>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Guest Warning if not authenticated */}
+            {session && !session.authenticated && (
+              <div className="mb-6 p-4 bg-sky-50 border border-sky-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs md:text-sm shadow-xs">
+                <div className="flex items-start gap-2.5">
+                  <span className="text-xl">ℹ️</span>
+                  <div>
+                    <strong className="text-sky-900">You are browsing as a guest.</strong>
+                    <p className="text-slate-600 text-xs mt-0.5">
+                      Your drafted inputs are saved locally. Please sign in or create an account so emergency responders can verify and track your report.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  <Link
+                    href="/login?next=/report"
+                    className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-xs transition shadow-xs"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold rounded-lg text-xs transition"
+                  >
+                    Register
+                  </Link>
+                </div>
+              </div>
+            )}
 
         {successResult ? (
           <div role="status" aria-live="polite" className="bg-white border border-emerald-200 rounded-2xl p-6 sm:p-8 text-center shadow-xs space-y-6">
@@ -1035,6 +1073,8 @@ export default function ReportIncidentPage() {
               </div>
             </form>
           </div>
+        )}
+          </>
         )}
       </main>
     </div>

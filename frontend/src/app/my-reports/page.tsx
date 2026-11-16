@@ -141,7 +141,7 @@ export default function MyReportsPage() {
           Auto-refresh 15s · {lastRefreshed ? lastRefreshed.toLocaleTimeString() : "…"}
         </span>
         <NavLink href="/report" variant="primary">+ Report<span className="hidden sm:inline"> Incident</span></NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">Dashboard</NavLink>
+        <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
         <NavLink href="/account" hideBelow="sm">Account</NavLink>
       </SiteHeader>
 
@@ -416,13 +416,12 @@ export default function MyReportsPage() {
 
                             {/* Node Icon */}
                             <div
-                              className={`w-7 h-7 rounded-full flex items-center justify-center mx-auto mb-1.5 text-xs font-bold relative z-10 transition ${
-                                isPast
+                              className={`w-7 h-7 rounded-full flex items-center justify-center mx-auto mb-1.5 text-xs font-bold relative z-10 transition ${isPast
                                   ? "bg-sky-600 text-white shadow-xs"
                                   : isCurrent
-                                  ? "bg-amber-500 text-white ring-4 ring-amber-100 shadow-xs font-extrabold"
-                                  : "bg-slate-100 text-slate-400 border border-slate-300"
-                              }`}
+                                    ? "bg-amber-500 text-white ring-4 ring-amber-100 shadow-xs font-extrabold"
+                                    : "bg-slate-100 text-slate-400 border border-slate-300"
+                                }`}
                             >
                               {isPast ? "✓" : stage.id}
                             </div>
