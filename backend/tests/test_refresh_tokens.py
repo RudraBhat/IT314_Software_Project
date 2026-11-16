@@ -26,7 +26,7 @@ def test_idle_window_never_passes_the_absolute_limit():
 
 
 def _citizen_login(client, make):
-    user = make.user()
+    user = make.user("NORMAL_USER", mfa=False)
     res = client.post("/api/v1/auth/login", json={"email": user["email"], "password": user["password"]})
     assert res.status_code == 200
     return user, res.json()
@@ -36,9 +36,14 @@ def _refresh(client, token):
     return client.post("/api/v1/auth/refresh", json={"refresh_token": token})
 
 
-def _set(token, sql):
+def _set(token, state):
+    statements = {
+        "revoked": "UPDATE refresh_tokens SET revoked_at = now() - interval '1 minute' WHERE token_hash = %s",
+        "idle_expired": "UPDATE refresh_tokens SET idle_expires_at = now() - interval '1 second' WHERE token_hash = %s",
+        "absolute_expired": "UPDATE refresh_tokens SET absolute_expires_at = now() - interval '1 second' WHERE token_hash = %s",
+    }
     with db.transaction() as conn:
-        conn.execute(f"UPDATE refresh_tokens SET {sql} WHERE token_hash = %s", (security.hash_token(token),))
+        conn.execute(statements[state], (security.hash_token(token),))
 
 
 @pytest.mark.db
@@ -71,7 +76,7 @@ def test_reusing_a_rotated_token_after_the_grace_window_revokes_the_session(clie
     _, login = _citizen_login(client, make)
     old = login["refresh_token"]
     newer = _refresh(client, old).json()["refresh_token"]
-    _set(old, "revoked_at = now() - interval '1 minute'")
+    _set(old, "revoked")
 
     reused = _refresh(client, old)
     assert reused.status_code == 401
@@ -90,7 +95,7 @@ def test_a_concurrent_refresh_inside_the_grace_window_is_allowed(client, make):
 @pytest.mark.db
 def test_idle_limit_ends_the_session(client, make):
     _, login = _citizen_login(client, make)
-    _set(login["refresh_token"], "idle_expires_at = now() - interval '1 second'")
+    _set(login["refresh_token"], "idle_expired")
     res = _refresh(client, login["refresh_token"])
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "SESSION_EXPIRED"
@@ -99,7 +104,7 @@ def test_idle_limit_ends_the_session(client, make):
 @pytest.mark.db
 def test_absolute_limit_ends_the_session_even_when_active(client, make):
     _, login = _citizen_login(client, make)
-    _set(login["refresh_token"], "absolute_expires_at = now() - interval '1 second'")
+    _set(login["refresh_token"], "absolute_expired")
     assert _refresh(client, login["refresh_token"]).json()["error"]["code"] == "SESSION_EXPIRED"
 
 
@@ -120,7 +125,7 @@ def test_unknown_token_is_refused(client):
 
 @pytest.mark.db
 def test_session_count_is_capped(client, make):
-    user = make.user()
+    user = make.user("NORMAL_USER", mfa=False)
     tokens = []
     for _ in range(6):
         res = client.post("/api/v1/auth/login", json={"email": user["email"], "password": user["password"]})
