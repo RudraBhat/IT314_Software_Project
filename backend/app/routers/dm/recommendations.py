@@ -129,7 +129,7 @@ def list_team_requests(
     if not get_settings().database_url:
         raise database_unavailable()
 
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         rows = conn.execute(
             """
             SELECT tr.request_id, tr.dispatch_id, d.dispatch_ref,

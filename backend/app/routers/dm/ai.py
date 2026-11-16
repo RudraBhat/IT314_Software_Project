@@ -116,7 +116,7 @@ def request_ai_triage(
 
 @router.get("/incidents/{incident_id}/ai-recommendations")
 def list_recommendations(incident_id: uuid.UUID, principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         if (
             conn.execute(
                 "SELECT 1 FROM incidents WHERE incident_id = %s", (incident_id,)

@@ -124,7 +124,7 @@ def test_field_profile_resolution(responder_principal: FieldPrincipal):
         yield mock_conn
 
     with (
-        patch("app.db.transaction", mock_tx),
+        patch("app.db.read_only", mock_tx),
         patch("app.routers.field.get_settings") as mock_settings,
     ):
         mock_settings.return_value.database_url = "postgresql://mock:5432/db"
@@ -174,7 +174,7 @@ def test_get_field_assignments_returns_only_assigned_dispatches(
         yield mock_conn
 
     with (
-        patch("app.db.transaction", mock_tx),
+        patch("app.db.read_only", mock_tx),
         patch("app.routers.field.get_settings") as mock_settings,
     ):
         mock_settings.return_value.database_url = "postgresql://mock:5432/db"

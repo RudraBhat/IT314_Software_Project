@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { API_URL, MFA_COOKIE, REFRESH_COOKIE, SESSION_COOKIE, cookieOptions, setSessionCookies } from "@/lib/session";
+import { API_URL, MFA_COOKIE, REFRESH_COOKIE, SESSION_COOKIE, cookieOptions, homeFor, setSessionCookies } from "@/lib/session";
 
 export type LoginState = { step: "password" | "mfa"; error?: string; email?: string };
 
@@ -29,20 +29,28 @@ async function post(path: string, body: unknown, token?: string) {
   }
 }
 
+// Workspaces a role may be sent back to after signing in. Anything else would only bounce.
+const ROLE_AREAS: Record<string, string[]> = {
+  DISASTER_MGMT: ["/dm"],
+  APP_MGMT: ["/dm"],
+  FIELD_TEAM: ["/field"],
+};
+const STAFF_AREAS = ["/dm", "/field"];
+
+function inArea(path: string, area: string): boolean {
+  return path === area || path.startsWith(`${area}/`) || path.startsWith(`${area}?`);
+}
+
 function safeNext(value: FormDataEntryValue | null, role?: string): string {
   const next = typeof value === "string" ? value : "";
-  // Administrators have one workspace; any other destination would only show a 403.
-  if (role === "APP_MGMT") return next.startsWith("/admin") ? next : "/admin";
-  // Only same-site workspace paths; never an absolute or protocol-relative URL.
-  if (next.startsWith("/") && !next.startsWith("//")) {
-    if (next.startsWith("/dm") && role === "NORMAL_USER") {
-      return "/citizen/dashboard";
-    }
-    return next;
-  }
-  if (role === "NORMAL_USER") return "/citizen/dashboard";
-  if (role === "FIELD_TEAM") return "/field";
-  return "/dm";
+  // Only same-site paths; never an absolute or protocol-relative URL.
+  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return homeFor(role);
+  // Administrators manage accounts in the shared workspace; the shell hides everything else from them.
+  const allowed = ROLE_AREAS[role ?? ""];
+  if (allowed) return allowed.some((area) => inArea(next, area)) ? next : homeFor(role);
+  // Citizens never land in a staff area.
+  if (STAFF_AREAS.some((area) => inArea(next, area))) return homeFor(role);
+  return next;
 }
 
 async function signIn(form: FormData): Promise<LoginState> {

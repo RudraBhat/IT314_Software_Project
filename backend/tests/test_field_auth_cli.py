@@ -238,7 +238,7 @@ def test_require_field_raises_when_no_team_membership(monkeypatch):
     def mock_tx():
         yield mock_conn
 
-    monkeypatch.setattr(db, "transaction", mock_tx)
+    monkeypatch.setattr(db, "read_only", mock_tx)
 
     req = _mock_request()
     field_principal = Principal(
@@ -288,7 +288,7 @@ def test_require_field_resolves_team_membership_successfully(monkeypatch):
     def mock_tx():
         yield mock_conn
 
-    monkeypatch.setattr(db, "transaction", mock_tx)
+    monkeypatch.setattr(db, "read_only", mock_tx)
 
     req = _mock_request()
     field_principal = Principal(

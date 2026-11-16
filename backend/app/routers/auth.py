@@ -158,27 +158,29 @@ def _register_failure(conn, account, ip: str | None, reason: str) -> None:
 
 def _complete_login(conn, account, ip: str | None, mfa: bool) -> dict:
     settings = get_settings()
-    conn.execute(
-        "UPDATE user_auth SET failed_login_count = 0, locked_until = NULL, last_login_at = now() WHERE user_id = %s",
-        (account["user_id"],),
-    )
-    audit.record(
-        conn,
-        actor=None,
-        action="LOGIN_SUCCEEDED",
-        entity_type="user",
-        entity_id=account["user_id"],
-        rationale="password + TOTP" if mfa else "password",
-        ip=ip,
-    )
-    token = security.issue_token(
-        account["user_id"],
-        account["token_version"],
-        security.ACCESS,
-        settings.access_token_minutes,
-        mfa=mfa,
-    )
-    refresh_token, refresh_expires_in = sessions.start_session(conn, account, mfa)
+    # Four independent writes: one pipelined round trip instead of four.
+    with conn.pipeline():
+        conn.execute(
+            "UPDATE user_auth SET failed_login_count = 0, locked_until = NULL, last_login_at = now() WHERE user_id = %s",
+            (account["user_id"],),
+        )
+        audit.record(
+            conn,
+            actor=None,
+            action="LOGIN_SUCCEEDED",
+            entity_type="user",
+            entity_id=account["user_id"],
+            rationale="password + TOTP" if mfa else "password",
+            ip=ip,
+        )
+        token = security.issue_token(
+            account["user_id"],
+            account["token_version"],
+            security.ACCESS,
+            settings.access_token_minutes,
+            mfa=mfa,
+        )
+        refresh_token, refresh_expires_in = sessions.start_session(conn, account, mfa)
     return {
         "mfa_required": False,
         "access_token": token,

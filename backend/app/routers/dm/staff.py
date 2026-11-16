@@ -205,7 +205,7 @@ def create_staff(body: CreateStaffRequest, principal: Supervisor):
 def list_staff(principal: Supervisor):
     """List all Disaster Management staff accounts."""
 
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         rows = conn.execute(
             """
             SELECT u.user_id, u.email, u.full_name, u.designation, u.status,

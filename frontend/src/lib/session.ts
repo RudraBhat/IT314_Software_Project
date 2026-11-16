@@ -42,6 +42,17 @@ export function setSessionCookies(jar: CookieWriter, data: SessionTokens): void 
   }
 }
 
+/**
+ * Where each role lands. Dispatchers and administrators share one staff workspace at /dm (the
+ * navigation and sections differ by role); field responders and citizens keep their own.
+ */
+export function homeFor(role: string | null | undefined): string {
+  if (role === "DISASTER_MGMT" || role === "APP_MGMT") return "/dm";
+  if (role === "FIELD_TEAM") return "/field";
+  if (role === "NORMAL_USER") return "/citizen/dashboard";
+  return "/login";
+}
+
 export type CurrentUser = {
   user_id: string;
   email: string;

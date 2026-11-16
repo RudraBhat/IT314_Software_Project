@@ -129,13 +129,13 @@ def list_public_incidents(
     bbox: Annotated[str | None, Query(description="min_lon,min_lat,max_lon,max_lat")] = None,
 ):
     query, params = build_public_incident_query(district, scenario, bbox)
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         return conn.execute(query, params).fetchall()
 
 
 @router.get("/campaigns", response_model=list[PublicCampaign], summary="Active donation campaigns")
 def list_public_campaigns():
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         rows = conn.execute(
             """
             SELECT campaign_id::text AS campaign_id, title, purpose, lower(scenario::text) AS scenario,
@@ -148,7 +148,7 @@ def list_public_campaigns():
 
 @router.get("/alerts", response_model=list[PublicAlert], summary="Active early warnings and external alerts")
 def list_public_alerts():
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         rows = conn.execute(
             """
             SELECT alert_id::text AS alert_id, source, event_type, severity, urgency, certainty, language,
@@ -199,7 +199,7 @@ def list_public_safety_content(scenario: Scenario | None = None):
         query += " AND scenario = %(scenario)s::scenario_type"
         params["scenario"] = scenario_db(scenario)
     query += " ORDER BY scenario, title LIMIT 200"
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         return conn.execute(query, params).fetchall()
 
 
@@ -219,5 +219,5 @@ def list_public_updates(scenario: Scenario | None = None):
         query += " AND scenario = %(scenario)s::scenario_type"
         params["scenario"] = scenario_db(scenario)
     query += " ORDER BY published_at DESC NULLS LAST LIMIT 50"
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         return conn.execute(query, params).fetchall()

@@ -20,85 +20,96 @@ def dashboard(principal: DMUser):
         raise database_unavailable()
 
     try:
-        with db.transaction() as conn:
-            counts = conn.execute(
-                """
-                SELECT
-                  COUNT(*)                                                         AS total,
-                  COUNT(*) FILTER (WHERE status IN ('SUBMITTED','NEEDS_INFORMATION')) AS pending_verification,
-                  COUNT(*) FILTER (WHERE status = 'NEEDS_INFORMATION')            AS needs_information,
-                  COUNT(*) FILTER (WHERE status IN ('VERIFIED','DISPATCHED'))     AS verified_active,
-                  COUNT(*) FILTER (WHERE status NOT IN ('CLOSED','REJECTED','RESOLVED')
-                                   AND verified_priority = 'CRITICAL')            AS critical_open,
-                  COUNT(*) FILTER (WHERE status NOT IN ('CLOSED','REJECTED','RESOLVED')
-                                   AND verified_priority = 'HIGH')                AS high_open,
-                  COUNT(*) FILTER (WHERE status NOT IN ('CLOSED','REJECTED','RESOLVED')
-                                   AND verified_priority IS NULL)                 AS unprioritised_open,
-                  MAX(updated_at)                                                  AS data_fresh_as_of
-                FROM incidents
-                """
-            ).fetchone()
-            by_scenario = conn.execute(
-                """
-                SELECT lower(scenario::text) AS scenario,
-                       COUNT(*) AS total,
-                       COUNT(*) FILTER (WHERE status NOT IN ('CLOSED','REJECTED','RESOLVED')) AS open
-                FROM incidents GROUP BY scenario ORDER BY scenario
-                """
-            ).fetchall()
-            dispatch = conn.execute(
-                """
-                SELECT
-                  COUNT(*) FILTER (WHERE status IN ('REQUESTED','ACKNOWLEDGED','DISPATCHED')) AS active,
-                  COUNT(*) FILTER (WHERE status = 'REQUESTED')                                AS awaiting_ack,
-                  COUNT(*) FILTER (WHERE status = 'REQUESTED'
-                                   AND created_at < now() - make_interval(mins => %s))        AS overdue
-                FROM dispatch_orders
-                """,
-                (timeout,),
-            ).fetchone()
-            resources = conn.execute(
-                """
-                SELECT type::text AS type,
-                       COUNT(*) AS total,
-                       COUNT(*) FILTER (WHERE status = 'AVAILABLE' AND quantity_available > 0) AS available
-                FROM resources GROUP BY type ORDER BY type
-                """
-            ).fetchall()
-            moderation = conn.execute(
-                """
-                SELECT COUNT(*) AS pending, MIN(uploaded_at) AS oldest
-                FROM evidence_files WHERE scan_state IN ('PENDING','QUARANTINED','FAILED')
-                """
-            ).fetchone()
-            aid = conn.execute(
-                """
-                SELECT (SELECT COUNT(*) FROM aid_contributions WHERE status = 'REGISTERED') AS awaiting_verification,
-                       (SELECT COUNT(*) FROM aid_needs WHERE is_open)                     AS open_needs
-                """
-            ).fetchone()
-            recent = conn.execute(
-                """
-                SELECT h.history_id, h.changed_at, h.from_status, h.to_status, h.reason,
-                       i.incident_id, i.incident_ref, lower(i.scenario::text) AS scenario,
-                       u.full_name AS changed_by_name
-                FROM incident_status_history h
-                JOIN incidents i ON i.incident_id = h.incident_id
-                LEFT JOIN users u ON u.user_id = h.changed_by
-                ORDER BY h.changed_at DESC, h.history_id DESC
-                LIMIT 12
-                """
-            ).fetchall()
-            queue = conn.execute(
-                """
-                SELECT incident_id, incident_ref, lower(scenario::text) AS scenario, status,
-                       verified_priority, reported_urgency, people_affected, address_text, submitted_at
-                FROM incidents
-                WHERE status IN ('SUBMITTED','NEEDS_INFORMATION')
-                ORDER BY reported_urgency NULLS LAST, submitted_at
-                LIMIT 8
-                """
-            ).fetchall()
+        with db.read_only() as conn:
+            # The statements are independent, so send them in one pipeline: one network round trip
+            # instead of eight (each is a full round trip to a remote database).
+            with conn.pipeline():
+                cur_counts = conn.execute(
+                    """
+                    SELECT
+                      COUNT(*)                                                         AS total,
+                      COUNT(*) FILTER (WHERE status IN ('SUBMITTED','NEEDS_INFORMATION')) AS pending_verification,
+                      COUNT(*) FILTER (WHERE status = 'NEEDS_INFORMATION')            AS needs_information,
+                      COUNT(*) FILTER (WHERE status IN ('VERIFIED','DISPATCHED'))     AS verified_active,
+                      COUNT(*) FILTER (WHERE status NOT IN ('CLOSED','REJECTED','RESOLVED')
+                                       AND verified_priority = 'CRITICAL')            AS critical_open,
+                      COUNT(*) FILTER (WHERE status NOT IN ('CLOSED','REJECTED','RESOLVED')
+                                       AND verified_priority = 'HIGH')                AS high_open,
+                      COUNT(*) FILTER (WHERE status NOT IN ('CLOSED','REJECTED','RESOLVED')
+                                       AND verified_priority IS NULL)                 AS unprioritised_open,
+                      MAX(updated_at)                                                  AS data_fresh_as_of
+                    FROM incidents
+                    """
+                )
+                cur_by_scenario = conn.execute(
+                    """
+                    SELECT lower(scenario::text) AS scenario,
+                           COUNT(*) AS total,
+                           COUNT(*) FILTER (WHERE status NOT IN ('CLOSED','REJECTED','RESOLVED')) AS open
+                    FROM incidents GROUP BY scenario ORDER BY scenario
+                    """
+                )
+                cur_dispatch = conn.execute(
+                    """
+                    SELECT
+                      COUNT(*) FILTER (WHERE status IN ('REQUESTED','ACKNOWLEDGED','DISPATCHED')) AS active,
+                      COUNT(*) FILTER (WHERE status = 'REQUESTED')                                AS awaiting_ack,
+                      COUNT(*) FILTER (WHERE status = 'REQUESTED'
+                                       AND created_at < now() - make_interval(mins => %s))        AS overdue
+                    FROM dispatch_orders
+                    """,
+                    (timeout,),
+                )
+                cur_resources = conn.execute(
+                    """
+                    SELECT type::text AS type,
+                           COUNT(*) AS total,
+                           COUNT(*) FILTER (WHERE status = 'AVAILABLE' AND quantity_available > 0) AS available
+                    FROM resources GROUP BY type ORDER BY type
+                    """
+                )
+                cur_moderation = conn.execute(
+                    """
+                    SELECT COUNT(*) AS pending, MIN(uploaded_at) AS oldest
+                    FROM evidence_files WHERE scan_state IN ('PENDING','QUARANTINED','FAILED')
+                    """
+                )
+                cur_aid = conn.execute(
+                    """
+                    SELECT (SELECT COUNT(*) FROM aid_contributions WHERE status = 'REGISTERED') AS awaiting_verification,
+                           (SELECT COUNT(*) FROM aid_needs WHERE is_open)                     AS open_needs
+                    """
+                )
+                cur_recent = conn.execute(
+                    """
+                    SELECT h.history_id, h.changed_at, h.from_status, h.to_status, h.reason,
+                           i.incident_id, i.incident_ref, lower(i.scenario::text) AS scenario,
+                           u.full_name AS changed_by_name
+                    FROM incident_status_history h
+                    JOIN incidents i ON i.incident_id = h.incident_id
+                    LEFT JOIN users u ON u.user_id = h.changed_by
+                    ORDER BY h.changed_at DESC, h.history_id DESC
+                    LIMIT 12
+                    """
+                )
+                cur_queue = conn.execute(
+                    """
+                    SELECT incident_id, incident_ref, lower(scenario::text) AS scenario, status,
+                           verified_priority, reported_urgency, people_affected, address_text, submitted_at
+                    FROM incidents
+                    WHERE status IN ('SUBMITTED','NEEDS_INFORMATION')
+                    ORDER BY reported_urgency NULLS LAST, submitted_at
+                    LIMIT 8
+                    """
+                )
+            counts = cur_counts.fetchone()
+            by_scenario = cur_by_scenario.fetchall()
+            dispatch = cur_dispatch.fetchone()
+            resources = cur_resources.fetchall()
+            moderation = cur_moderation.fetchone()
+            aid = cur_aid.fetchone()
+            recent = cur_recent.fetchall()
+            queue = cur_queue.fetchall()
 
         return {
             "generated_at": datetime.now(UTC),

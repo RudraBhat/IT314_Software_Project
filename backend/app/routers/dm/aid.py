@@ -28,7 +28,7 @@ Qty = Field(gt=0, max_digits=12, decimal_places=2)
 
 @router.get("/oversight/donations")
 def donation_oversight(principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         # Unpaid orders past their time limit are counted as failed, not as money still to come.
         expire_stale_donations(conn)
         campaigns = conn.execute(
@@ -95,7 +95,7 @@ def donation_oversight(principal: DMUser):
 
 @router.get("/oversight/aid")
 def aid_oversight(principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         by_type = conn.execute(
             "SELECT aid_type, status, contributions, total_quantity FROM v_aid_summary ORDER BY aid_type, status"
         ).fetchall()
@@ -144,7 +144,7 @@ def list_contributions(
     if aid_type:
         f.add("upper(c.aid_type) = upper(%(aid_type)s)", aid_type=aid_type)
     where = f.where()
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         total = conn.execute(
             sql.SQL("SELECT COUNT(*) AS n FROM aid_contributions c {}").format(where), f.params
         ).fetchone()["n"]
@@ -216,7 +216,7 @@ def list_needs(
         f.add("n.is_open")
     if incident_id:
         f.add("n.incident_id = %(incident)s", incident=incident_id)
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         items = conn.execute(
             sql.SQL("{} {} ORDER BY n.is_open DESC, n.created_at DESC LIMIT 200").format(
                 sql.SQL(_NEED_SELECT), f.where()
@@ -315,7 +315,7 @@ class AllocationCreate(BaseModel):
 
 @router.get("/allocations")
 def list_allocations(principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         items = conn.execute(
             sql.SQL("{} WHERE c.need_id IS NOT NULL AND c.status IN ('ALLOCATED','IN_TRANSIT','DELIVERED') "
                     "ORDER BY c.updated_at DESC LIMIT 200").format(sql.SQL(_CONTRIBUTION_SELECT))
@@ -444,7 +444,7 @@ FROM donation_campaigns c LEFT JOIN v_donation_summary s USING (campaign_id)
 
 @router.get("/campaigns")
 def list_campaigns(principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         items = conn.execute(
             sql.SQL("{} ORDER BY (c.status = 'CLOSED'), c.created_at DESC").format(sql.SQL(_CAMPAIGN_SELECT))
         ).fetchall()

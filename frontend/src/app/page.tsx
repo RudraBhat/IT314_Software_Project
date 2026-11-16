@@ -5,6 +5,7 @@ import Link from "next/link";
 import { fetchPublicIncidents, fetchPublicAlerts, PublicIncident, PublicAlert } from "../services/citizenApi";
 import { LiveOperationsLayer } from "../components/dm/LiveOperationsLayer";
 import { signOut } from "./login/actions";
+import { homeFor } from "../lib/session";
 import { NavLink, SiteHeader } from "../components/Brand";
 import { GUJARAT_CENTER, GUJARAT_DEFAULT_ZOOM, GUJARAT_DISTRICTS, INDIA_BOUNDS } from "../lib/geo";
 
@@ -387,7 +388,7 @@ export default function PublicPortalPage() {
         {session?.authenticated ? (
           <div className="hidden items-center gap-2 border-l border-sky-800 pl-2 sm:flex">
             <Link
-              href={session.dm ? "/dm" : "/citizen/dashboard"}
+              href={homeFor(session.role)}
               className="max-w-[120px] truncate text-xs font-semibold text-sky-200 underline hover:text-white"
             >
               {session.name || "My Account"}

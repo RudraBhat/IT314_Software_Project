@@ -101,7 +101,7 @@ def get_field_profile(principal: FieldUser) -> FieldProfileResponse:
     if not get_settings().database_url:
         raise database_unavailable()
 
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         row = conn.execute(
             """
             SELECT u.user_id, u.email, u.full_name, u.phone, r.code AS role,
@@ -171,7 +171,7 @@ def get_field_assignments(
         "active_only": active,
     }
 
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         rows = conn.execute(query, params).fetchall()
 
     return [

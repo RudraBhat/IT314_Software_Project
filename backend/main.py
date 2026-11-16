@@ -248,7 +248,7 @@ def api_health():
     database = "not_configured"
     if get_settings().database_url:
         try:
-            with db.transaction() as conn:
+            with db.read_only() as conn:
                 conn.execute("SELECT 1")
             database = "ok"
         except Exception:

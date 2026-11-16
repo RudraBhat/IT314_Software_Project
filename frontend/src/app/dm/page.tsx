@@ -6,12 +6,19 @@ import { StatusBadge } from "@/components/badges";
 import { BarList } from "@/components/charts";
 import { ScenarioWalkthrough } from "@/components/dm/ScenarioWalkthrough";
 import { Button, Card, EmptyState, ErrorState, PageHeader, Skeleton, cx } from "@/components/ui";
+import { AccountsAdmin } from "@/components/staff/AccountsAdmin";
 import { useStaff } from "./shell";
 import { useQuery } from "@/lib/api";
 import { formatDateTime, formatNumber, label, scenarioLabel, timeAgo } from "@/lib/format";
 import type { Dashboard } from "@/lib/types";
 
+/** One dashboard URL for both staff roles: administrators see accounts, dispatchers see operations. */
 export default function DashboardPage() {
+  const { isAdmin } = useStaff();
+  return isAdmin ? <AccountsAdmin /> : <OperationsDashboard />;
+}
+
+function OperationsDashboard() {
   const { data, error, loading, reload } = useQuery<Dashboard>("dashboard");
 
   return (

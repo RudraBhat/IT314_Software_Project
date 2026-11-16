@@ -50,7 +50,7 @@ def list_public_updates(
     if incident_id:
         f.add("p.incident_id = %(incident)s", incident=incident_id)
     where = f.where()
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         total = conn.execute(
             sql.SQL("SELECT COUNT(*) AS n FROM public_updates p {}").format(where), f.params
         ).fetchone()["n"]
@@ -234,7 +234,7 @@ def list_safety_content(
     f = Filters()
     if scenario:
         f.add("c.scenario = %(scenario)s::scenario_type", scenario=scenario_db(scenario))
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         items = conn.execute(
             sql.SQL("{} {} ORDER BY c.scenario, c.title, c.version DESC").format(sql.SQL(_CONTENT_SELECT), f.where()),
             f.params,
@@ -314,7 +314,7 @@ def edit_safety_content(content_id: uuid.UUID, body: ContentEdit, principal: DMU
 
 @router.get("/safety-content/{content_id}/versions")
 def safety_content_versions(content_id: uuid.UUID, principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         base = conn.execute(
             "SELECT scenario, title FROM safety_content WHERE content_id = %s", (content_id,)
         ).fetchone()
