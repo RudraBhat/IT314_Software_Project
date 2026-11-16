@@ -4,8 +4,21 @@ import { CitizenDashboardClient } from "./client-view";
 
 export default async function CitizenDashboardPage() {
   const user = await currentUser();
-  if (!user || user.role !== "NORMAL_USER") {
+  if (!user) {
     redirect("/login?next=/citizen/dashboard");
+  }
+
+  if (user.role === "DISASTER_MGMT") {
+    redirect("/dm");
+  }
+  if (user.role === "FIELD_TEAM") {
+    redirect("/field");
+  }
+  if (user.role === "APP_MGMT") {
+    redirect("/admin");
+  }
+  if (user.role !== "NORMAL_USER") {
+    redirect("/");
   }
 
   return (

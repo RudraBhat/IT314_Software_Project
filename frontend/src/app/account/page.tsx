@@ -107,7 +107,7 @@ export default function AccountPage() {
       <SiteHeader subtitle="My Account" maxWidth="max-w-3xl">
         <NavLink href="/my-reports">My Reports</NavLink>
         <NavLink href="/my-donations">My Donations</NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">Dashboard</NavLink>
+        <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
       </SiteHeader>
 
       <main className="mx-auto w-full max-w-3xl flex-1 space-y-6 p-4 sm:p-6">
@@ -172,37 +172,37 @@ export default function AccountPage() {
               </div>
             )}
             {profile.has_password && (
-            <form onSubmit={onChangePassword} className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
-              <h2 className="text-xl font-bold text-white">Change password</h2>
-              <p className="text-xs text-slate-400">At least 8 characters with a digit and a special symbol. You will be signed out everywhere and sign in again.</p>
-              <div>
-                <label htmlFor="acc-current" className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-300">Current password</label>
-                <input id="acc-current" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className={field} />
-              </div>
-              <div>
-                <label htmlFor="acc-new" className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-300">New password</label>
-                <input id="acc-new" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className={field} />
-              </div>
-              {passwordError && <p role="alert" className="text-sm text-red-300">{passwordError}</p>}
-              <button type="submit" disabled={changing} className={button}>{changing ? "Changing…" : "Change password"}</button>
-            </form>
+              <form onSubmit={onChangePassword} className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
+                <h2 className="text-xl font-bold text-white">Change password</h2>
+                <p className="text-xs text-slate-400">At least 8 characters with a digit and a special symbol. You will be signed out everywhere and sign in again.</p>
+                <div>
+                  <label htmlFor="acc-current" className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-300">Current password</label>
+                  <input id="acc-current" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className={field} />
+                </div>
+                <div>
+                  <label htmlFor="acc-new" className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-300">New password</label>
+                  <input id="acc-new" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className={field} />
+                </div>
+                {passwordError && <p role="alert" className="text-sm text-red-300">{passwordError}</p>}
+                <button type="submit" disabled={changing} className={button}>{changing ? "Changing…" : "Change password"}</button>
+              </form>
             )}
             {profile.has_password && (
-            <form onSubmit={onDelete} className="space-y-4 rounded-2xl border border-red-900/60 bg-slate-900 p-5 sm:p-6">
-              <h2 className="text-xl font-bold text-white">Delete account</h2>
-              <p className="text-xs text-slate-400">
-                Your name, email, phone and photos are erased and you are signed out everywhere. Reports you filed stay on record for the
-                response audit trail without your identity. You can only delete your account when none of your reports is still open.
-              </p>
-              <div>
-                <label htmlFor="acc-delete" className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-300">Confirm with your password</label>
-                <input id="acc-delete" type="password" autoComplete="current-password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} required className={field} />
-              </div>
-              {deleteError && <p role="alert" className="text-sm text-red-300">{deleteError}</p>}
-              <button type="submit" disabled={deleting} className="min-h-[44px] rounded-lg bg-red-700 px-5 py-2 text-sm font-bold text-white transition hover:bg-red-600 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300">
-                {deleting ? "Deleting…" : "Delete my account"}
-              </button>
-            </form>
+              <form onSubmit={onDelete} className="space-y-4 rounded-2xl border border-red-900/60 bg-slate-900 p-5 sm:p-6">
+                <h2 className="text-xl font-bold text-white">Delete account</h2>
+                <p className="text-xs text-slate-400">
+                  Your name, email, phone and photos are erased and you are signed out everywhere. Reports you filed stay on record for the
+                  response audit trail without your identity. You can only delete your account when none of your reports is still open.
+                </p>
+                <div>
+                  <label htmlFor="acc-delete" className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-300">Confirm with your password</label>
+                  <input id="acc-delete" type="password" autoComplete="current-password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} required className={field} />
+                </div>
+                {deleteError && <p role="alert" className="text-sm text-red-300">{deleteError}</p>}
+                <button type="submit" disabled={deleting} className="min-h-[44px] rounded-lg bg-red-700 px-5 py-2 text-sm font-bold text-white transition hover:bg-red-600 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300">
+                  {deleting ? "Deleting…" : "Delete my account"}
+                </button>
+              </form>
             )}
           </>
         )}

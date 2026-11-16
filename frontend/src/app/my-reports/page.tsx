@@ -141,7 +141,7 @@ export default function MyReportsPage() {
           Auto-refresh 15s · {lastRefreshed ? lastRefreshed.toLocaleTimeString() : "…"}
         </span>
         <NavLink href="/report" variant="primary">+ Report<span className="hidden sm:inline"> Incident</span></NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">Dashboard</NavLink>
+        <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
         <NavLink href="/account" hideBelow="sm">Account</NavLink>
       </SiteHeader>
 
@@ -407,30 +407,27 @@ export default function MyReportsPage() {
                             {/* Connector Bar */}
                             {stage.id < 4 && (
                               <div
-                                className={`hidden sm:block absolute top-3.5 left-1/2 w-full h-0.5 z-0 ${
-                                  isPast ? "bg-sky-500" : "bg-slate-800"
-                                }`}
+                                className={`hidden sm:block absolute top-3.5 left-1/2 w-full h-0.5 z-0 ${isPast ? "bg-sky-500" : "bg-slate-800"
+                                  }`}
                                 aria-hidden="true"
                               />
                             )}
 
                             {/* Node Icon */}
                             <div
-                              className={`w-7 h-7 rounded-full flex items-center justify-center mx-auto mb-1.5 text-xs font-bold relative z-10 transition ${
-                                isPast
-                                  ? "bg-sky-500 text-white shadow-md shadow-sky-500/30"
-                                  : isCurrent
+                              className={`w-7 h-7 rounded-full flex items-center justify-center mx-auto mb-1.5 text-xs font-bold relative z-10 transition ${isPast
+                                ? "bg-sky-500 text-white shadow-md shadow-sky-500/30"
+                                : isCurrent
                                   ? "bg-amber-500 text-slate-950 ring-4 ring-amber-500/20 shadow-md shadow-amber-500/30 font-extrabold"
                                   : "bg-slate-800 text-slate-400 border border-slate-700"
-                              }`}
+                                }`}
                             >
                               {isPast ? "✓" : stage.id}
                             </div>
 
                             <div
-                              className={`text-[11px] sm:text-xs font-semibold truncate ${
-                                isCurrent ? "text-amber-300 font-bold" : isPast ? "text-slate-200" : "text-slate-400"
-                              }`}
+                              className={`text-[11px] sm:text-xs font-semibold truncate ${isCurrent ? "text-amber-300 font-bold" : isPast ? "text-slate-200" : "text-slate-400"
+                                }`}
                             >
                               {stage.name}
                             </div>

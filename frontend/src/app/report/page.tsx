@@ -56,6 +56,7 @@ const DRAFT_STORAGE_KEY = "resq_incident_report_draft";
 export default function ReportIncidentPage() {
   // Session State
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
 
   // Form State
   const [scenario, setScenario] = useState("urban_flooding");
@@ -116,7 +117,8 @@ export default function ReportIncidentPage() {
           setSession({ authenticated: false, role: null, name: null });
         }
       })
-      .catch(() => setSession({ authenticated: false, role: null, name: null }));
+      .catch(() => setSession({ authenticated: false, role: null, name: null }))
+      .finally(() => setSessionLoading(false));
 
     // Restore draft if saved (sessionStorage is client-only, so this has to run after mount)
     try {
@@ -498,40 +500,83 @@ export default function ReportIncidentPage() {
       <SiteHeader subtitle="Citizen Emergency Dispatch" maxWidth="max-w-5xl">
         {!session?.authenticated && <NavLink href="/login?next=/report">Sign In</NavLink>}
         <NavLink href="/my-reports">My Reports</NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">Dashboard</NavLink>
+        <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
         <NavLink href="/" hideBelow="sm">Public Map</NavLink>
       </SiteHeader>
 
       {/* Main Container */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 md:p-8">
-        {/* Guest Warning if not authenticated */}
-        {session && !session.authenticated && (
-          <div className="mb-6 p-4 bg-sky-950/70 border border-sky-600/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs md:text-sm">
-            <div className="flex items-start gap-2.5">
-              <span className="text-xl">ℹ️</span>
-              <div>
-                <strong className="text-sky-200">You are browsing as a guest.</strong>
-                <p className="text-slate-300 text-xs mt-0.5">
-                  Your drafted inputs are saved locally. Please sign in or create an account so emergency responders can verify and track your report.
-                </p>
-              </div>
+        {sessionLoading ? (
+          <div role="status" aria-label="Loading incident reporting" className="space-y-4 max-w-4xl mx-auto py-8">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 animate-pulse space-y-4">
+              <div className="h-6 w-48 bg-slate-800 rounded" />
+              <div className="h-4 w-72 bg-slate-800/60 rounded" />
+              <div className="h-40 w-full bg-slate-950/60 rounded-xl border border-slate-800/40" />
             </div>
-            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+          </div>
+        ) : session?.authenticated && session.role !== "NORMAL_USER" ? (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-10 shadow-xl max-w-2xl mx-auto my-6 text-center space-y-5">
+            <div role="alert" aria-live="assertive" className="p-4 bg-red-950/60 border border-red-700/60 rounded-xl text-red-200 text-sm flex items-center justify-center gap-2">
+              <span className="text-lg" aria-hidden="true">⚠️</span>
+              <span className="font-semibold">Citizen role required</span>
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">
+                Emergency Reporting Restricted
+              </h1>
+              <p className="text-slate-300 text-sm max-w-lg mx-auto leading-relaxed">
+                Emergency incident reporting is exclusively reserved for citizen accounts (<code className="text-xs bg-slate-800 text-sky-300 px-1.5 py-0.5 rounded font-mono">NORMAL_USER</code>).
+                You are currently signed in with a staff operational role (<strong className="text-white">{session.role}</strong>).
+              </p>
+            </div>
+            <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-400 max-w-md mx-auto">
+              Staff members triage, verify, and dispatch emergency incidents from the operational workspaces rather than submitting public citizen reports.
+            </div>
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
               <Link
-                href="/login?next=/report"
-                className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-xs transition shadow"
+                href="/dashboard"
+                className="min-h-[44px] bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold px-6 py-2.5 rounded-xl shadow-lg shadow-sky-600/30 transition flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
               >
-                Sign In
+                Go to Operational Dashboard →
               </Link>
               <Link
-                href="/signup"
-                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs transition"
+                href="/"
+                className="min-h-[44px] bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium px-5 py-2.5 rounded-xl transition flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
               >
-                Register
+                Public Map
               </Link>
             </div>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Guest Warning if not authenticated */}
+            {session && !session.authenticated && (
+              <div className="mb-6 p-4 bg-sky-950/70 border border-sky-600/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs md:text-sm">
+                <div className="flex items-start gap-2.5">
+                  <span className="text-xl">ℹ️</span>
+                  <div>
+                    <strong className="text-sky-200">You are browsing as a guest.</strong>
+                    <p className="text-slate-300 text-xs mt-0.5">
+                      Your drafted inputs are saved locally. Please sign in or create an account so emergency responders can verify and track your report.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  <Link
+                    href="/login?next=/report"
+                    className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-xs transition shadow"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs transition"
+                  >
+                    Register
+                  </Link>
+                </div>
+              </div>
+            )}
 
         {successResult ? (
           <div role="status" aria-live="polite" className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 sm:p-8 text-center shadow-xl space-y-6">
@@ -641,11 +686,10 @@ export default function ReportIncidentPage() {
                         tabIndex={isSelected ? 0 : -1}
                         aria-checked={isSelected}
                         onClick={() => { setScenario(item.id); setNeeds([]); }}
-                        className={`min-h-[56px] p-3.5 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
-                          isSelected
-                            ? "bg-sky-950/40 border-sky-500 shadow-md shadow-sky-500/10"
-                            : "bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300"
-                        }`}
+                        className={`min-h-[56px] p-3.5 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${isSelected
+                          ? "bg-sky-950/40 border-sky-500 shadow-md shadow-sky-500/10"
+                          : "bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300"
+                          }`}
                       >
                         <span className="text-2xl" aria-hidden="true">{item.icon}</span>
                         <div>
@@ -681,11 +725,10 @@ export default function ReportIncidentPage() {
                         tabIndex={urgency === item.id ? 0 : -1}
                         aria-checked={urgency === item.id}
                         onClick={() => setUrgency(item.id)}
-                        className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-semibold border text-center transition flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
-                          urgency === item.id
-                            ? `${item.color} bg-slate-800 shadow ring-1 ring-sky-500/50`
-                            : "border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white"
-                        }`}
+                        className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-semibold border text-center transition flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${urgency === item.id
+                          ? `${item.color} bg-slate-800 shadow ring-1 ring-sky-500/50`
+                          : "border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white"
+                          }`}
                       >
                         {item.label}
                       </button>
@@ -749,11 +792,10 @@ export default function ReportIncidentPage() {
                   {(URGENT_NEEDS[scenario as Scenario] || []).map((need) => (
                     <label
                       key={need}
-                      className={`min-h-[40px] px-3.5 py-2 rounded-lg border text-xs cursor-pointer transition select-none flex items-center focus-within:ring-2 focus-within:ring-sky-400 focus-within:ring-offset-1 focus-within:ring-offset-slate-950 ${
-                        needs.includes(need)
-                          ? "border-sky-500 bg-sky-950/40 text-white font-medium shadow-sm"
-                          : "border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white"
-                      }`}
+                      className={`min-h-[40px] px-3.5 py-2 rounded-lg border text-xs cursor-pointer transition select-none flex items-center focus-within:ring-2 focus-within:ring-sky-400 focus-within:ring-offset-1 focus-within:ring-offset-slate-950 ${needs.includes(need)
+                        ? "border-sky-500 bg-sky-950/40 text-white font-medium shadow-sm"
+                        : "border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white"
+                        }`}
                     >
                       <input
                         type="checkbox"
@@ -1031,6 +1073,8 @@ export default function ReportIncidentPage() {
               </div>
             </form>
           </div>
+        )}
+          </>
         )}
       </main>
     </div>

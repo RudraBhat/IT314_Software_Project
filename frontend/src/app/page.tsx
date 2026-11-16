@@ -387,7 +387,7 @@ export default function PublicPortalPage() {
         {session?.authenticated ? (
           <div className="hidden items-center gap-2 border-l border-sky-800 pl-2 sm:flex">
             <Link
-              href={session.dm ? "/dm" : "/citizen/dashboard"}
+              href="/dashboard"
               className="max-w-[120px] truncate text-xs font-semibold text-sky-200 underline hover:text-white"
             >
               {session.name || "My Account"}

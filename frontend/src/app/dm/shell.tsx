@@ -78,7 +78,7 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
   return (
     <UserContext.Provider value={user}>
       <ToastProvider>
-        <div className="dm-theme app-screen flex flex-col font-sans">
+        <div className="dm-theme app-screen fixed inset-0 flex flex-col font-sans overflow-hidden">
           {/* Same top banner as the ResQ login page */}
           <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-[#093554] bg-[#0c4a75] px-4 text-white shadow-md sm:px-6">
             <button className="rounded-md p-2 text-sky-100 hover:bg-white/10 lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">
@@ -107,18 +107,18 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
             </div>
           </header>
 
-          <div className="flex min-h-0 flex-1">
-            <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-border bg-surface p-3 lg:block">{nav}</aside>
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <aside className="hidden w-56 shrink-0 overflow-y-auto overscroll-contain border-r border-border bg-surface p-3 lg:block">{nav}</aside>
 
             {open && (
               <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
                 <button className="absolute inset-0 bg-black/60" aria-label="Close navigation" onClick={() => setOpen(false)} />
-                <div className="absolute inset-y-0 left-0 w-64 overflow-y-auto border-r border-border bg-surface p-3 shadow-xl">{nav}</div>
+                <div className="absolute inset-y-0 left-0 w-64 overflow-y-auto overscroll-contain border-r border-border bg-surface p-3 shadow-xl">{nav}</div>
               </div>
             )}
 
-            {/* The ResQ body is fixed-height, so the workspace scrolls inside this pane. */}
-            <div className="min-w-0 flex-1 overflow-y-auto">
+            {/* The ResQ body is fixed-height, so only the workspace scrolls inside this pane. */}
+            <div className="min-w-0 flex-1 overflow-y-auto overscroll-contain">
               <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
             </div>
           </div>

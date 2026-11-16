@@ -50,7 +50,7 @@ export default function MyDonationsPage() {
         <NavLink href="/my-reports" hideBelow="sm">
           My Reports
         </NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">
+        <NavLink href="/dashboard" hideBelow="sm">
           Dashboard
         </NavLink>
         <NavLink href="/account" hideBelow="sm">
@@ -168,10 +168,10 @@ function DonationCard({ item }: { item: DonationRecord }) {
     item.failure_reason === "ABANDONED"
       ? "You cancelled this donation"
       : item.failure_reason === "GATEWAY_DECLINED"
-      ? "Your payment was declined"
-      : item.failure_reason === "EXPIRED"
-      ? "This donation expired before payment"
-      : "This donation did not complete";
+        ? "Your payment was declined"
+        : item.failure_reason === "EXPIRED"
+          ? "This donation expired before payment"
+          : "This donation did not complete";
 
   return (
     <li className="bg-slate-900 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-md transition hover:border-slate-700/80">
