@@ -130,3 +130,21 @@ def test_reset_mfa_and_set_permissions_still_refuse_other_roles(make, automated)
     admin = make.user("APP_MGMT")
     with pytest.raises(SystemExit, match="only manages Disaster Management staff"):
         cli.set_permissions(argparse.Namespace(email=admin["email"], permissions="DISPATCH"))
+
+
+def test_a_bad_mfa_encryption_key_gives_a_clear_message_and_writes_nothing(monkeypatch):
+    class Connection:
+        called = False
+
+        def execute(self, *_args, **_kwargs):
+            self.called = True
+
+    def invalid_key(_secret):
+        raise ValueError("Fernet key must be 32 url-safe base64-encoded bytes.")
+
+    monkeypatch.setenv("RESQ_STAFF_PASSWORD", PASSWORD)
+    monkeypatch.setattr(cli.security, "encrypt_mfa_secret", invalid_key)
+    conn = Connection()
+    with pytest.raises(SystemExit, match="MFA_ENCRYPTION_KEY is not a valid key"):
+        cli._enrol_mfa(conn, "user-id", "ops@example.org")
+    assert not conn.called

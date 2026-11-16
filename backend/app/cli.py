@@ -71,9 +71,18 @@ def _enrol_mfa(conn, user_id, email: str) -> None:
         )
 
     totp_key = security.new_totp_secret()
+    try:
+        encrypted_key = security.encrypt_mfa_secret(totp_key)
+    except ValueError:
+        # Exiting here rolls the whole command back, so no half-created account is left behind.
+        sys.exit(
+            "MFA_ENCRYPTION_KEY is not a valid key: it must be 44 characters (a Fernet key). Generate one with:\n"
+            '  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"\n'
+            "and set it in .env. Use the same key everywhere the accounts must sign in."
+        )
     conn.execute(
         "UPDATE user_auth SET mfa_enabled = TRUE, mfa_secret = %s, token_version = token_version + 1 WHERE user_id = %s",
-        (security.encrypt_mfa_secret(totp_key), user_id),
+        (encrypted_key, user_id),
     )
     raw_uri = security.provisioning_uri(totp_key, email)
     display_key = "".join(chr(ord(c)) for c in totp_key)
