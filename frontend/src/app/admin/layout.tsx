@@ -9,7 +9,7 @@ import { currentUser } from "@/lib/session";
 export const metadata: Metadata = { title: "Administration · ResQ" };
 
 /**
- * Application Management (APP_MGMT) area: account invitations only (issue #100).
+ * Application Management (APP_MGMT) area: the staff account directory and account invitations (issue #100).
  * Administrators have no operational access; the backend enforces that on every route.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
