@@ -154,7 +154,7 @@
 }
 ```
 * **Response (200 OK), staff** (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`): `{"mfa_required": true, "mfa_token": "eyJ..."}`. The client then calls `POST /api/v1/auth/mfa/verify` with `{"mfa_token", "code"}` (6-digit TOTP; 20 requests per 5 minutes) and receives the citizen-shaped response above with `"mfa_required": false`. The `mfa_token` is valid for `MFA_TOKEN_MINUTES` (default 5).
-* **Lifetimes:** access tokens last `ACCESS_TOKEN_MINUTES` (default 60; `expires_in` is in seconds). Repeated failures lock the account for `LOGIN_LOCKOUT_MINUTES` (default 15).
+* **Lifetimes:** access tokens last `ACCESS_TOKEN_MINUTES` (default 15; `expires_in` is in seconds) and are renewed with a refresh token (section 9). Repeated failures lock the account for `LOGIN_LOCKOUT_MINUTES` (default 15).
 * **Errors:**
   * `401 INVALID_CREDENTIALS`: wrong email or password, locked or disabled account (one generic message, so account existence is not revealed).
   * `403 ACCOUNT_NOT_SETUP`: an invited account has not finished setup; use the emailed invitation link (9.2).
@@ -908,7 +908,12 @@ All endpoints below are under `/api/v1`, use the standard error format, and neve
 | Password-reset link lifetime | 15 minutes | `PASSWORD_RESET_TOKEN_MINUTES` |
 | Invitation link lifetime | 48 hours | `INVITATION_TOKEN_HOURS` |
 | MFA setup session (after accepting an invitation) | 15 minutes | fixed |
-| Access token | 60 minutes | `ACCESS_TOKEN_MINUTES` |
+| Access token | 15 minutes | `ACCESS_TOKEN_MINUTES` |
+| Refresh token, idle limit (staff / citizen) | 48 hours / 30 days | `REFRESH_IDLE_HOURS_STAFF`, `REFRESH_IDLE_HOURS_CITIZEN` |
+| Refresh token, absolute limit (staff / citizen) | 7 days / 90 days | `REFRESH_MAX_HOURS_STAFF`, `REFRESH_MAX_HOURS_CITIZEN` |
+| Active sessions per user | 5 | `MAX_ACTIVE_SESSIONS` |
+
+`POST /api/v1/auth/refresh` (public, rate limited) takes `{"refresh_token"}` and returns `access_token`, `expires_in`, a replacement `refresh_token`, `refresh_expires_in` and `role`. Every sign-in response (`login`, `mfa/verify`, `signup`, `google`, invitation setup) also carries `refresh_token` and `refresh_expires_in`. Refresh tokens are single-use and stored only as SHA-256 hashes. Errors, all `401`: `INVALID_REFRESH_TOKEN`, `SESSION_EXPIRED` (idle or absolute limit reached, account disabled or locked, password or MFA changed, logged out) and `REFRESH_TOKEN_REUSED` (an already-used token was replayed outside the grace window; the whole session is revoked and audited as `REFRESH_TOKEN_REUSE`). Logout revokes every refresh token of the user.
 
 Rate limits are per client IP (sliding window, `429 RATE_LIMITED` with `details.retry_after_seconds`).
 

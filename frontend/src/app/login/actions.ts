@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { API_URL, MFA_COOKIE, SESSION_COOKIE, cookieOptions } from "@/lib/session";
+import { API_URL, MFA_COOKIE, REFRESH_COOKIE, SESSION_COOKIE, cookieOptions, setSessionCookies } from "@/lib/session";
 
 export type LoginState = { step: "password" | "mfa"; error?: string; email?: string };
 
@@ -59,10 +59,7 @@ async function signIn(form: FormData): Promise<LoginState> {
     if (!token) {
       return { step: "password", error: "Authentication response missing access token.", email };
     }
-    const expiresIn = Number(res.data.expires_in) || 86400;
-    const jar = await cookies();
-    jar.set(SESSION_COOKIE, token, cookieOptions(expiresIn));
-    jar.set("drch_session", "1", cookieOptions(expiresIn));
+    setSessionCookies(await cookies(), { ...res.data, access_token: token });
     const role = res.data.role || res.data.user?.role || "NORMAL_USER";
     redirect(safeNext(form.get("next"), role));
   }
@@ -86,14 +83,11 @@ async function verifyCode(prev: LoginState, form: FormData): Promise<LoginState>
   }
   jar.delete(MFA_COOKIE);
   if (res.data.role === "DISASTER_MGMT" || res.data.role === "FIELD_TEAM" || res.data.role === "APP_MGMT") {
-    jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(res.data.expires_in));
-    jar.set("drch_session", "1", cookieOptions(res.data.expires_in));
+    setSessionCookies(jar, res.data);
     redirect(safeNext(form.get("next"), res.data.role));
   }
   if (res.data.role === "NORMAL_USER") {
-    const expiresIn = Number(res.data.expires_in) || 86400;
-    jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(expiresIn));
-    jar.set("drch_session", "1", cookieOptions(expiresIn));
+    setSessionCookies(jar, res.data);
     redirect(safeNext(form.get("next"), "NORMAL_USER"));
   }
   await post("/api/v1/auth/logout", {}, res.data.access_token);
@@ -114,8 +108,7 @@ export async function register(_prev: { error?: string }, form: FormData): Promi
   });
   if (!res.ok) return { error: (res.data as ApiError).error?.message ?? "Registration failed." };
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, res.data.access_token, cookieOptions(Number(res.data.expires_in) || 3600));
-  jar.set("drch_session", "1", cookieOptions(Number(res.data.expires_in) || 3600));
+  setSessionCookies(jar, res.data);
   redirect("/citizen/dashboard");
 }
 
@@ -124,6 +117,7 @@ export async function signOut() {
   const token = jar.get(SESSION_COOKIE)?.value;
   if (token) await post("/api/v1/auth/logout", {}, token);
   jar.delete(SESSION_COOKIE);
+  jar.delete(REFRESH_COOKIE);
   jar.delete("drch_session");
   redirect("/login");
 }

@@ -21,6 +21,7 @@ from app.config import get_settings
 from app.errors import ApiError
 from app.ratelimit import rate_limit
 from app.services import email as email_service
+from app.services import sessions
 
 router = APIRouter(prefix="/api/v1", tags=["auth"])
 
@@ -177,12 +178,15 @@ def _complete_login(conn, account, ip: str | None, mfa: bool) -> dict:
         settings.access_token_minutes,
         mfa=mfa,
     )
+    refresh_token, refresh_expires_in = sessions.start_session(conn, account, mfa)
     return {
         "mfa_required": False,
         "access_token": token,
         "token": token,
         "token_type": "bearer",
         "expires_in": settings.access_token_minutes * 60,
+        "refresh_token": refresh_token,
+        "refresh_expires_in": refresh_expires_in,
         "role": account["role"],
         "user": {
             "id": str(account["user_id"]),
@@ -351,6 +355,32 @@ def verify_mfa(body: MfaVerifyRequest, request: Request):
     raise ApiError(401, "MFA_INVALID", "The verification code is not valid")
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=10, max_length=512)
+
+
+@router.post("/auth/refresh", dependencies=[rate_limit("refresh", 300, 300)])
+def refresh_session(body: RefreshRequest, request: Request):
+    """Exchange a refresh token for a new access token and a replacement refresh token."""
+    settings = get_settings()
+    with db.transaction() as conn:
+        result = sessions.rotate(conn, body.refresh_token, _ip(request))
+    # Raised after the transaction so any revocation recorded above is kept.
+    if result.error:
+        raise ApiError(401, result.error, "Your session has ended. Sign in again.")
+    token = security.issue_token(
+        result.user_id, result.token_version, security.ACCESS, settings.access_token_minutes, mfa=result.mfa
+    )
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": settings.access_token_minutes * 60,
+        "refresh_token": result.refresh_token,
+        "refresh_expires_in": result.expires_in,
+        "role": result.role,
+    }
+
+
 @router.post("/auth/logout", status_code=204)
 def logout(principal: CurrentUser):
     # Bumping token_version revokes every token issued to this user.
@@ -359,6 +389,7 @@ def logout(principal: CurrentUser):
             "UPDATE user_auth SET token_version = token_version + 1 WHERE user_id = %s",
             (principal.user_id,),
         )
+        sessions.revoke_all(conn, principal.user_id, "LOGOUT")
         audit.record(
             conn,
             actor=principal,

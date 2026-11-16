@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { API_URL, currentUser, cookieOptions, SESSION_COOKIE } from "@/lib/session";
+import { API_URL, currentUser, cookieOptions, REFRESH_COOKIE, SESSION_COOKIE } from "@/lib/session";
 
 function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
@@ -79,6 +79,7 @@ export async function DELETE(request: Request) {
   }
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
+  jar.delete(REFRESH_COOKIE);
   jar.delete("drch_session");
   return Response.json({ ok: true });
 }

@@ -3,6 +3,7 @@ import { API_URL } from "./config";
 export { API_URL };
 export const MFA_COOKIE = "mfa_token";
 export const SESSION_COOKIE = "session_token";
+export const REFRESH_COOKIE = "refresh_token";
 
 export function cookieOptions(maxAge: number) {
   return {
@@ -12,6 +13,33 @@ export function cookieOptions(maxAge: number) {
     path: "/",
     maxAge,
   };
+}
+
+/** Sign-in or refresh response fields that start or extend a session. */
+export type SessionTokens = {
+  access_token?: unknown;
+  expires_in?: unknown;
+  refresh_token?: unknown;
+  refresh_expires_in?: unknown;
+};
+
+type CookieWriter = { set(name: string, value: string, options: ReturnType<typeof cookieOptions>): unknown };
+
+// The access cookie lapses a little before the token does, so a request never carries a token
+// the backend is about to refuse; the proxy refreshes it first.
+const ACCESS_COOKIE_MARGIN_SECONDS = 30;
+
+/** Write the access, session-marker and refresh cookies from a sign-in or refresh response. */
+export function setSessionCookies(jar: CookieWriter, data: SessionTokens): void {
+  const expiresIn = Number(data.expires_in) || 900;
+  const accessAge = Math.max(expiresIn - ACCESS_COOKIE_MARGIN_SECONDS, 1);
+  const refreshAge = Number(data.refresh_expires_in) || 0;
+  jar.set(SESSION_COOKIE, String(data.access_token), cookieOptions(accessAge));
+  // Outlives the access cookie, so the marker alone does not mean the access token is still valid.
+  jar.set("drch_session", "1", cookieOptions(refreshAge || accessAge));
+  if (typeof data.refresh_token === "string" && refreshAge > 0) {
+    jar.set(REFRESH_COOKIE, data.refresh_token, cookieOptions(refreshAge));
+  }
 }
 
 export type CurrentUser = {
