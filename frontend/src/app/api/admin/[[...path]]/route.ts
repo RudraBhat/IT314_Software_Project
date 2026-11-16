@@ -5,13 +5,17 @@ import { API_URL, sessionToken } from "@/lib/session";
 /**
  * Backend-for-frontend proxy for the administrator area (/api/v1/admin/...).
  *
- *   GET /api/admin/accounts   -> staff account directory (APP_MGMT with verified MFA)
+ *   GET  /api/admin/accounts                     -> staff account directory (APP_MGMT with verified MFA)
+ *   POST /api/admin/accounts/{id}/disable|enable -> switch an account off or on, with a reason
  *
- * Read-only for now. The browser holds only the httpOnly session cookie; this handler attaches the
+ * The browser holds only the httpOnly session cookie; this handler attaches the
  * bearer token server-side and the backend decides who may call each route. Unknown paths are 404.
  */
 
-const ALLOWED = [{ method: "GET", pattern: /^accounts$/ }];
+const ALLOWED = [
+  { method: "GET", pattern: /^accounts$/ },
+  { method: "POST", pattern: /^accounts\/[0-9a-f-]{36}\/(disable|enable)$/i },
+];
 
 function sameOrigin(request: NextRequest): boolean {
   const origin = request.headers.get("origin");
@@ -44,11 +48,16 @@ async function forward(request: NextRequest, ctx: { params: Promise<{ path?: str
   const target = new URL(`${API_URL}/api/v1/admin/${path.map(encodeURIComponent).join("/")}`);
   target.search = request.nextUrl.search;
 
+  const headers = new Headers({ Authorization: `Bearer ${token}` });
+  const contentType = request.headers.get("content-type");
+  if (contentType) headers.set("content-type", contentType);
+
   let upstream: Response;
   try {
     upstream = await fetch(target, {
       method: request.method,
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
+      body: request.method === "POST" ? await request.text() : undefined,
       cache: "no-store",
       signal: AbortSignal.timeout(20000),
     });
@@ -63,3 +72,4 @@ async function forward(request: NextRequest, ctx: { params: Promise<{ path?: str
 }
 
 export const GET = forward;
+export const POST = forward;

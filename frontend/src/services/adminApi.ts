@@ -42,14 +42,13 @@ export type AccountsPage = {
 
 export type AccountQuery = { q?: string; role?: InvitableRole | ""; status?: AccountStatus | ""; page?: number };
 
-export async function listAccounts(query: AccountQuery): Promise<AccountsPage> {
-  const params = new URLSearchParams();
-  if (query.q?.trim()) params.set("q", query.q.trim());
-  if (query.role) params.set("role", query.role);
-  if (query.status) params.set("status", query.status);
-  params.set("page", String(query.page ?? 1));
-  params.set("limit", "15");
-  const res = await fetch(`/api/admin/accounts?${params.toString()}`, { cache: "no-store" });
+async function request<T>(path: string, init?: { method: string; body: unknown }): Promise<T> {
+  const res = await fetch(`/api/admin/${path}`, {
+    method: init?.method ?? "GET",
+    headers: init ? { "content-type": "application/json" } : undefined,
+    body: init ? JSON.stringify(init.body) : undefined,
+    cache: "no-store",
+  });
   const payload = await res.json().catch(() => null);
   if (!res.ok) {
     const err = payload?.error;
@@ -60,5 +59,25 @@ export async function listAccounts(query: AccountQuery): Promise<AccountsPage> {
       err?.details ?? null,
     );
   }
-  return payload as AccountsPage;
+  return payload as T;
 }
+
+export async function listAccounts(query: AccountQuery): Promise<AccountsPage> {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.role) params.set("role", query.role);
+  if (query.status) params.set("status", query.status);
+  params.set("page", String(query.page ?? 1));
+  params.set("limit", "15");
+  return request<AccountsPage>(`accounts?${params.toString()}`);
+}
+
+export type StatusChangeResult = { user_id: string; status: AccountStatus };
+
+/** Switch a staff account off. The reason is required and audited; sessions end at once. */
+export const disableAccount = (userId: string, reason: string) =>
+  request<StatusChangeResult>(`accounts/${encodeURIComponent(userId)}/disable`, { method: "POST", body: { reason } });
+
+/** Switch a disabled account back on (an unfinished invitation returns to awaiting setup). */
+export const enableAccount = (userId: string, reason: string) =>
+  request<StatusChangeResult>(`accounts/${encodeURIComponent(userId)}/enable`, { method: "POST", body: { reason } });

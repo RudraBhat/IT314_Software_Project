@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 
-import { Badge, Card, EmptyState, ErrorState, Input, LoadingRows, Pagination, Select } from "@/components/ui";
+import { Badge, Button, Card, Dialog, EmptyState, ErrorState, Field, Input, LoadingRows, Notice, Pagination, Select, Textarea } from "@/components/ui";
+import { useAction } from "@/components/use-action";
 import { formatDateTime, timeAgo } from "@/lib/format";
-import { listAccounts, type AccountStatus, type AccountsPage, type StaffAccount } from "@/services/adminApi";
+import { disableAccount, enableAccount, listAccounts, type AccountStatus, type AccountsPage, type StaffAccount } from "@/services/adminApi";
 import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
 
 import type { Tone } from "@/components/ui";
@@ -43,6 +44,9 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<Result | null>(null);
   const [retry, setRetry] = useState(0);
+  const { run, busy } = useAction();
+  const [changing, setChanging] = useState<{ account: StaffAccount; action: "disable" | "enable" } | null>(null);
+  const [reason, setReason] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -67,6 +71,26 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
   }, [key]);
 
   const loading = !result || result.key !== key;
+
+  function ask(account: StaffAccount, action: "disable" | "enable") {
+    setReason("");
+    setChanging({ account, action });
+  }
+
+  async function confirm() {
+    if (!changing) return;
+    const { account, action } = changing;
+    const call = action === "disable" ? disableAccount : enableAccount;
+    const done = await run(
+      `${action}-${account.user_id}`,
+      () => call(account.user_id, reason.trim()),
+      action === "disable" ? `${account.full_name} was disabled and signed out.` : `${account.full_name} was enabled.`,
+    );
+    if (done !== undefined) {
+      setChanging(null);
+      setRetry((n) => n + 1);
+    }
+  }
   const data = result?.data;
   const summary = data?.summary;
   const filtered = Boolean(debouncedSearch.trim() || role || status);
@@ -132,7 +156,7 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
       {data && data.items.length > 0 && (
         <ul className={`divide-y divide-border ${loading ? "opacity-60" : ""}`} aria-busy={loading}>
           {data.items.map((account) => (
-            <AccountRow key={account.user_id} account={account} />
+            <AccountRow key={account.user_id} account={account} onAction={ask} />
           ))}
         </ul>
       )}
@@ -141,11 +165,47 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
           <Pagination page={data.page} pages={data.pages} total={data.total} onPage={setPage} />
         </div>
       )}
+
+      <Dialog
+        open={changing !== null}
+        onClose={() => setChanging(null)}
+        title={changing?.action === "disable" ? `Disable ${changing.account.full_name}?` : `Enable ${changing?.account.full_name ?? ""}?`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setChanging(null)}>Cancel</Button>
+            <Button
+              variant={changing?.action === "disable" ? "danger" : "primary"}
+              busy={busy !== null}
+              disabled={reason.trim().length < 5}
+              onClick={confirm}
+            >
+              {changing?.action === "disable" ? "Disable account" : "Enable account"}
+            </Button>
+          </>
+        }
+      >
+        {changing && (
+          <div className="space-y-4">
+            <Notice tone={changing.action === "disable" ? "high" : "info"}>
+              {changing.action === "disable"
+                ? `${changing.account.email} will be signed out on their next request and cannot sign in again until you enable the account. Nothing is deleted.`
+                : changing.account.status === "DISABLED" && (!changing.account.mfa_enabled || changing.account.last_login_at === null)
+                  ? `${changing.account.email} can sign in again if setup was finished. If they never completed setup, send a new invitation link from the pending list.`
+                  : `${changing.account.email} will be able to sign in again. Their old sessions stay ended.`}
+            </Notice>
+            <Field label="Reason (recorded in the audit log)" hint="At least 5 characters.">
+              {(id) => (
+                <Textarea id={id} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
+              )}
+            </Field>
+          </div>
+        )}
+      </Dialog>
     </Card>
   );
 }
 
-function AccountRow({ account }: { account: StaffAccount }) {
+function AccountRow({ account, onAction }: { account: StaffAccount; onAction: (account: StaffAccount, action: "disable" | "enable") => void }) {
   const never = !account.last_login_at;
   return (
     <li className="flex flex-col gap-2 px-5 py-4">
@@ -155,6 +215,17 @@ function AccountRow({ account }: { account: StaffAccount }) {
         <Badge tone="neutral">{ROLE_LABEL[account.role] ?? account.role}</Badge>
         <Badge tone={STATUS_TONE[account.status] ?? "neutral"}>{STATUS_LABEL[account.status] ?? account.status}</Badge>
         {account.is_locked && <Badge tone="high">Locked after failed sign-ins</Badge>}
+        {!account.is_you && (
+          <span className="ml-auto">
+            {account.status === "DISABLED" ? (
+              <Button size="sm" onClick={() => onAction(account, "enable")}>Enable</Button>
+            ) : (
+              <Button size="sm" variant="ghost" onClick={() => onAction(account, "disable")} aria-label={`Disable ${account.full_name}`}>
+                Disable
+              </Button>
+            )}
+          </span>
+        )}
       </div>
       <p className="text-xs text-muted">
         {account.email}
