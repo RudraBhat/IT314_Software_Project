@@ -15,6 +15,16 @@ interface GoogleSignInButtonProps {
   onSuccess?: () => void;
   onError?: (err: string) => void;
   next?: string;
+  /** Let Google sign in automatically when this browser profile has one signed-in Google account. */
+  autoSelect?: boolean;
+}
+
+// Pages only staff or admins use. A citizen who signs in with Google must not be sent there.
+const STAFF_AREAS = ["/dm", "/admin", "/field"];
+
+function safeDestination(next: string | undefined): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
+  return STAFF_AREAS.some((area) => next === area || next.startsWith(`${area}/`)) ? "/citizen/dashboard" : next;
 }
 
 export function GoogleSignInButton({
@@ -22,12 +32,16 @@ export function GoogleSignInButton({
   onSuccess,
   onError,
   next,
+  autoSelect = false,
 }: GoogleSignInButtonProps) {
   const router = useRouter();
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [configNotice, setConfigNotice] = useState<string | null>(null);
+  const [staffRefused, setStaffRefused] = useState(false);
+  const promptedRef = useRef(false);
+  const dialogButtonRef = useRef<HTMLButtonElement>(null);
 
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const isConfigured = Boolean(clientId && !clientId.includes("your_google_client_id"));
@@ -43,17 +57,22 @@ export function GoogleSignInButton({
           router.refresh();
           if (onSuccess) {
             onSuccess();
-          } else if (next && next.startsWith("/") && !next.startsWith("//")) {
-            router.push(next);
           } else {
-            router.push("/");
+            router.push(safeDestination(next));
           }
         } else if (res.mfa_required) {
           onError?.(
             res.message || "MFA required for privileged account. Please enter your TOTP code."
           );
+        } else if (res.errorCode === "GOOGLE_STAFF_NOT_ALLOWED") {
+          // Staff and admin accounts never sign in with Google. Stop Google retrying automatically
+          // and tell the person how to sign in instead.
+          window.google?.accounts?.id?.disableAutoSelect?.();
+          setStaffRefused(true);
         } else {
-          onError?.(res.error || "Google authentication failed.");
+          const message = res.error || "Google authentication failed.";
+          if (onError) onError(message);
+          else setConfigNotice(message);
         }
       } catch {
         onError?.("Failed to connect to authentication server.");
@@ -79,6 +98,8 @@ export function GoogleSignInButton({
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: handleCredentialResponse,
+          auto_select: autoSelect,
+          cancel_on_tap_outside: false,
         });
 
         googleBtnRef.current.innerHTML = "";
@@ -92,6 +113,16 @@ export function GoogleSignInButton({
         });
 
         setScriptLoaded(true);
+        if (mode === "login" && !promptedRef.current) {
+          promptedRef.current = true;
+          if (autoSelect) {
+            // One Tap: signs in on its own when this browser profile has a single Google session.
+            window.google.accounts.id.prompt();
+          } else {
+            // An explicit sign-out: forget the automatic choice so Google asks again.
+            window.google.accounts.id.disableAutoSelect?.();
+          }
+        }
         return true;
       } catch (err) {
         console.warn("Google GSI renderButton error:", err);
@@ -129,7 +160,27 @@ export function GoogleSignInButton({
       cancelled = true;
       if (checkInterval) clearInterval(checkInterval);
     };
-  }, [isConfigured, clientId, mode, handleCredentialResponse]);
+  }, [isConfigured, clientId, mode, autoSelect, handleCredentialResponse]);
+
+  // Modal behaviour for the staff-refusal dialog: focus it, and let Escape close it.
+  useEffect(() => {
+    if (!staffRefused) return;
+    dialogButtonRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setStaffRefused(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [staffRefused]);
+
+  const useEmailAndPassword = () => {
+    setStaffRefused(false);
+    if (mode === "signup") {
+      router.push("/login");
+    } else {
+      document.querySelector<HTMLInputElement>('input[name="email"]')?.focus();
+    }
+  };
 
   const handleFallbackClick = () => {
     if (!isConfigured) {
@@ -208,6 +259,43 @@ export function GoogleSignInButton({
         {googleLoading && (
           <div className="text-xs text-sky-600 flex items-center gap-1.5 mt-2 animate-pulse">
             <span>⏳</span> Authenticating with Google...
+          </div>
+        )}
+
+        {staffRefused && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="google-staff-title"
+              aria-describedby="google-staff-text"
+              className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+            >
+              <h2 id="google-staff-title" className="text-xl font-extrabold text-slate-900">
+                Google sign-in is not available for this account
+              </h2>
+              <p id="google-staff-text" className="mt-3 text-base text-slate-700">
+                This email belongs to a staff, dispatcher or admin account. Those accounts cannot use Google.
+                Sign in with your email, password and the 6-digit code from your authenticator app instead.
+              </p>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row-reverse">
+                <button
+                  ref={dialogButtonRef}
+                  type="button"
+                  onClick={useEmailAndPassword}
+                  className="min-h-12 rounded-xl bg-sky-800 px-5 text-base font-bold text-white hover:bg-sky-900 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-300"
+                >
+                  {mode === "signup" ? "Go to sign in" : "Use email and password"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStaffRefused(false)}
+                  className="min-h-12 rounded-xl border-2 border-slate-300 px-5 text-base font-bold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-200"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

@@ -20,7 +20,6 @@ type AuthCopy = {
   searchLanguages: string;
   noLanguageMatch: string;
   forgotPassword: string;
-  staffInvitationSetup: string;
   loading: string;
   createYourAccount: string;
   signupDescription: string;
@@ -83,7 +82,6 @@ const COPY: Record<AuthLanguage, AuthCopy> = {
     searchLanguages: "Search languages",
     noLanguageMatch: "No language matches your search.",
     forgotPassword: "Forgot password?",
-    staffInvitationSetup: "Staff invitation setup",
     loading: "Loading…",
     createYourAccount: "Create your account",
     signupDescription: "Free. It lets you report an incident and follow what happens next.",
@@ -144,7 +142,6 @@ const COPY: Record<AuthLanguage, AuthCopy> = {
     searchLanguages: "भाषा खोजें",
     noLanguageMatch: "आपकी खोज से कोई भाषा मेल नहीं खाती।",
     forgotPassword: "पासवर्ड भूल गए?",
-    staffInvitationSetup: "स्टाफ आमंत्रण सेटअप",
     loading: "लोड हो रहा है…",
     createYourAccount: "अपना खाता बनाएँ",
     signupDescription: "निःशुल्क। इससे आप घटना की सूचना दे सकते हैं और आगे क्या होता है, यह देख सकते हैं।",
@@ -205,7 +202,6 @@ const COPY: Record<AuthLanguage, AuthCopy> = {
     searchLanguages: "ભાષા શોધો",
     noLanguageMatch: "તમારી શોધ સાથે કોઈ ભાષા મેળ ખાતી નથી.",
     forgotPassword: "પાસવર્ડ ભૂલી ગયા?",
-    staffInvitationSetup: "સ્ટાફ આમંત્રણ સેટઅપ",
     loading: "લોડ થઈ રહ્યું છે…",
     createYourAccount: "તમારું ખાતું બનાવો",
     signupDescription: "મફત. તેનાથી તમે ઘટનાની જાણ કરી શકો છો અને આગળ શું થાય છે તે જોઈ શકો છો.",

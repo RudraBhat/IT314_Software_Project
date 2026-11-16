@@ -472,15 +472,45 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     email = google_user["email"]
     name = google_user["name"]
 
+    try:
+        return _google_sign_in(email, name, google_user["sub"], ip)
+    except _GoogleStaffRefused as refused:
+        # Audited outside the rolled-back transaction, so the denial is kept.
+        audit.record_standalone(
+            actor=None,
+            action="GOOGLE_LOGIN_DENIED",
+            entity_type="user",
+            entity_id=refused.user_id,
+            result="DENIED",
+            rationale="Staff account attempted Google sign-in",
+            ip=ip,
+        )
+        raise ApiError(
+            403,
+            "GOOGLE_STAFF_NOT_ALLOWED",
+            "Staff, dispatcher and admin accounts cannot sign in with Google. "
+            "Sign in with your email, password and authenticator code.",
+        ) from None
+
+
+class _GoogleStaffRefused(Exception):
+    def __init__(self, user_id: uuid.UUID):
+        super().__init__("staff account refused for Google sign-in")
+        self.user_id = user_id
+
+
+def _google_sign_in(email: str, name: str, google_sub: str, ip: str | None) -> dict:
     with db.transaction() as conn:
         account = _load_account(conn, email=email)
 
         # ── 1. EXISTING USER ──
         if account is not None:
+            # A staff email can never become a citizen session, whatever the account's state, so the
+            # role is checked before status and the person is told to use password and MFA instead.
+            if account["role"] != "NORMAL_USER":
+                raise _GoogleStaffRefused(account["user_id"])
             if _is_locked(account) or account["status"] != "ACTIVE":
                 raise ApiError(401, "INVALID_CREDENTIALS", _GENERIC)
-            if account["role"] != "NORMAL_USER":
-                raise ApiError(403, "GOOGLE_STAFF_NOT_ALLOWED", "Staff accounts must sign in with password and MFA")
 
             audit.record(
                 conn,
@@ -488,7 +518,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
                 action="GOOGLE_LOGIN",
                 entity_type="user",
                 entity_id=account["user_id"],
-                rationale=f"Authenticated via Google OAuth 2.0 (sub={google_user['sub']})",
+                rationale=f"Authenticated via Google OAuth 2.0 (sub={google_sub})",
                 ip=ip,
             )
             return _complete_login(conn, account, ip, mfa=False)

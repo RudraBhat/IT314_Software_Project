@@ -55,6 +55,8 @@ export interface AuthApiResponse {
   message?: string;
   user?: UserProfile;
   error?: string;
+  /** Backend error code, for example GOOGLE_STAFF_NOT_ALLOWED. */
+  errorCode?: string;
   isOffline?: boolean;
 }
 
@@ -176,7 +178,12 @@ export async function backendGoogleLogin(
 ): Promise<AuthApiResponse & { mfa_required?: boolean }> {
   const res = await callBackend("/api/v1/auth/google", { body: { credential }, timeoutMs: 15000 });
   if (!res.ok) {
-    return { success: false, isOffline: res.status === 503, error: errorText(res, "Google authentication failed.") };
+    return {
+      success: false,
+      isOffline: res.status === 503,
+      error: errorText(res, "Google authentication failed."),
+      errorCode: typeof res.data?.error?.code === "string" ? res.data.error.code : undefined,
+    };
   }
   if (res.data.mfa_required) {
     // The MFA challenge token stays on the server; the user finishes on the password sign-in form.

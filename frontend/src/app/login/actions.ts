@@ -119,5 +119,6 @@ export async function signOut() {
   jar.delete(SESSION_COOKIE);
   jar.delete(REFRESH_COOKIE);
   jar.delete("drch_session");
-  redirect("/login");
+  // signed_out stops Google auto sign-in from signing the user straight back in.
+  redirect("/login?signed_out=1");
 }
