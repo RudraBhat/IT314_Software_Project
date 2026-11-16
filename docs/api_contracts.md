@@ -965,6 +965,13 @@ Staff accounts (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`) are never created wit
 * **Response (200):** `{"items": [...], "page", "limit", "total", "pages", "summary": {"total", "by_role", "by_status"}}`, newest account first. Each item has `user_id`, `email`, `full_name`, `role`, `designation`, `status`, `mfa_enabled`, `last_login_at`, `is_locked` (temporary lockout after failed sign-ins), `permissions` (sorted names), `team_name` (field responders), `created_at` and `is_you`. `summary` counts all staff accounts and ignores the filters.
 * **Privacy:** only staff accounts are listed; citizens never appear. No phone number, password hash, MFA secret or session detail is returned.
 
+#### Disable and enable an account
+* **Paths:** `POST /api/v1/admin/accounts/{user_id}/disable` and `POST /api/v1/admin/accounts/{user_id}/enable`. Same authentication as the directory (`APP_MGMT` with verified MFA); rate limited (30 per hour per client).
+* **Body:** `{"reason": "..."}`, 5 to 500 characters, required and recorded in the audit log (`422` otherwise).
+* **Disable:** sets the account to `DISABLED` and bumps its session version. The person cannot sign in, and their current session ends on their next request. Nothing is deleted. Returns `{"user_id", "status": "DISABLED"}`. Audit action `ACCOUNT_DISABLED` with the actor, the reason and the before and after state.
+* **Enable:** an account that had finished setup becomes `ACTIVE` and any lockout is cleared; one that never finished setup goes back to `PENDING_SETUP` and needs a new invitation link (resend it from the pending list). Old sessions stay ended. Returns `{"user_id", "status"}`. Audit action `ACCOUNT_ENABLED`.
+* **Errors:** `409 CANNOT_DISABLE_SELF`, `409 LAST_ADMIN` (the last active administrator cannot be disabled), `409 ALREADY_DISABLED`, `409 NOT_DISABLED`, `404` for a citizen or unknown account.
+
 ---
 
 ## 10. Owner Sign-Off Matrix
