@@ -131,14 +131,14 @@ export function NavLink({
   const hide = hideBelow === "sm" ? "hidden sm:inline-flex" : hideBelow === "md" ? "hidden md:inline-flex" : hideBelow === "lg" ? "hidden lg:inline-flex" : "inline-flex";
   const tone =
     variant === "primary"
-      ? "bg-red-600 hover:bg-red-500 font-bold"
+      ? "bg-red-600 hover:bg-red-500"
       : variant === "success"
-        ? "bg-emerald-600 hover:bg-emerald-500 font-semibold"
-        : "bg-white/10 hover:bg-white/20 font-semibold";
+        ? "bg-emerald-600 hover:bg-emerald-500"
+        : "bg-white/10 hover:bg-white/20";
   return (
     <Link
       href={href}
-      className={`${hide} ${tone} items-center gap-1.5 min-h-11 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300`}
+      className={`${hide} ${tone} font-semibold items-center gap-1.5 min-h-11 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300`}
     >
       {children}
     </Link>
