@@ -48,6 +48,26 @@ The India split is random because its public master file has no event or time co
 
 The train command writes `artifacts/model.joblib`, `artifacts/metadata.json`, and `reports/evaluation.json`. The model artifact is local and ignored by Git. The tracked evaluation report contains metrics and hashes, not message text. Inference checks the scikit-learn version recorded in the artifact; keep the pinned version in `ai-workers/requirements.txt` aligned when rebuilding the image.
 
+## Class balancing for the category heads
+
+The category heads (`request`, `water`, `floods`, ...) are trained with `class_weight="balanced"`. Before this change they were unweighted, so for rare categories the predicted probability almost never reached the 0.50 candidate threshold: 15 of 24 heads scored F1 = 0 on the Hurricane Sandy test event, including `floods` (1,521 training positives), `medical_help` and `search_and_rescue`. The 0.50 minimum threshold is unchanged.
+
+`evaluation.json` now also contains `multilabel_summary` (macro-F1 over categories that have test positives, pooled micro-precision/recall/F1, and the list of categories still at F1 = 0), so one change can be compared with one set of numbers.
+
+Measured on the same pinned Appen data and the same event splits (train Haiti/news, validate Pakistan, test Sandy):
+
+| Sandy test, category heads | Unweighted (committed report) | Balanced |
+|---|---|---|
+| Macro-F1 | 0.138 | 0.249 |
+| Micro-F1 | 0.503 | 0.567 |
+| Micro-recall | 0.417 | 0.625 |
+| Micro-precision | 0.621 | 0.520 |
+| Heads with F1 = 0 | 15 of 24 | 10 of 24 |
+
+Recall rises more than precision falls, which suits advisory "candidate for review" suggestions that a human checks. Caveats: it is a single held-out event with very few positives for many categories (for example 1 for `hospitals`, 3 for `fire`), so per-category changes are noisy; and the numbers above were produced without the India relevance file (the Mendeley download was not reachable), which does not feed the category heads. Re-run `python -m text_model.train` with both datasets to regenerate `reports/evaluation.json` before relying on exact values.
+
+The same experiment showed that balancing the **relevance** head does not help: Sandy accuracy fell from 0.905 to 0.860 and macro-F1 from 0.635 to 0.621, with `NOT_RELATED` recall up (0.24 to 0.35) but precision down (0.50 to 0.30). The relevance head is therefore left unchanged. Its weak point remains `NOT_RELATED` on event-held-out data, which needs more hard negatives rather than re-weighting.
+
 ## Event-held-out transformer experiment (research only)
 
 An additional experiment fine-tunes [BERTweet](https://huggingface.co/vinai/bertweet-base) on QCRI's [HumAID-events](https://huggingface.co/datasets/QCRI/HumAID-events) English tweet labels. HumAID covers humanitarian information categories, not the DRCH's exact incident scenario or urgency labels. Its `not_humanitarian` class means a post is not useful humanitarian information in a disaster dataset; it is not a general-purpose filter for everyday metaphorical posts such as “my exam was a disaster.” Keep the existing relevance head separate.
