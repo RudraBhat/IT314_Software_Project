@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { SiteHeader, NavLink } from "@/components/Brand";
+import { UnifiedSiteHeader } from "@/components/navigation/UnifiedSiteHeader";
 import { fetchPublicCampaigns, PublicCampaign } from "@/services/citizenApi";
 
 type DonationStep = "select" | "order_created" | "confirmed" | "declined" | "abandoned" | "timed_out";
@@ -344,9 +344,7 @@ export default function DonatePage() {
         </div>
       )}
 
-      <SiteHeader subtitle="Disaster Relief Fund" maxWidth="max-w-5xl">
-        <NavLink href="/">← Back to map</NavLink>
-      </SiteHeader>
+      <UnifiedSiteHeader activeHref="/donate" />
 
       <main className="mx-auto max-w-5xl px-4 pt-8 sm:px-6">
         <div className="mb-8">

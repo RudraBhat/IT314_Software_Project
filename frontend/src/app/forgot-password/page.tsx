@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen bg-[#070d18] text-slate-100 flex flex-col font-sans">
       {/* Top Bar */}
-      <SiteHeader subtitle="Disaster Response Coordination" maxWidth="max-w-5xl">
+      <SiteHeader subtitle="Gujarat Emergency Portal" maxWidth="max-w-7xl">
         <NavLink href="/login">← Back to Sign In</NavLink>
       </SiteHeader>
 
