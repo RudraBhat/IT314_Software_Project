@@ -55,10 +55,12 @@ export function LogoMark({ variant = "dark", className = "size-9" }: { variant?:
   );
 }
 
+export const DEFAULT_BRAND_SUBTITLE = "Gujarat Emergency Portal";
+
 /** Single brand lockup used by every header so the logo is identical everywhere. */
 export function Brand({
   href = "/",
-  subtitle,
+  subtitle = DEFAULT_BRAND_SUBTITLE,
   size = "md",
 }: {
   href?: string;
@@ -86,7 +88,7 @@ export function Brand({
  * Children go in the right-hand area; `center` is an optional context badge.
  */
 export function SiteHeader({
-  subtitle,
+  subtitle = DEFAULT_BRAND_SUBTITLE,
   brandHref = "/",
   badge,
   leading,
