@@ -31,6 +31,7 @@ const NAV: { href: string; label: string; icon: string; permission?: string | st
   { href: "/dm/updates", label: "Public updates", icon: "✎" },
   { href: "/dm/content", label: "Safety content", icon: "☰" },
   { href: "/dm/aid", label: "Aid & needs", icon: "◆" },
+  { href: "/dm/shelters", label: "Shelters", icon: "⌂", permission: ["DISPATCH", "SUPERVISOR"] },
   { href: "/dm/campaigns", label: "Campaigns", icon: "₹" },
   { href: "/dm/analytics", label: "Analytics", icon: "▤" },
   { href: "/dm/staff", label: "Staff accounts", icon: "👥", permission: "SUPERVISOR" },

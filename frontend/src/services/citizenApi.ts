@@ -404,7 +404,7 @@ export async function fetchPublicAlerts(): Promise<ApiResult<PublicAlert[]>> {
   };
 }
 
-// ── Shelters: there is no shelter API in the approved scope yet ──
+// ── Shelters: relief shelters and medical posts kept up to date by dispatchers ──
 
 export interface ShelterData {
   id: string;
@@ -413,17 +413,19 @@ export interface ShelterData {
   lat: number;
   lon: number;
   address: string;
+  district: string | null;
   total_capacity: number | null;
   current_occupancy: number | null;
   available_beds: number | null;
-  contact_number: string;
+  contact_number: string | null;
   status: string;
   notes: string | null;
+  is_simulated: boolean;
 }
 
-/** No backend source exists, so this is honestly empty rather than filled with sample data. */
+/** Open and full shelters (closed ones are hidden by the server). An empty list means none are published. */
 export async function fetchShelters(): Promise<ApiResult<ShelterData[]>> {
-  return { data: [], error: null, isBackend: true };
+  return apiFetch<ShelterData[]>("/api/v1/public/shelters");
 }
 
 // ── Campaigns and Donations ─────────────────────────────────────

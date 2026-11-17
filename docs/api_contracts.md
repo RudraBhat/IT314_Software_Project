@@ -88,6 +88,13 @@
 * **updates:** only published broadcast updates. Fields: `update_id`, `scenario`, `title`, `body`, `area_label`, `published_at`; newest first, at most 50.
 * **Privacy:** no author or approver names, no linked incident, no internal notes. The `/safety` page shows these above its general guidance and falls back to the general guidance when the service is unreachable.
 
+### 1.5 Relief Shelters
+* **Public path:** `GET /api/v1/public/shelters`. No authentication. Returns the shelters that are `OPERATIONAL` or `FULL` (closed ones are hidden), by name, at most 500. Fields: `id`, `name`, `type` (`SHELTER`, `RELIEF_CAMP` or `MEDICAL_POST`), `lat`, `lon` (rounded to 4 decimals), `address`, `district`, `total_capacity`, `current_occupancy`, `available_beds` (`null` unless both are known, never negative), `contact_number`, `status`, `notes`, `is_simulated`. An empty list means none are published; the citizen dashboard then says so. No internal ids, authors or timestamps are returned.
+* **Dispatcher paths:** `GET /api/v1/dm/shelters` (all shelters, closed included; `include_closed=false` hides them), `POST /api/v1/dm/shelters` (201) and `PUT /api/v1/dm/shelters/{id}` (replaces the whole record). They need the `DISPATCH` or `SUPERVISOR` permission (`403 PERMISSION_REQUIRED` otherwise).
+* **Body:** `name`, `type`, `address_text`, `district`, `latitude`, `longitude`, `total_capacity`, `current_occupancy`, `contact_number` (digits, spaces, `+ - ( )`), `status`, `notes` (max 500) and a required `reason` of 5 to 500 characters. `422` if `current_occupancy` exceeds `total_capacity`, a coordinate is out of range, or a value is not allowed; `404` for an unknown shelter on update.
+* **Audit:** `SHELTER_CREATED` and `SHELTER_UPDATED`, with the actor, the reason and, for updates, the before and after values. A shelter is never deleted: set it to `CLOSED` to hide it.
+* **Transparency:** `is_simulated` marks sample data; the dashboard labels it. No sample shelters are seeded, so a fresh database publishes none.
+
 ---
 
 ## 2. Citizen Authentication & Reporting API (Owner: Zalak)
