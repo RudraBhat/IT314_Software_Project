@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { SiteHeader, NavLink } from "@/components/Brand";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { UnifiedSiteHeader } from "@/components/navigation/UnifiedSiteHeader";
 import Link from "next/link";
 import { isInGujarat, GUJARAT_CENTER, GUJARAT_BOUNDS } from "@/lib/geo";
 import {
@@ -164,8 +164,13 @@ export default function ReportIncidentPage() {
     fetchPublicIncidents().then((res) => res.data && setPublicIncidents(res.data));
   }, []);
 
-  const nearby = validLocation ? findNearbyIncidents(latitude, longitude, scenario as Scenario, publicIncidents) : [];
-  const hint = preTriage(scenario as Scenario, description, peopleAffected, needs);
+  const nearby = useMemo(() => {
+    return validLocation ? findNearbyIncidents(latitude, longitude, scenario as Scenario, publicIncidents) : [];
+  }, [validLocation, latitude, longitude, scenario, publicIncidents]);
+
+  const hint = useMemo(() => {
+    return preTriage(scenario as Scenario, description, peopleAffected, needs);
+  }, [scenario, description, peopleAffected, needs]);
 
   // Initialize Interactive Leaflet Pin-Picker Map
   useEffect(() => {
@@ -255,6 +260,7 @@ export default function ReportIncidentPage() {
         mapRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount
 
   // Sync marker position when lat/lon changes from search, GPS, or manual input
@@ -495,12 +501,7 @@ export default function ReportIncidentPage() {
       </div>
 
       {/* Header */}
-      <SiteHeader subtitle="Citizen Emergency Dispatch" maxWidth="max-w-5xl">
-        {!session?.authenticated && <NavLink href="/login?next=/report">Sign In</NavLink>}
-        <NavLink href="/my-reports">My Reports</NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">Dashboard</NavLink>
-        <NavLink href="/" hideBelow="sm">Public Map</NavLink>
-      </SiteHeader>
+      <UnifiedSiteHeader activeHref="/report" session={session} />
 
       {/* Main Container */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 md:p-8">

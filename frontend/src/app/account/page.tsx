@@ -4,7 +4,7 @@ import Link from "next/link";
 import React, { useEffect, useState } from "react";
 
 import { signOut } from "@/app/login/actions";
-import { NavLink, SiteHeader } from "@/components/Brand";
+import { UnifiedSiteHeader } from "@/components/navigation/UnifiedSiteHeader";
 import { changePassword, deleteAccount, fetchProfile, updateProfile, type ProfileData } from "@/services/citizenApi";
 
 const LANGUAGES: { code: "en" | "hi" | "gu"; label: string }[] = [
@@ -104,10 +104,7 @@ export default function AccountPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <SiteHeader subtitle="My Account" maxWidth="max-w-3xl">
-        <NavLink href="/my-reports">My Reports</NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">Dashboard</NavLink>
-      </SiteHeader>
+      <UnifiedSiteHeader activeHref="/account" />
 
       <main className="mx-auto w-full max-w-3xl flex-1 space-y-6 p-4 sm:p-6">
         {loadError && (
