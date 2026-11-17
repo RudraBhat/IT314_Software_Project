@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/admin", label: "Accounts" },
   { href: "/admin/audit", label: "Audit log" },
+  { href: "/admin/system", label: "System" },
 ];
 
 /** Section links for the administration area; the current page is marked for screen readers too. */

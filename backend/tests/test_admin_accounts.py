@@ -100,9 +100,11 @@ def test_locked_account_is_flagged(make, client, sql):
 
 def test_summary_counts_all_staff_whatever_the_filter(make, client):
     _, headers = _admin(make)
-    everything = _find(client, headers)["summary"]
-    filtered = _find(client, headers, role="FIELD_TEAM", status="DISABLED")["summary"]
-    assert filtered == everything
+    # The database is shared, so compare inside one response rather than across two snapshots.
+    narrow = _find(client, headers, role="FIELD_TEAM", status="DISABLED")
+    everything = narrow["summary"]
+    assert everything["total"] > narrow["total"], "the summary must ignore the filters"
+    assert set(everything) == {"total", "by_role", "by_status"}
     assert everything["total"] >= 1 and everything["by_role"]["APP_MGMT"] >= 1 and everything["by_status"]["ACTIVE"] >= 1
     assert "NORMAL_USER" not in everything["by_role"]
 
@@ -375,3 +377,33 @@ def test_only_an_mfa_verified_administrator_can_reset_a_sign_in(make, client):
     assert _reset(client, make.field_team_user()["headers"], target["user_id"]).status_code == 403
     assert _reset(client, make.staff("SUPERVISOR")["headers"], target["user_id"]).status_code == 403
     assert client.get("/api/v1/dm/dashboard", headers=target["headers"]).status_code == 200  # nothing changed
+
+
+# --------------------------------------------------------------------------- system status
+
+
+def test_system_status_reports_health_without_secrets(make, client):
+    _, headers = _admin(make)
+    r = client.get("/api/v1/admin/system", headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["database"]["status"] == "ok" and body["database"]["latency_ms"] >= 0
+    assert set(body["accounts"]) == {"invitations_open", "invitations_expired", "locked", "active_without_mfa"}
+    assert isinstance(body["email"]["configured"], bool) and isinstance(body["mfa_key_valid"], bool)
+    text = r.text.lower()
+    for secret in ("smtp_password", "jwt_secret", "database_url", "postgresql://"):
+        assert secret not in text
+
+
+def test_system_status_counts_a_locked_account(make, client, sql):
+    _, headers = _admin(make)
+    user = make.user("DISASTER_MGMT")
+    sql.execute("UPDATE user_auth SET locked_until = now() + interval '1 hour' WHERE user_id = %s", (user["user_id"],))
+    assert client.get("/api/v1/admin/system", headers=headers).json()["accounts"]["locked"] >= 1
+
+
+def test_only_an_mfa_verified_administrator_sees_system_status(make, client):
+    assert client.get("/api/v1/admin/system").status_code == 401
+    assert client.get("/api/v1/admin/system", headers=make.token(make.user("APP_MGMT"), mfa=False)).status_code == 401
+    for headers in (make.citizen()["headers"], make.field_team_user()["headers"], make.staff("SUPERVISOR")["headers"]):
+        assert client.get("/api/v1/admin/system", headers=headers).status_code == 403

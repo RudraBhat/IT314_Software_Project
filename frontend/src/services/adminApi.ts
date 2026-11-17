@@ -132,6 +132,19 @@ export type AuditVerification = {
   verified_at: string;
 };
 
+export type SystemStatus = {
+  database: { status: string; latency_ms: number };
+  version: string;
+  email: { configured: boolean; simulated: boolean };
+  mfa_key_valid: boolean;
+  accounts: { invitations_open: number; invitations_expired: number; locked: number; active_without_mfa: number };
+  audit: { last_entry_at: string | null; last_verified_at: string | null; last_verification_ok: boolean | null };
+  checked_at: string;
+};
+
+/** Platform health for administrators: booleans, counts and timestamps only. */
+export const getSystemStatus = () => request<SystemStatus>("system");
+
 /** Check the audit log's hash chain. The check is itself recorded in the log. */
 export const verifyAudit = () => request<AuditVerification>("audit/verify", { method: "POST", body: {} });
 

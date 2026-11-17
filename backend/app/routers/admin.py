@@ -10,6 +10,7 @@ Privacy: citizens are never listed here, and no phone number, password hash, MFA
 detail is returned. Every route needs the APP_MGMT role with verified MFA (AdminUser).
 """
 
+import os
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
@@ -436,4 +437,53 @@ def verify_audit_log(principal: AdminUser):
         "mismatches": None if valid else count,
         "message": message,
         "verified_at": datetime.now(UTC),
+    }
+
+
+@router.get("/system")
+def system_status(principal: AdminUser):
+    """Is the platform healthy enough to run? Booleans, counts and timestamps only: no secrets or addresses.
+
+    Lets an administrator see a missing email setup or a stalled invitation before a person is locked out.
+    """
+    settings = get_settings()
+    try:
+        security.encrypt_mfa_secret("check")
+        mfa_key_ok = True
+    except ValueError:  # an invalid MFA_ENCRYPTION_KEY would break every enrolment
+        mfa_key_ok = False
+    with db.transaction() as conn:
+        t0 = datetime.now(UTC)
+        conn.execute("SELECT 1")
+        latency_ms = round((datetime.now(UTC) - t0).total_seconds() * 1000)
+        accounts = conn.execute(
+            """
+            SELECT
+              count(*) FILTER (WHERE u.status = 'PENDING_SETUP' AND a.invitation_expires_at > now()) AS invitations_open,
+              count(*) FILTER (WHERE u.status = 'PENDING_SETUP' AND (a.invitation_expires_at IS NULL OR a.invitation_expires_at <= now())) AS invitations_expired,
+              count(*) FILTER (WHERE a.locked_until > now()) AS locked,
+              count(*) FILTER (WHERE u.status = 'ACTIVE' AND NOT a.mfa_enabled) AS active_without_mfa
+            FROM users u
+            JOIN roles r ON r.role_id = u.role_id
+            JOIN user_auth a ON a.user_id = u.user_id
+            WHERE r.code = ANY(%s)
+            """,
+            (STAFF_ROLES,),
+        ).fetchone()
+        last_entry = conn.execute("SELECT max(occurred_at) AS at FROM audit_logs").fetchone()["at"]
+        last_check = conn.execute(
+            "SELECT occurred_at, result::text AS result FROM audit_logs WHERE action = 'AUDIT_CHAIN_VERIFIED' ORDER BY audit_id DESC LIMIT 1"
+        ).fetchone()
+    return {
+        "database": {"status": "ok", "latency_ms": latency_ms},
+        "version": os.getenv("GIT_SHA", "dev"),
+        "email": {"configured": bool(settings.smtp_host), "simulated": not settings.smtp_host},
+        "mfa_key_valid": mfa_key_ok,
+        "accounts": {key: int(value) for key, value in accounts.items()},
+        "audit": {
+            "last_entry_at": last_entry,
+            "last_verified_at": last_check["occurred_at"] if last_check else None,
+            "last_verification_ok": (last_check["result"] == "SUCCESS") if last_check else None,
+        },
+        "checked_at": datetime.now(UTC),
     }

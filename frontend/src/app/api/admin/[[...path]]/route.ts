@@ -8,7 +8,8 @@ import { API_URL, sessionToken } from "@/lib/session";
  *   GET  /api/admin/accounts                     -> staff account directory (APP_MGMT with verified MFA)
  *   POST /api/admin/accounts/{id}/disable|enable -> switch an account off or on, with a reason
  *   POST /api/admin/accounts/{id}/reset-credentials -> clear a person's password and authenticator, email a setup link
- *   GET  /api/admin/audit                        -> account and security audit entries
+ *   GET  /api/admin/system                       -> platform health: database, email, authenticator key, invitations
+ *   GET  /api/admin/audit                      -> account and security audit entries
  *   POST /api/admin/audit/verify                 -> check the audit hash chain for tampering
  *
  * The browser holds only the httpOnly session cookie; this handler attaches the
@@ -18,6 +19,7 @@ import { API_URL, sessionToken } from "@/lib/session";
 const ALLOWED = [
   { method: "GET", pattern: /^accounts$/ },
   { method: "POST", pattern: /^accounts\/[0-9a-f-]{36}\/(disable|enable|reset-credentials)$/i },
+  { method: "GET", pattern: /^system$/ },
   { method: "GET", pattern: /^audit$/ },
   { method: "POST", pattern: /^audit\/verify$/ },
 ];
