@@ -8,6 +8,7 @@ import { API_URL, sessionToken } from "@/lib/session";
  *   GET  /api/admin/accounts                     -> staff account directory (APP_MGMT with verified MFA)
  *   POST /api/admin/accounts/{id}/disable|enable -> switch an account off or on, with a reason
  *   POST /api/admin/accounts/{id}/reset-credentials -> clear a person's password and authenticator, email a setup link
+ *   PUT  /api/admin/accounts/{id}/permissions    -> replace a Disaster Management account's permissions, with a reason
  *   GET  /api/admin/system                       -> platform health: database, email, authenticator key, invitations
  *   GET  /api/admin/audit                      -> account and security audit entries
  *   POST /api/admin/audit/verify                 -> check the audit hash chain for tampering
@@ -19,6 +20,7 @@ import { API_URL, sessionToken } from "@/lib/session";
 const ALLOWED = [
   { method: "GET", pattern: /^accounts$/ },
   { method: "POST", pattern: /^accounts\/[0-9a-f-]{36}\/(disable|enable|reset-credentials)$/i },
+  { method: "PUT", pattern: /^accounts\/[0-9a-f-]{36}\/permissions$/i },
   { method: "GET", pattern: /^system$/ },
   { method: "GET", pattern: /^audit$/ },
   { method: "POST", pattern: /^audit\/verify$/ },
@@ -64,7 +66,7 @@ async function forward(request: NextRequest, ctx: { params: Promise<{ path?: str
     upstream = await fetch(target, {
       method: request.method,
       headers,
-      body: request.method === "POST" ? await request.text() : undefined,
+      body: request.method === "POST" || request.method === "PUT" ? await request.text() : undefined,
       cache: "no-store",
       signal: AbortSignal.timeout(20000),
     });
@@ -80,3 +82,4 @@ async function forward(request: NextRequest, ctx: { params: Promise<{ path?: str
 
 export const GET = forward;
 export const POST = forward;
+export const PUT = forward;

@@ -42,7 +42,7 @@ export type AccountsPage = {
 
 export type AccountQuery = { q?: string; role?: InvitableRole | ""; status?: AccountStatus | ""; page?: number };
 
-async function request<T>(path: string, init?: { method: string; body: unknown }): Promise<T> {
+async function request<T>(path: string, init?: { method: "POST" | "PUT"; body: unknown }): Promise<T> {
   const res = await fetch(`/api/admin/${path}`, {
     method: init?.method ?? "GET",
     headers: init ? { "content-type": "application/json" } : undefined,
@@ -81,6 +81,12 @@ export const disableAccount = (userId: string, reason: string) =>
 /** Switch a disabled account back on (an unfinished invitation returns to awaiting setup). */
 export const enableAccount = (userId: string, reason: string) =>
   request<StatusChangeResult>(`accounts/${encodeURIComponent(userId)}/enable`, { method: "POST", body: { reason } });
+
+export type PermissionResult = { user_id: string; permissions: string[] };
+
+/** Replace a Disaster Management account's permissions. Applies at once; the reason is audited. */
+export const setPermissions = (userId: string, permissions: string[], reason: string) =>
+  request<PermissionResult>(`accounts/${encodeURIComponent(userId)}/permissions`, { method: "PUT", body: { permissions, reason } });
 
 export type AuditResult = "SUCCESS" | "FAILURE" | "DENIED";
 

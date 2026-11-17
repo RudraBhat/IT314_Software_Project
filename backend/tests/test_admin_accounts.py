@@ -407,3 +407,57 @@ def test_only_an_mfa_verified_administrator_sees_system_status(make, client):
     assert client.get("/api/v1/admin/system", headers=make.token(make.user("APP_MGMT"), mfa=False)).status_code == 401
     for headers in (make.citizen()["headers"], make.field_team_user()["headers"], make.staff("SUPERVISOR")["headers"]):
         assert client.get("/api/v1/admin/system", headers=headers).status_code == 403
+
+
+# --------------------------------------------------------------------------- edit permissions
+
+
+def _perms(client, headers, user_id, permissions, reason="Moved to the night shift"):
+    return client.put(f"{URL}/{user_id}/permissions", headers=headers, json={"permissions": permissions, "reason": reason})
+
+
+def test_permissions_change_at_once_and_are_audited(make, client, sql):
+    admin, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    assert client.get("/api/v1/dm/dashboard", headers=staff["headers"]).status_code == 200
+
+    r = _perms(client, headers, staff["user_id"], ["PUBLISHER", "MODERATOR", "PUBLISHER"])
+    assert r.status_code == 200 and r.json()["permissions"] == ["MODERATOR", "PUBLISHER"]
+    assert _find(client, headers, q=staff["email"])["items"][0]["permissions"] == ["MODERATOR", "PUBLISHER"]
+
+    entry = sql.execute(
+        "SELECT actor_id, rationale, before_state, after_state FROM audit_logs WHERE entity_id = %s AND action = 'PERMISSIONS_CHANGED'",
+        (staff["user_id"],),
+    ).fetchone()
+    assert entry["actor_id"] == admin["user_id"] and entry["rationale"] == "Moved to the night shift"
+    assert entry["before_state"]["permissions"] == ["DISPATCH"] and entry["after_state"]["permissions"] == ["MODERATOR", "PUBLISHER"]
+    # the person is not signed out; the new access applies on their very next request
+    me = client.get("/api/v1/me", headers=staff["headers"])
+    assert me.status_code == 200 and me.json()["permissions"] == ["MODERATOR", "PUBLISHER"]
+
+
+def test_permissions_can_be_emptied(make, client):
+    _, headers = _admin(make)
+    staff = make.staff("DISPATCH", "CLOSURE")
+    assert _perms(client, headers, staff["user_id"], []).json()["permissions"] == []
+
+
+def test_permission_edit_guards(make, client):
+    _, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    assert _perms(client, headers, staff["user_id"], ["DISPATCH"]).json()["error"]["code"] == "NO_CHANGE"
+    assert _perms(client, headers, staff["user_id"], ["ROOT"]).status_code == 422
+    assert _perms(client, headers, staff["user_id"], ["PUBLISHER"], "no").status_code == 422
+    assert _perms(client, headers, make.field_team_user()["user_id"], ["DISPATCH"]).json()["error"]["code"] == "NO_PERMISSIONS_FOR_ROLE"
+    assert _perms(client, headers, make.citizen()["user_id"], ["DISPATCH"]).status_code == 404
+    assert _perms(client, headers, uuid.uuid4(), ["DISPATCH"]).status_code == 404
+
+
+def test_only_an_mfa_verified_administrator_can_edit_permissions(make, client):
+    target = make.staff("DISPATCH")
+    body = {"permissions": ["PUBLISHER"], "reason": "Not allowed to do this"}
+    url = f"{URL}/{target['user_id']}/permissions"
+    assert client.put(url, json=body).status_code == 401
+    assert client.put(url, headers=make.token(make.user("APP_MGMT"), mfa=False), json=body).status_code == 401
+    for headers in (make.citizen()["headers"], make.field_team_user()["headers"], target["headers"], make.staff("SUPERVISOR")["headers"]):
+        assert client.put(url, headers=headers, json=body).status_code == 403

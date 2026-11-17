@@ -20,7 +20,7 @@ from psycopg import sql
 from pydantic import BaseModel, Field
 
 from app import audit, db, security
-from app.auth import APP_MGMT_ROLE, DM_ROLE, FIELD_ROLE, AdminUser
+from app.auth import APP_MGMT_ROLE, DM_ROLE, FIELD_ROLE, PERMISSIONS, AdminUser
 from app.common import Filters, Page, page_body
 from app.config import get_settings
 from app.errors import ApiError, conflict, not_found
@@ -487,3 +487,50 @@ def system_status(principal: AdminUser):
         },
         "checked_at": datetime.now(UTC),
     }
+
+
+class PermissionChange(BaseModel):
+    permissions: list[str] = Field(max_length=len(PERMISSIONS))
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.put("/accounts/{user_id}/permissions", dependencies=[rate_limit("admin-account", 30, 3600)])
+def set_permissions(user_id: uuid.UUID, body: PermissionChange, principal: AdminUser):
+    """Replace a Disaster Management account's permissions. Only that role has them: others are 404.
+
+    Permissions are read on every request, so the change applies at once. Replacing the full set (rather
+    than patching) keeps the audit entry's before and after unambiguous. The reason is required and audited.
+    """
+    unknown = sorted({p for p in body.permissions if p not in PERMISSIONS})
+    if unknown:
+        raise ApiError(422, "UNKNOWN_PERMISSION", f"Unknown permission: {', '.join(unknown)}.")
+    wanted = sorted(set(body.permissions))
+    with db.transaction() as conn:
+        target = _lock_staff_account(conn, user_id)
+        if target["role"] != DM_ROLE:
+            raise conflict("NO_PERMISSIONS_FOR_ROLE", "Only Disaster Management staff have permissions to edit.")
+        current = sorted(
+            r["p"]
+            for r in conn.execute(
+                "SELECT permission::text AS p FROM staff_permissions WHERE user_id = %s", (user_id,)
+            ).fetchall()
+        )
+        if current == wanted:
+            raise conflict("NO_CHANGE", "These are already this person's permissions.")
+        conn.execute("DELETE FROM staff_permissions WHERE user_id = %s", (user_id,))
+        for permission in wanted:
+            conn.execute(
+                "INSERT INTO staff_permissions (user_id, permission) VALUES (%s, %s)", (user_id, permission)
+            )
+        audit.record(
+            conn,
+            actor=principal,
+            action="PERMISSIONS_CHANGED",
+            entity_type="user",
+            entity_id=user_id,
+            rationale=body.reason.strip(),
+            before={"permissions": current},
+            after={"permissions": wanted},
+            ip=principal.ip,
+        )
+    return {"user_id": str(user_id), "permissions": wanted}

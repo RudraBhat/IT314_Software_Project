@@ -977,6 +977,12 @@ Staff accounts (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`) are never created wit
 * **Effect:** for an `ACTIVE` staff account whose person lost their phone or password. The account goes back to `PENDING_SETUP`, the password stays but the authenticator is removed, sessions end, lockout and any pending password reset are cleared, and a single-use setup link (same expiry as invitations) is emailed to them. They choose a new password and enrol a new authenticator on `/setup-account`. The administrator never sees the link, a password or an authenticator secret. Returns `{"user_id", "status": "PENDING_SETUP", "invitation_expires_at", "email_configured"}`; `email_configured` is false when no SMTP host is set, so no email left the server. Audit action `ACCOUNT_CREDENTIALS_RESET`.
 * **Errors:** `409 CANNOT_RESET_SELF`, `409 ACCOUNT_DISABLED` (enable it first), `409 ALREADY_PENDING` (resend its invitation instead), `409 LAST_ADMIN` (the only active administrator cannot be reset), `404` for a citizen or unknown account.
 
+#### Edit a staff member's permissions
+* **Path:** `PUT /api/v1/admin/accounts/{user_id}/permissions`. Same authentication and rate limit as disable.
+* **Body:** `{"permissions": ["DISPATCH", ...], "reason": "..."}`. `permissions` is the full new set (any of `PUBLISHER`, `MODERATOR`, `CLOSURE`, `DISPATCH`, `SUPERVISOR`; an empty list removes them all; duplicates are ignored); `reason` is 5 to 500 characters and audited.
+* **Effect:** only Disaster Management accounts have permissions. The change applies on the person's very next request; they are not signed out. Returns `{"user_id", "permissions"}` (sorted). Audit action `PERMISSIONS_CHANGED` with the actor, the reason, and the before and after sets.
+* **Errors:** `422 UNKNOWN_PERMISSION` (or a short reason), `409 NO_CHANGE` (the set is identical), `409 NO_PERMISSIONS_FOR_ROLE` (field team and administrator accounts), `404` for a citizen or unknown account.
+
 #### System status
 * **Path:** `GET /api/v1/admin/system`. Same authentication as the directory (`APP_MGMT` with verified MFA).
 * **Response (200):** `{"database": {"status", "latency_ms"}, "version", "email": {"configured", "simulated"}, "mfa_key_valid", "accounts": {"invitations_open", "invitations_expired", "locked", "active_without_mfa"}, "audit": {"last_entry_at", "last_verified_at", "last_verification_ok"}, "checked_at"}`. Staff accounts only are counted. `email.simulated` is true when no SMTP host is set, so invitation and reset links are not delivered.
