@@ -412,15 +412,17 @@ export default function PublicPortalPage() {
         )}
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="rounded-lg bg-white/10 px-2.5 py-1.5 text-sm text-white hover:bg-white/20 lg:hidden"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-sm text-white hover:bg-white/20 lg:hidden"
           aria-label="Toggle menu"
           aria-expanded={menuOpen}
         >
-          {menuOpen ? "✕" : "☰"}
+          <span aria-hidden className="select-none">
+            {menuOpen ? "✕" : "☰"}
+          </span>
         </button>
       </SiteHeader>
       {menuOpen && (
-        <nav className="absolute inset-x-0 top-14 z-[1000] flex flex-col gap-1 border-b border-[#093554] bg-[#0c4a75] p-3 text-sm text-white shadow-xl lg:hidden" aria-label="Menu">
+        <nav className="fixed inset-x-0 top-14 z-[1100] flex flex-col gap-1 border-b border-[#093554] bg-[#0c4a75] p-3 text-sm text-white shadow-xl lg:hidden" aria-label="Menu">
           {[
             ["/my-reports", "My Reports"],
             ["/about", "About"],
@@ -450,7 +452,7 @@ export default function PublicPortalPage() {
         {/* Top Controls Container (Unified Flex Layout to Prevent Any Overlap) */}
         <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 z-[500] flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 pointer-events-none">
           {/* Status Banner */}
-          <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-white shadow-xl max-w-sm pointer-events-auto">
+          <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-white shadow-xl max-w-sm w-fit pointer-events-auto shrink-0">
             <div className="flex items-center gap-2 text-xs">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
               <span className="font-bold text-sky-300">Live Public Disaster Map</span>

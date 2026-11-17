@@ -71,7 +71,7 @@ function loginUrl(request: NextRequest): URL {
 export const config = {
   matcher: [
     "/dm/:path*", "/dm", "/field/:path*", "/field", "/citizen/:path*", "/report/:path*",
-    "/report", "/my-reports/:path*", "/my-reports", "/account/:path*", "/account",
+    "/report", "/my-reports/:path*", "/my-reports", "/account/:path*", "/account", "/dashboard",
     // Server-side proxies and the session probe: refreshed here, never redirected.
     "/api/dm/:path*", "/api/field/:path*", "/api/citizen/:path*", "/api/invitations/:path*", "/api/session",
   ],

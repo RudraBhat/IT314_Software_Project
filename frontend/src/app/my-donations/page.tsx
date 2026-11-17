@@ -42,7 +42,7 @@ export default function MyDonationsPage() {
   const anySandbox = isSandboxEnv || (data?.items?.some((d) => d.is_sandbox) ?? false);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       <SiteHeader subtitle="My Donations & Receipts" maxWidth="max-w-4xl">
         <NavLink href="/donate" variant="primary">
           + Donate
@@ -50,7 +50,7 @@ export default function MyDonationsPage() {
         <NavLink href="/my-reports" hideBelow="sm">
           My Reports
         </NavLink>
-        <NavLink href="/citizen/dashboard" hideBelow="sm">
+        <NavLink href="/dashboard" hideBelow="sm">
           Dashboard
         </NavLink>
         <NavLink href="/account" hideBelow="sm">
@@ -67,10 +67,10 @@ export default function MyDonationsPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
               <span aria-hidden="true">🧾</span> My Donations &amp; Receipts
             </h1>
-            <p className="text-slate-300 text-xs md:text-sm mt-0.5">
+            <p className="text-slate-600 text-xs md:text-sm mt-0.5">
               Official receipts for verified contributions to Gujarat Disaster Management operations.
             </p>
           </div>
@@ -91,7 +91,7 @@ export default function MyDonationsPage() {
               <div className="text-center">
                 <Link
                   href="/login?next=/my-donations"
-                  className="text-xs font-semibold text-sky-400 hover:underline"
+                  className="text-xs font-semibold text-sky-600 hover:underline"
                 >
                   Sign in with your citizen account →
                 </Link>
@@ -104,12 +104,12 @@ export default function MyDonationsPage() {
 
         {!loading && !error && data && data.items.length === 0 && (
           <EmptyState title="No donations yet.">
-            <p className="text-xs text-slate-400 mt-1 mb-4">
+            <p className="text-xs text-slate-500 mt-1 mb-4">
               You have not made any donations with this account yet. Contributions help provide vital relief supplies during active emergencies.
             </p>
             <Link
               href="/donate"
-              className="inline-flex items-center gap-2 min-h-[40px] bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold px-5 py-2 rounded-xl shadow-lg transition"
+              className="inline-flex items-center gap-2 min-h-[40px] bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold px-5 py-2 rounded-xl shadow-xs transition"
             >
               Support Disaster Relief
             </Link>
@@ -145,22 +145,22 @@ function DonationCard({ item }: { item: DonationRecord }) {
   const statusConfig = {
     CONFIRMED: {
       label: "Confirmed",
-      badgeClass: "bg-emerald-950/60 text-emerald-300 border-emerald-700/60",
+      badgeClass: "bg-emerald-50 text-emerald-800 border-emerald-200",
       symbol: "✓",
     },
     PENDING: {
       label: "Pending",
-      badgeClass: "bg-amber-950/60 text-amber-300 border-amber-700/60",
+      badgeClass: "bg-amber-50 text-amber-800 border-amber-200",
       symbol: "⏳",
     },
     FAILED: {
       label: "Failed",
-      badgeClass: "bg-rose-950/60 text-rose-300 border-rose-700/60",
+      badgeClass: "bg-rose-50 text-rose-800 border-rose-200",
       symbol: "✕",
     },
   }[item.status] || {
     label: item.status,
-    badgeClass: "bg-slate-800 text-slate-300 border-slate-700",
+    badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
     symbol: "•",
   };
 
@@ -168,13 +168,13 @@ function DonationCard({ item }: { item: DonationRecord }) {
     item.failure_reason === "ABANDONED"
       ? "You cancelled this donation"
       : item.failure_reason === "GATEWAY_DECLINED"
-      ? "Your payment was declined"
-      : item.failure_reason === "EXPIRED"
-      ? "This donation expired before payment"
-      : "This donation did not complete";
+        ? "Your payment was declined"
+        : item.failure_reason === "EXPIRED"
+          ? "This donation expired before payment"
+          : "This donation did not complete";
 
   return (
-    <li className="bg-slate-900 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-md transition hover:border-slate-700/80">
+    <li className="bg-white border border-slate-200/90 rounded-2xl p-5 md:p-6 shadow-xs transition hover:border-slate-300">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -185,41 +185,41 @@ function DonationCard({ item }: { item: DonationRecord }) {
               {statusConfig.label}
             </span>
             {item.is_sandbox && (
-              <span className="text-[10px] font-mono uppercase bg-amber-950/80 text-amber-400 border border-amber-800/80 px-2 py-0.5 rounded">
+              <span className="text-[10px] font-mono uppercase bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded font-semibold">
                 Sandbox
               </span>
             )}
           </div>
-          <h2 className="mt-2 text-base md:text-lg font-bold text-white">
+          <h2 className="mt-2 text-base md:text-lg font-bold text-slate-900">
             {item.campaign_title || "Disaster Relief Campaign"}
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5">
             Initiated on {formatDateTime(item.created_at)}
           </p>
         </div>
 
         <div className="text-right">
-          <div className="text-lg md:text-xl font-bold text-white tabular-nums">
+          <div className="text-lg md:text-xl font-bold text-slate-900 tabular-nums">
             {formatMoney(item.amount, item.currency)}
           </div>
-          <div className="text-[11px] text-slate-400 uppercase tracking-wider">
+          <div className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">
             {item.currency}
           </div>
         </div>
       </div>
 
       {item.status === "CONFIRMED" && (
-        <div className="mt-4 rounded-xl border border-emerald-900/60 bg-emerald-950/30 p-4">
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-800">
                 Official Receipt Number
               </div>
-              <div className="mt-1 font-mono text-base md:text-lg font-bold text-white tracking-wide">
+              <div className="mt-1 font-mono text-base md:text-lg font-bold text-slate-900 tracking-wide">
                 {item.receipt_no}
               </div>
               {item.receipt_issued_at && (
-                <div className="mt-0.5 text-xs text-slate-400">
+                <div className="mt-0.5 text-xs text-slate-600">
                   Issued at {formatDateTime(item.receipt_issued_at)}
                 </div>
               )}
@@ -227,7 +227,7 @@ function DonationCard({ item }: { item: DonationRecord }) {
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-700/60 bg-emerald-900/50 hover:bg-emerald-900/80 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white hover:bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition cursor-pointer shadow-2xs"
             >
               <span aria-hidden="true">🖨️</span> Print / Save Receipt
             </button>
@@ -236,20 +236,20 @@ function DonationCard({ item }: { item: DonationRecord }) {
       )}
 
       {item.status === "PENDING" && (
-        <div className="mt-4 rounded-xl border border-amber-900/60 bg-amber-950/30 p-4 text-xs text-amber-200">
-          <p className="font-semibold text-amber-300">
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900">
+          <p className="font-semibold text-amber-800">
             Awaiting payment confirmation from the gateway.
           </p>
-          <p className="mt-1 text-slate-400">
+          <p className="mt-1 text-slate-600">
             Unpaid orders expire automatically after 30 minutes. Once confirmed by the gateway callback, your official receipt will appear here.
           </p>
         </div>
       )}
 
       {item.status === "FAILED" && (
-        <div className="mt-4 rounded-xl border border-rose-900/60 bg-rose-950/30 p-4 text-xs space-y-1.5">
-          <p className="font-semibold text-rose-300">{failureText}</p>
-          <p className="text-slate-400">
+        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50/70 p-4 text-xs space-y-1.5 text-rose-950">
+          <p className="font-semibold text-rose-800">{failureText}</p>
+          <p className="text-slate-600">
             If money was deducted anyway, the donation is confirmed automatically when the payment provider reports it, and the receipt appears here.
           </p>
         </div>
