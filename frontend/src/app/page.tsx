@@ -4,8 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { fetchPublicIncidents, fetchPublicAlerts, PublicIncident, PublicAlert } from "../services/citizenApi";
 import { LiveOperationsLayer } from "../components/dm/LiveOperationsLayer";
-import { signOut } from "./login/actions";
-import { NavLink, SiteHeader } from "../components/Brand";
+import { UnifiedSiteHeader } from "../components/navigation/UnifiedSiteHeader";
 import { GUJARAT_CENTER, GUJARAT_DEFAULT_ZOOM, GUJARAT_DISTRICTS, INDIA_BOUNDS } from "../lib/geo";
 
 interface SessionInfo {
@@ -52,7 +51,6 @@ export default function PublicPortalPage() {
 
   const [incidents, setIncidents] = useState<PublicIncident[]>([]);
   const [alerts, setAlerts] = useState<PublicAlert[]>([]);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<PublicIncident | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -367,7 +365,7 @@ export default function PublicPortalPage() {
   return (
     <div className="app-screen relative bg-slate-900 font-sans flex flex-col">
       {/* Top Header */}
-      <SiteHeader subtitle="Gujarat Emergency Portal · NDMA" maxWidth="max-w-none">
+      <UnifiedSiteHeader activeHref="/" session={session}>
         <button
           onClick={() => setShowAlertsDrawer(!showAlertsDrawer)}
           className="relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-700/60 bg-sky-950/80 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-900"
@@ -378,66 +376,7 @@ export default function PublicPortalPage() {
             <span className="rounded-full bg-red-600 px-1.5 text-[10px] font-bold">{alerts.length}</span>
           )}
         </button>
-        <NavLink href="/report" variant="primary">Report<span className="hidden sm:inline"> Incident</span></NavLink>
-        <NavLink href="/my-reports" hideBelow="lg">My Reports</NavLink>
-        <NavLink href="/about" hideBelow="lg">About</NavLink>
-        <NavLink href="/how-to" hideBelow="lg">How to use</NavLink>
-        <NavLink href="/safety" hideBelow="lg">Safety</NavLink>
-        <NavLink href="/donate" hideBelow="lg" variant="success">Donate</NavLink>
-        {session?.authenticated ? (
-          <div className="hidden items-center gap-2 border-l border-sky-800 pl-2 sm:flex">
-            <Link
-              href={session.dm ? "/dm" : "/citizen/dashboard"}
-              className="max-w-[120px] truncate text-xs font-semibold text-sky-200 underline hover:text-white"
-            >
-              {session.name || "My Account"}
-            </Link>
-            <button
-              onClick={async () => {
-                await signOut();
-              }}
-              className="rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
-            >
-              Sign Out
-            </button>
-          </div>
-        ) : (
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-bold text-slate-950 transition hover:bg-sky-400"
-          >
-            Sign In
-          </Link>
-        )}
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          className="rounded-lg bg-white/10 px-2.5 py-1.5 text-sm text-white hover:bg-white/20 lg:hidden"
-          aria-label="Toggle menu"
-          aria-expanded={menuOpen}
-        >
-          {menuOpen ? "✕" : "☰"}
-        </button>
-      </SiteHeader>
-      {menuOpen && (
-        <nav className="absolute inset-x-0 top-14 z-[1000] flex flex-col gap-1 border-b border-[#093554] bg-[#0c4a75] p-3 text-sm text-white shadow-xl lg:hidden" aria-label="Menu">
-          {[
-            ["/my-reports", "My Reports"],
-            ["/about", "About"],
-            ["/how-to", "How to use"],
-            ["/safety", "Safety"],
-            ["/donate", "Donate"],
-          ].map(([href, label]) => (
-            <Link key={href} href={href} className="rounded-lg px-3 py-2 font-semibold hover:bg-white/10" onClick={() => setMenuOpen(false)}>
-              {label}
-            </Link>
-          ))}
-          {session?.authenticated && (
-            <button onClick={async () => { await signOut(); }} className="rounded-lg px-3 py-2 text-left font-semibold hover:bg-white/10">
-              Sign Out
-            </button>
-          )}
-        </nav>
-      )}
+      </UnifiedSiteHeader>
 
       {/* Main Map View */}
       <div className="relative flex-1 w-full h-full">
