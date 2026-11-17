@@ -36,7 +36,7 @@ test.describe("Global Navigation Consistency (Issue #172)", () => {
 
     const header = page.locator("header");
     await expect(header.getByRole("link", { name: "Map" })).toBeVisible();
-    await expect(header.getByRole("link", { name: /Report/ })).toBeVisible();
+    await expect(header.getByRole("link", { name: "Report Incident" })).toBeVisible();
     await expect(header.getByRole("link", { name: "My Reports" })).toBeVisible();
     await expect(header.getByRole("link", { name: "Safety" })).toBeVisible();
     await expect(header.getByRole("link", { name: "How to use" })).toBeVisible();

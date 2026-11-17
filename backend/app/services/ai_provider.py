@@ -1,10 +1,11 @@
 """AI triage integration boundary (DM-FR-05, DM-NFR-09/10).
 
-The project's AI worker (ai-workers/worker.py) is a placeholder, so there is no
-live model. Requests go to an external triage service only when AI_TRIAGE_URL
-is configured; otherwise the result is UNAVAILABLE. Output is never trusted:
-it is validated and bounded here before anything is stored, and it can never
-change an incident by itself.
+Requests go to the drch-ai-triage service (ai-workers/triage_service.py: the
+keyword rules, or a trained scenario model when one is configured; see
+docs/ai/triage-rules.md) only when AI_TRIAGE_URL is configured; otherwise, or
+when the call fails, the result is UNAVAILABLE and staff triage manually.
+Output is never trusted: it is validated and bounded here before anything is
+stored, and it can never change an incident by itself.
 """
 
 import re

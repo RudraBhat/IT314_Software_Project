@@ -87,7 +87,7 @@ export function UnifiedSiteHeader({
         {session?.authenticated ? (
           <div className="hidden items-center gap-2 border-l border-sky-800 pl-2 sm:flex">
             <Link
-              href={session.dm ? "/dm" : "/citizen/dashboard"}
+              href="/dashboard"
               className="max-w-[120px] truncate text-xs font-semibold text-sky-200 underline hover:text-white"
             >
               {session.name || "My Account"}
@@ -131,7 +131,7 @@ export function UnifiedSiteHeader({
             ["/", "Live Map"],
             ["/report", "Report Incident"],
             ["/my-reports", "My Reports"],
-            ...(session?.authenticated ? [["/citizen/dashboard", "Dashboard"]] : []),
+            ...(session?.authenticated ? [["/dashboard", "Dashboard"]] : []),
             ["/safety", "Safety Guidelines"],
             ["/how-to", "How to use"],
             ["/about", "About ResQ"],

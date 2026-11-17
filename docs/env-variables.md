@@ -17,7 +17,11 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `MFA_ENCRYPTION_KEY` (S) | **required\*** | - | Fernet key encrypting staff TOTP secrets. Outside development it must be set (it is otherwise derived from `JWT_SECRET`, so rotating the JWT secret would lock out all staff). |
 | `INGEST_TOKEN` (S) | **required\*** | - | Bearer token for `POST /api/v1/internal/ingest/run`; the DM poll action uses staff authentication instead. |
 | `CORS_ALLOWED_ORIGINS` | **required\*** | `http://localhost:3000,http://127.0.0.1:3000` in development, empty otherwise | Comma-separated browser origins allowed to call the API. |
-| `ACCESS_TOKEN_MINUTES` | no | `60` | Access-token lifetime. |
+| `ACCESS_TOKEN_MINUTES` | no | `15` | Access-token lifetime. Short on purpose: the browser quietly swaps in a new one using its refresh token. |
+| `REFRESH_IDLE_HOURS_STAFF` / `REFRESH_IDLE_HOURS_CITIZEN` | no | `48` / `720` | Idle limit: a session ends if unused for this long. It slides forward each time the session refreshes. |
+| `REFRESH_MAX_HOURS_STAFF` / `REFRESH_MAX_HOURS_CITIZEN` | no | `168` / `2160` | Absolute limit: a session ends this long after sign-in however active it is (7 days staff, 90 days citizens), then the user signs in again with MFA for staff. |
+| `MAX_ACTIVE_SESSIONS` | no | `5` | Sessions (devices) a user may hold at once; signing in beyond this revokes the oldest. |
+| `REFRESH_REUSE_GRACE_SECONDS` | no | `10` | A refresh token reused inside this window is treated as two tabs racing; outside it, the whole session is revoked as a suspected theft. |
 | `MFA_TOKEN_MINUTES` | no | `5` | MFA challenge lifetime. |
 | `LOGIN_MAX_ATTEMPTS` | no | `5` | Failures before account lockout. |
 | `LOGIN_LOCKOUT_MINUTES` | no | `15` | Lockout duration. |
@@ -79,6 +83,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | Variable | Required | Purpose |
 |---|---|---|
 | `AI_TRIAGE_TOKEN` (S) | recommended | If set, `POST /triage` requires `Authorization: Bearer <token>`. |
+| `TRIAGE_MODEL_DIR` | no | Directory with a trained scenario model for `/triage` (`scenario_model.joblib` plus `metadata.json` holding its SHA-256; contract in `ai-workers/service/scenario_model.py`). Unset, missing or failing its checks = `/triage` uses the rules baseline; `GET /health` reports which (`triage_engine`). Never commit the artifact. |
 | `LLM_ENABLED` | no | `true` turns on the optional LLM adapter (`service/llm.py`). Off by default. |
 | `LLM_PROVIDER` | if enabled | `groq`, `gemini` or `ollama`. |
 | `LLM_API_KEY` (S) | if enabled | Provider key (not needed for `ollama`). Set in the hosting environment only, never in git. |

@@ -25,6 +25,9 @@ type Oversight = {
   }[];
   totals: { confirmed_amount: string; pending_amount: string; failed_amount: string };
   oldest_pending_at: string | null;
+  failed_by_reason?: Record<string, { count: number; amount: string | number }>;
+  pending_timeout_minutes?: number;
+  is_sandbox?: boolean;
   definitions: Record<string, string>;
 };
 
@@ -57,6 +60,13 @@ export default function CampaignsPage() {
       {loading && !data && <LoadingRows rows={3} />}
       {data && (
         <>
+          {data.is_sandbox && (
+            <div className="mb-4">
+              <Notice tone="medium">
+                ⚠️ SANDBOX payment gateway active: all campaigns and donation records are test simulations and no real money moved.
+              </Notice>
+            </div>
+          )}
           <section className="mb-6 grid gap-4 sm:grid-cols-3" aria-label="Donation totals">
             {([["Confirmed", data.totals.confirmed_amount, "text-low", data.definitions.confirmed], ["Pending", data.totals.pending_amount, "text-medium", data.definitions.pending], ["Failed", data.totals.failed_amount, "text-muted", data.definitions.failed]] as const).map(([name, value, tone, def]) => (
               <div key={name} className="rounded-xl border border-border bg-surface p-4">
@@ -66,7 +76,36 @@ export default function CampaignsPage() {
               </div>
             ))}
           </section>
-          {data.oldest_pending_at && <div className="mb-6"><Notice tone="medium">Oldest pending payment since {formatDateTime(data.oldest_pending_at)}; awaiting gateway reconciliation.</Notice></div>}
+          {data.failed_by_reason && Object.keys(data.failed_by_reason).length > 0 && (
+            <div className="mb-6 rounded-xl border border-border bg-surface p-4 text-xs" aria-label="Failed donations breakdown">
+              <p className="font-semibold text-muted uppercase tracking-wider mb-2">Failed Donations Breakdown</p>
+              <div className="grid gap-2 sm:grid-cols-4">
+                {Object.entries(data.failed_by_reason).map(([reason, stats]) => (
+                  <div key={reason} className="rounded-lg border border-border/60 bg-surface-muted/50 p-2.5">
+                    <p className="text-[11px] font-medium text-muted">
+                      {reason === "ABANDONED"
+                        ? "Abandoned / Cancelled"
+                        : reason === "GATEWAY_DECLINED"
+                        ? "Gateway Declined"
+                        : reason === "EXPIRED"
+                        ? "Expired Unpaid"
+                        : "Other / Unclassified"}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">
+                      {formatMoney(stats.amount)} <span className="text-xs font-normal text-muted">({stats.count})</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {data.oldest_pending_at && (
+            <div className="mb-6">
+              <Notice tone="medium">
+                Oldest pending payment since {formatDateTime(data.oldest_pending_at)}; awaiting gateway reconciliation{data.pending_timeout_minutes ? ` (unpaid orders expire after ${data.pending_timeout_minutes} minutes)` : ""}.
+              </Notice>
+            </div>
+          )}
         </>
       )}
       {campaigns.data && campaigns.data.items.length === 0 && <EmptyState title="No campaigns yet." />}

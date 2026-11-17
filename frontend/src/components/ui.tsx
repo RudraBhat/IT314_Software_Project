@@ -283,20 +283,53 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((t) => [...t, { id, tone, message }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === "error" ? 8000 : 4500);
   }, []);
+  const remove = useCallback((id: number) => {
+    setToasts((t) => t.filter((x) => x.id !== id));
+  }, []);
+
   return (
     <ToastContext.Provider value={push}>
       {children}
-      <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-end gap-2 sm:left-auto" aria-live="polite">
+      <div
+        className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-end gap-2.5 sm:left-auto sm:right-6 sm:bottom-6"
+        aria-live="polite"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
             role={t.tone === "error" ? "alert" : "status"}
+            style={{
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+            }}
             className={cx(
-              "pointer-events-auto max-w-sm rounded-lg border px-4 py-3 text-sm shadow-lg",
-              t.tone === "success" ? "border-low/30 bg-low-soft text-low" : "border-critical/30 bg-critical-soft text-critical",
+              "pointer-events-auto flex max-w-md items-start gap-3 rounded-2xl border px-4 py-3.5 text-sm shadow-2xl backdrop-blur-xl transition-all duration-200 animate-in fade-in slide-in-from-bottom-2",
+              "bg-slate-950/80 text-slate-100",
+              t.tone === "success"
+                ? "border-emerald-500/30 shadow-black/40"
+                : "border-rose-500/30 shadow-black/40",
             )}
           >
-            {t.message}
+            <span
+              className={cx(
+                "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                t.tone === "success"
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-rose-500/20 text-rose-400",
+              )}
+              aria-hidden
+            >
+              {t.tone === "success" ? "✓" : "!"}
+            </span>
+            <div className="flex-1 font-medium leading-snug">{t.message}</div>
+            <button
+              type="button"
+              onClick={() => remove(t.id)}
+              className="ml-2 -mr-1 -mt-0.5 p-1 text-slate-400 hover:text-white transition rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40 cursor-pointer"
+              aria-label="Dismiss notification"
+            >
+              ✕
+            </button>
           </div>
         ))}
       </div>

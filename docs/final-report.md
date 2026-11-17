@@ -158,7 +158,7 @@ simulated. Blank means not yet signed.
 | Section | Author | Signed (name, date) |
 |---|---|---|
 | 1, 10 (QA) | Dhruv | |
-| 2, 3, 10 (security) | Siddh | |
+| 2, 3, 10 (security) | Siddh | Siddh Shah, 15 Nov 2026 |
 | 4, 5 (citizen and public API) | Zalak | |
 | 4, 6 (dispatch and field API) | Nisarg | |
 | 4, 6, 7 (payments, signals) | Shlok | |
