@@ -461,3 +461,64 @@ def test_only_an_mfa_verified_administrator_can_edit_permissions(make, client):
     assert client.put(url, headers=make.token(make.user("APP_MGMT"), mfa=False), json=body).status_code == 401
     for headers in (make.citizen()["headers"], make.field_team_user()["headers"], target["headers"], make.staff("SUPERVISOR")["headers"]):
         assert client.put(url, headers=headers, json=body).status_code == 403
+
+
+# --------------------------------------------------------------------------- export
+
+
+def _export(client, headers, **params):
+    return client.get(f"{URL}/export", headers=headers, params=params)
+
+
+def test_export_is_a_csv_of_the_filtered_directory_and_is_audited(make, client, sql):
+    import csv
+    import io
+
+    admin, headers = _admin(make)
+    tag = uuid.uuid4().hex[:8]
+    staff = make.user("DISASTER_MGMT", permissions=("DISPATCH", "PUBLISHER"))
+    sql.execute("UPDATE users SET full_name = %s WHERE user_id = %s", (f"Export {tag}", staff["user_id"]))
+
+    r = _export(client, headers, q=tag)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/csv") and "attachment" in r.headers["content-disposition"]
+    assert r.headers["cache-control"] == "no-store"
+    rows = list(csv.reader(io.StringIO(r.text.lstrip(chr(0xFEFF)))))
+    assert rows[0][:3] == ["Name", "Email", "Role"] and len(rows) == 2
+    assert rows[1][0] == f"Export {tag}" and rows[1][2] == "DISASTER_MGMT" and rows[1][8] == "DISPATCH PUBLISHER"
+
+    entry = sql.execute(
+        "SELECT actor_id, after_state FROM audit_logs WHERE action = 'ACCOUNTS_EXPORTED' AND actor_id = %s ORDER BY audit_id DESC LIMIT 1",
+        (admin["user_id"],),
+    ).fetchone()
+    assert entry["after_state"]["rows"] == 1 and entry["after_state"]["filters"]["q"] == tag
+
+
+def test_export_never_includes_secrets_or_citizens(make, client):
+    _, headers = _admin(make)
+    citizen = make.citizen()
+    text = _export(client, headers).text.lower()
+    assert citizen["email"].lower() not in text
+    for hidden in ("password", "mfa_secret", "phone", "$argon2"):
+        assert hidden not in text
+
+
+def test_export_neutralises_spreadsheet_formulas(make, client, sql):
+    import csv
+    import io
+
+    _, headers = _admin(make)
+    tag = uuid.uuid4().hex[:8]
+    staff = make.user("DISASTER_MGMT")
+    sql.execute("UPDATE users SET full_name = %s WHERE user_id = %s", (f"=HYPERLINK(\"x\") {tag}", staff["user_id"]))
+    rows = list(csv.reader(io.StringIO(_export(client, headers, q=tag).text.lstrip(chr(0xFEFF)))))
+    assert rows[1][0].startswith("'=HYPERLINK")
+
+
+def test_export_rejects_bad_filters_and_non_admins(make, client):
+    _, headers = _admin(make)
+    assert _export(client, headers, role="NORMAL_USER").status_code == 422
+    assert client.get(f"{URL}/export").status_code == 401
+    assert client.get(f"{URL}/export", headers=make.token(make.user("APP_MGMT"), mfa=False)).status_code == 401
+    for other in (make.citizen()["headers"], make.field_team_user()["headers"], make.staff("SUPERVISOR")["headers"]):
+        assert client.get(f"{URL}/export", headers=other).status_code == 403

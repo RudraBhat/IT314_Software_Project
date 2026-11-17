@@ -6,6 +6,7 @@ import { API_URL, sessionToken } from "@/lib/session";
  * Backend-for-frontend proxy for the administrator area (/api/v1/admin/...).
  *
  *   GET  /api/admin/accounts                     -> staff account directory (APP_MGMT with verified MFA)
+ *   GET  /api/admin/accounts/export              -> the filtered directory as a CSV download (audited)
  *   POST /api/admin/accounts/{id}/disable|enable -> switch an account off or on, with a reason
  *   POST /api/admin/accounts/{id}/reset-credentials -> clear a person's password and authenticator, email a setup link
  *   PUT  /api/admin/accounts/{id}/permissions    -> replace a Disaster Management account's permissions, with a reason
@@ -19,6 +20,7 @@ import { API_URL, sessionToken } from "@/lib/session";
 
 const ALLOWED = [
   { method: "GET", pattern: /^accounts$/ },
+  { method: "GET", pattern: /^accounts\/export$/ },
   { method: "POST", pattern: /^accounts\/[0-9a-f-]{36}\/(disable|enable|reset-credentials)$/i },
   { method: "PUT", pattern: /^accounts\/[0-9a-f-]{36}\/permissions$/i },
   { method: "GET", pattern: /^system$/ },

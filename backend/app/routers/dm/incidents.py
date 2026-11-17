@@ -40,6 +40,12 @@ router = APIRouter()
 DUPLICATE_RADIUS_M = 1000
 DUPLICATE_WINDOW_HOURS = 6
 
+# A citizen's "please withdraw my report" is stored as a status-history row (see routers/citizen.py).
+# It only matters while the report can still be withdrawn; after dispatch or closure it is stale.
+_WITHDRAWAL_PENDING = """(i.status IN ('SUBMITTED','NEEDS_INFORMATION','VERIFIED') AND EXISTS (
+        SELECT 1 FROM incident_status_history w
+        WHERE w.incident_id = i.incident_id AND w.reason LIKE 'Reporter asked to withdraw%%'))"""
+
 _LIST_COLUMNS = """
     i.incident_id, i.incident_ref, lower(i.scenario::text) AS scenario, i.status,
     i.verified_priority, i.reported_urgency, i.people_affected, i.address_text, i.landmark,
@@ -47,7 +53,8 @@ _LIST_COLUMNS = """
     i.submitted_at, i.updated_at, i.closed_at, i.version,
     (SELECT COUNT(*) FROM evidence_files e WHERE e.incident_id = i.incident_id) AS evidence_count,
     (SELECT COUNT(*) FROM dispatch_orders d WHERE d.incident_id = i.incident_id
-        AND d.status IN ('REQUESTED','ACKNOWLEDGED','DISPATCHED')) AS active_dispatches
+        AND d.status IN ('REQUESTED','ACKNOWLEDGED','DISPATCHED')) AS active_dispatches,
+    """ + _WITHDRAWAL_PENDING + """ AS withdrawal_requested
 """
 
 _SORTS = {
@@ -68,6 +75,7 @@ def list_incidents(
     from_: Annotated[date | None, Query(alias="from")] = None,
     to: date | None = None,
     q: Annotated[str | None, Query(max_length=100)] = None,
+    withdrawal_requested: Annotated[bool | None, Query(description="true: only reports whose reporter asked to withdraw them")] = None,
     near_lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
     near_lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
     radius_km: Annotated[float, Query(gt=0, le=500)] = 10,
@@ -97,6 +105,8 @@ def list_incidents(
             "(i.incident_ref ILIKE %(q)s OR i.address_text ILIKE %(q)s OR i.landmark ILIKE %(q)s)",
             q=f"%{q.strip()}%",
         )
+    if withdrawal_requested:
+        f.add(_WITHDRAWAL_PENDING)
     if near_lat is not None and near_lon is not None:
         f.add(
             "ST_DWithin(i.geom, ST_SetSRID(ST_MakePoint(%(lon)s, %(lat)s), 4326)::geography, %(radius)s)",
@@ -149,6 +159,7 @@ def get_incident(incident_id: uuid.UUID, principal: DMUser):
                    i.canonical_incident_id, c.incident_ref AS canonical_incident_ref,
                    i.location_source, i.latitude, i.longitude, i.accuracy_m, i.address_text,
                    i.landmark, i.details, i.version, i.submitted_at, i.updated_at, i.closed_at,
+                   """ + _WITHDRAWAL_PENDING + """ AS withdrawal_requested,
                    jsonb_build_object('user_id', r.user_id, 'full_name', r.full_name,
                                       'email', r.email, 'phone', r.phone) AS reporter
             FROM incidents i

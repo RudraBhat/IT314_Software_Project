@@ -251,6 +251,7 @@
 * **Notifications:** `POST /api/v1/me/notifications/read-all` marks all of your in-app notifications read and returns `{"marked_read": n}`.
 * **Email copy:** a citizen with email alerts on is also emailed each in-app notification (sent in the background, never blocks the action; simulated and logged when no SMTP is configured). SMS is only a stored preference; there is no SMS provider.
 * **Withdraw request:** `POST /api/v1/me/incidents/{id}/withdrawal-request` with optional `{reason}`. Allowed for your own report while `SUBMITTED`, `NEEDS_INFORMATION` or `VERIFIED`; it only records the request (history row and audit entry, `withdrawal_requested: true` on the report) and never changes the status, because a dispatcher decides. `409 NOT_WITHDRAWABLE` after dispatch or closure, `409 ALREADY_REQUESTED`, `404` for another citizen's report. Rate limited.
+* **Dispatcher visibility:** `GET /api/v1/dm/incidents` and `GET /api/v1/dm/incidents/{id}` return `withdrawal_requested` (true only while the report is still `SUBMITTED`, `NEEDS_INFORMATION` or `VERIFIED`, since the request is stale once help is sent or the report is closed). The list also accepts `withdrawal_requested=true` to show only those reports. Nothing is withdrawn automatically; the dispatcher rejects or carries on.
 * **Delete account:** `POST /api/v1/me/account/deletion` with `{password}`. Refused with `409 OPEN_REPORTS` while any report is not `RESOLVED`, `CLOSED` or `REJECTED`; a wrong password is `400 INVALID_CURRENT_PASSWORD` and audited; an account with no password gets `409 NO_PASSWORD_SET`, as above. On success the name, email, phone and address are erased, photos and notifications deleted, the account disabled and every session ended (`{"deleted": true, "sign_in_required": true}`). Reports stay on record for the audit trail without a link to an identity. Rate limited.
 
 ---
@@ -964,6 +965,12 @@ Staff accounts (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`) are never created wit
 * **Query:** `q` (part of a name or email, case-insensitive, `%` and `_` are literal; up to 100 characters), `role` (`DISASTER_MGMT`, `FIELD_TEAM` or `APP_MGMT`), `status` (`ACTIVE`, `PENDING_SETUP`, `DISABLED`, `LOCKED` or `PENDING_VERIFICATION`), `page`, `limit` (1–100, default 25). Anything else is `422`.
 * **Response (200):** `{"items": [...], "page", "limit", "total", "pages", "summary": {"total", "by_role", "by_status"}}`, newest account first. Each item has `user_id`, `email`, `full_name`, `role`, `designation`, `status`, `mfa_enabled`, `last_login_at`, `is_locked` (temporary lockout after failed sign-ins), `permissions` (sorted names), `team_name` (field responders), `created_at` and `is_you`. `summary` counts all staff accounts and ignores the filters.
 * **Privacy:** only staff accounts are listed; citizens never appear. No phone number, password hash, MFA secret or session detail is returned.
+
+#### Export the directory
+* **Path:** `GET /api/v1/admin/accounts/export`, with the directory's `q`, `role` and `status` filters. Same authentication as the directory; rate limited (10 per hour per client).
+* **Response (200):** a UTF-8 CSV download (`Content-Disposition: attachment`, `Cache-Control: no-store`, byte-order mark for Excel), newest first, at most 5000 rows. Columns: Name, Email, Role, Designation, Status, Authenticator set up, Last sign-in, Created, Permissions (space separated), Team. Cells that a spreadsheet could run as a formula (starting with `=`, `+`, `-`, `@`, tab or carriage return) are prefixed with a quote.
+* **Privacy:** staff only, never citizens, and no phone number, password hash or MFA secret. Because it copies staff email addresses out of the system, every export is recorded as `ACCOUNTS_EXPORTED` with the actor, the row count and the filters used.
+* **Errors:** `422` for an invalid filter value.
 
 #### Disable and enable an account
 * **Paths:** `POST /api/v1/admin/accounts/{user_id}/disable` and `POST /api/v1/admin/accounts/{user_id}/enable`. Same authentication as the directory (`APP_MGMT` with verified MFA); rate limited (30 per hour per client).

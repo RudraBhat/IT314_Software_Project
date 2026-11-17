@@ -10,12 +10,14 @@ Privacy: citizens are never listed here, and no phone number, password hash, MFA
 detail is returned. Every route needs the APP_MGMT role with verified MFA (AdminUser).
 """
 
+import csv
+import io
 import os
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from psycopg import sql
 from pydantic import BaseModel, Field
 
@@ -59,6 +61,19 @@ def _like(text: str) -> str:
     return f"%{escaped}%"
 
 
+def _account_filters(q: str | None, role: str | None, status: str | None) -> Filters:
+    """The staff-only filter shared by the directory and its export, so they can never disagree."""
+    f = Filters()
+    f.add("r.code = ANY(%(staff_roles)s)", staff_roles=STAFF_ROLES)
+    if role:
+        f.add("r.code = %(role)s", role=role)
+    if status:
+        f.add("u.status = %(status)s::account_status", status=status)
+    if q and q.strip():
+        f.add("(u.full_name ILIKE %(q)s OR u.email ILIKE %(q)s)", q=_like(q.strip()))
+    return f
+
+
 @router.get("/accounts")
 def list_accounts(
     *,
@@ -73,14 +88,7 @@ def list_accounts(
     Returns the page of accounts, the filtered total, and `summary` counts for all staff accounts
     (unaffected by the filters) so the screen can show how many are active, pending or disabled.
     """
-    f = Filters()
-    f.add("r.code = ANY(%(staff_roles)s)", staff_roles=STAFF_ROLES)
-    if role:
-        f.add("r.code = %(role)s", role=role)
-    if status:
-        f.add("u.status = %(status)s::account_status", status=status)
-    if q and q.strip():
-        f.add("(u.full_name ILIKE %(q)s OR u.email ILIKE %(q)s)", q=_like(q.strip()))
+    f = _account_filters(q, role, status)
     where = f.where()
 
     with db.transaction() as conn:
@@ -122,6 +130,69 @@ def list_accounts(
         summary["by_role"][c["role"]] = summary["by_role"].get(c["role"], 0) + c["n"]
         summary["by_status"][c["status"]] = summary["by_status"].get(c["status"], 0) + c["n"]
     return {**page_body(items, total, page), "summary": summary}
+
+
+EXPORT_LIMIT = 5000
+_EXPORT_HEADER = ["Name", "Email", "Role", "Designation", "Status", "Authenticator set up", "Last sign-in", "Created", "Permissions", "Team"]
+
+
+def _csv_cell(value) -> str:
+    """One CSV cell. Text a spreadsheet would run as a formula (= + - @, tab, CR) is prefixed with a quote."""
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    text = str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
+@router.get("/accounts/export", dependencies=[rate_limit("admin-export", 10, 3600)])
+def export_accounts(
+    principal: AdminUser,
+    q: Annotated[str | None, Query(max_length=100)] = None,
+    role: StaffRole | None = None,
+    status: AccountStatus | None = None,
+):
+    """The directory (same filters) as a CSV download, newest first, at most 5000 rows.
+
+    Staff only and without phone numbers, password hashes or secrets. Because it copies staff email
+    addresses out of the system, every export is recorded in the audit log with its filters and row count.
+    """
+    f = _account_filters(q, role, status)
+    with db.transaction() as conn:
+        rows = conn.execute(
+            sql.SQL(_LIST_QUERY).format(from_=sql.SQL(_FROM), where=f.where()),
+            {**f.params, "limit": EXPORT_LIMIT, "offset": 0},
+        ).fetchall()
+        audit.record(
+            conn,
+            actor=principal,
+            action="ACCOUNTS_EXPORTED",
+            entity_type="user",
+            rationale=f"Exported {len(rows)} staff accounts",
+            after={"rows": len(rows), "filters": {"q": (q or "").strip() or None, "role": role, "status": status}},
+            ip=principal.ip,
+        )
+    out = io.StringIO(newline="")
+    writer = csv.writer(out)
+    writer.writerow(_EXPORT_HEADER)
+    for r in rows:
+        writer.writerow(
+            [
+                _csv_cell(v)
+                for v in (
+                    r["full_name"], r["email"], r["role"], r["designation"], r["status"],
+                    "yes" if r["mfa_enabled"] else "no", r["last_login_at"], r["created_at"],
+                    " ".join(r["permissions"]), r["team_name"],
+                )
+            ]
+        )
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M")
+    return Response(
+        content="\ufeff" + out.getvalue(),  # BOM so Excel reads UTF-8 names correctly
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="staff-accounts-{stamp}.csv"', "Cache-Control": "no-store"},
+    )
 
 
 # --------------------------------------------------------------------------- disable / enable

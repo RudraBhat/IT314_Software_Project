@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Badge, Button, Card, Dialog, EmptyState, ErrorState, Field, Input, LoadingRows, Notice, Pagination, Select, Textarea } from "@/components/ui";
 import { useAction } from "@/components/use-action";
 import { formatDateTime, timeAgo } from "@/lib/format";
-import { disableAccount, enableAccount, listAccounts, resetCredentials, setPermissions, type AccountStatus, type AccountsPage, type StaffAccount } from "@/services/adminApi";
+import { disableAccount, enableAccount, exportAccounts, listAccounts, resetCredentials, setPermissions, type AccountStatus, type AccountsPage, type StaffAccount } from "@/services/adminApi";
 import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
 
 import type { Tone } from "@/components/ui";
@@ -120,6 +120,17 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
       setRetry((n) => n + 1);
     }
   }
+  async function download() {
+    const file = await run("export", () => exportAccounts({ q: debouncedSearch, role, status }), "Export downloaded.");
+    if (!file) return;
+    const url = URL.createObjectURL(file.blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   const data = result?.data;
   const summary = data?.summary;
   const filtered = Boolean(debouncedSearch.trim() || role || status);
@@ -130,7 +141,7 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
       subtitle={summary ? `${summary.total} accounts · ${summary.by_status.ACTIVE ?? 0} active · ${summary.by_status.PENDING_SETUP ?? 0} awaiting setup · ${summary.by_status.DISABLED ?? 0} disabled` : "Everyone who can sign in to the operations side"}
       bodyClassName="p-0"
     >
-      <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-[minmax(0,1fr)_14rem_12rem]">
+      <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-[minmax(0,1fr)_14rem_12rem_auto]">
         <label className="block">
           <span className="sr-only">Search by name or email</span>
           <Input
@@ -171,6 +182,9 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
             ))}
           </Select>
         </label>
+        <Button variant="ghost" onClick={download} busy={busy === "export"} disabled={!data || data.total === 0} title="Download the accounts matching these filters as CSV. The export is recorded in the audit log.">
+          Export CSV
+        </Button>
       </div>
 
       {note && <div className="border-b border-border p-4"><Notice tone="high">{note}</Notice></div>}

@@ -72,6 +72,26 @@ export async function listAccounts(query: AccountQuery): Promise<AccountsPage> {
   return request<AccountsPage>(`accounts?${params.toString()}`);
 }
 
+/** Download the directory, with the same filters as the list, as a CSV file (the export is audited). */
+export async function exportAccounts(query: AccountQuery): Promise<{ blob: Blob; filename: string }> {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.role) params.set("role", query.role);
+  if (query.status) params.set("status", query.status);
+  const res = await fetch(`/api/admin/accounts/export?${params.toString()}`, { cache: "no-store" });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new ApiError(
+      typeof payload?.error?.message === "string" ? payload.error.message : `Export failed (${res.status}).`,
+      res.status,
+      typeof payload?.error?.code === "string" ? payload.error.code : "REQUEST_FAILED",
+      null,
+    );
+  }
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  return { blob: await res.blob(), filename: `staff-accounts-${stamp}.csv` };
+}
+
 export type StatusChangeResult = { user_id: string; status: AccountStatus };
 
 /** Switch a staff account off. The reason is required and audited; sessions end at once. */
