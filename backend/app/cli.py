@@ -58,6 +58,25 @@ def _read_password() -> str:
     return password
 
 
+def _qr_text(uri: str) -> str:
+    """A terminal QR code for the otpauth URI, or a plain note when one cannot be drawn."""
+    try:
+        import io
+
+        import segno
+
+        buffer = io.StringIO()
+        segno.make(uri, error="m").terminal(out=buffer, compact=True)
+        text = buffer.getvalue()
+        text.encode(sys.stdout.encoding or "utf-8")  # a legacy console may not show the block characters
+        return "Scan this QR code with the authenticator app:\n" + text + "\n"
+    except ImportError:
+        reason = "the 'segno' package is not installed (pip install segno)"
+    except (UnicodeEncodeError, ValueError):
+        reason = "this terminal cannot display it (try Windows Terminal)"
+    return f"  QR code not shown: {reason}.\n  Enter the secret key below into the app by hand.\n\n"
+
+
 def _enrol_mfa(conn, user_id, email: str) -> None:
     is_automated = bool(
         os.getenv("RESQ_STAFF_PASSWORD")
@@ -87,7 +106,11 @@ def _enrol_mfa(conn, user_id, email: str) -> None:
     raw_uri = security.provisioning_uri(totp_key, email)
     display_key = "".join(chr(ord(c)) for c in totp_key)
     display_uri = "".join(chr(ord(c)) for c in raw_uri)
-    sys.stdout.write("\nAdd this account to an authenticator app (shown once):\n")
+    sys.stdout.write("\nAdd this account to an authenticator app (shown once).\n")
+    sys.stdout.write("In the app choose Add account > Enter a setup key, then enter:\n")
+    sys.stdout.write(f"  Account name: ResQ: {email}   (only a label; any name works)\n")
+    sys.stdout.write("  Key type    : Time based\n")
+    sys.stdout.write("\n" + _qr_text(raw_uri))
     # codeql[py/clear-text-logging-sensitive-data] - one-time output to the interactive terminal for operator enrollment
     sys.stdout.write(f"  Secret key : {display_key}\n")
     # codeql[py/clear-text-logging-sensitive-data] - one-time output to the interactive terminal for operator enrollment

@@ -108,18 +108,18 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
             </div>
           </header>
 
-          <div className="flex min-h-0 flex-1">
-            <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-border bg-surface p-3 lg:block">{nav}</aside>
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <aside className="hidden w-56 shrink-0 overflow-y-auto overscroll-contain border-r border-border bg-surface p-3 lg:block">{nav}</aside>
 
             {open && (
               <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
                 <button className="absolute inset-0 bg-black/60" aria-label="Close navigation" onClick={() => setOpen(false)} />
-                <div className="absolute inset-y-0 left-0 w-64 overflow-y-auto border-r border-border bg-surface p-3 shadow-xl">{nav}</div>
+                <div className="absolute inset-y-0 left-0 w-64 overflow-y-auto overscroll-contain border-r border-border bg-surface p-3 shadow-xl">{nav}</div>
               </div>
             )}
 
-            {/* The ResQ body is fixed-height, so the workspace scrolls inside this pane. */}
-            <div className="min-w-0 flex-1 overflow-y-auto">
+            {/* The ResQ body is fixed-height, so only the workspace scrolls inside this pane. */}
+            <div className="min-w-0 flex-1 overflow-y-auto overscroll-contain">
               <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
             </div>
           </div>

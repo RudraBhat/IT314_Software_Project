@@ -231,6 +231,30 @@ def _report_binary(y_true: np.ndarray, probabilities: np.ndarray, threshold: flo
         "recall": round(float(recall_score(y_true, predictions, zero_division=0)), 6),
         "f1": round(float(f1_score(y_true, predictions, zero_division=0)), 6),
         "support_positive": int(y_true.sum()),
+        "true_positive": int(np.sum(predictions & (y_true == 1))),
+        "false_positive": int(np.sum(predictions & (y_true == 0))),
+        "false_negative": int(np.sum(~predictions & (y_true == 1))),
+    }
+
+
+def summarize_multilabel(reports: dict[str, dict]) -> dict:
+    """Aggregate per-category test scores so a change can be judged by one number, not 24.
+
+    Macro-F1 averages only categories that have test positives (an F1 over zero positives is undefined).
+    Micro-F1 pools every prediction, so it is dominated by the common categories.
+    """
+    scored = {name: r for name, r in reports.items() if r["support_positive"] > 0}
+    tp = sum(r["true_positive"] for r in reports.values())
+    fp = sum(r["false_positive"] for r in reports.values())
+    fn = sum(r["false_negative"] for r in reports.values())
+    return {
+        "categories_trained": len(reports),
+        "categories_with_test_positives": len(scored),
+        "categories_with_zero_f1": sorted(name for name, r in scored.items() if r["f1"] == 0),
+        "macro_f1": round(float(np.mean([r["f1"] for r in scored.values()])), 6) if scored else None,
+        "micro_precision": round(tp / (tp + fp), 6) if tp + fp else 0.0,
+        "micro_recall": round(tp / (tp + fn), 6) if tp + fn else 0.0,
+        "micro_f1": round(2 * tp / (2 * tp + fp + fn), 6) if tp else 0.0,
     }
 
 
@@ -282,7 +306,12 @@ def _abstention_metrics(
 
 
 def _fit_binary_classifier(features, labels: np.ndarray) -> LogisticRegression:
-    model = LogisticRegression(C=2.0, max_iter=1000, solver="liblinear", random_state=17)
+    # "balanced" weights stop rare categories (e.g. floods, medical_help) from being drowned out by the many
+    # negative rows. Unweighted heads rarely reached the 0.5 threshold, so 14 of 24 heads scored F1 = 0
+    # on the Hurricane Sandy test event; see the README section on class balancing.
+    model = LogisticRegression(
+        C=2.0, max_iter=1000, solver="liblinear", random_state=17, class_weight="balanced"
+    )
     return model.fit(features, labels)
 
 
@@ -458,6 +487,7 @@ def train(data_dir: Path, output_dir: Path, report_path: Path) -> dict:
         "training": {
             "vectorizer": "word TF-IDF uni/bi-grams + character 3-5 grams",
             "classifier": "scikit-learn logistic regression",
+            "category_class_weight": "balanced",
             "runtime_versions": {
                 "python": platform.python_version(),
                 "scikit_learn": sklearn.__version__,
@@ -484,6 +514,7 @@ def train(data_dir: Path, output_dir: Path, report_path: Path) -> dict:
                 "interpretation": "Keep these dataset-specific results separate; the India split is random and the Sandy split is event-held-out.",
             },
             "multilabel_categories": multilabel_reports,
+            "multilabel_summary": summarize_multilabel(multilabel_reports),
             "threshold_selection": threshold_methods,
         },
         "artifact": {"path": str(model_path), "sha256": model_sha256, "committed_to_git": False},
@@ -511,6 +542,11 @@ def train(data_dir: Path, output_dir: Path, report_path: Path) -> dict:
     print(f"India random-holdout relevance macro-F1: {india['macro_f1']:.3f}")
     print(f"Relevance review threshold: {relevance_review_threshold:.3f}")
     print(f"Trainable multilabel categories: {len(binary_models)}; skipped: {len(skipped_labels)}")
+    summary = report["evaluation"]["multilabel_summary"]
+    print(
+        f"Multilabel Sandy test macro-F1: {summary['macro_f1']:.3f}; micro-F1: {summary['micro_f1']:.3f}; "
+        f"categories with F1 = 0: {len(summary['categories_with_zero_f1'])}/{summary['categories_with_test_positives']}"
+    )
     return report
 
 

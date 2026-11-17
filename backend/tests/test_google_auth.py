@@ -112,6 +112,46 @@ def test_staff_account_cannot_sign_in_with_google(client, make, google_configure
     assert "access_token" not in resp.json()
 
 
+@pytest.mark.parametrize("status", ["DISABLED", "PENDING_SETUP"])
+def test_staff_refusal_does_not_depend_on_account_status(client, make, sql, google_configured, status):
+    """A staff email gets the clear staff answer in every state, not a generic invalid-credentials one."""
+    staff = make.staff("DISPATCH")
+    sql.execute("UPDATE users SET status = %s WHERE user_id = %s", (status, staff["user_id"]))
+    patcher = _tokeninfo({"aud": CLIENT_ID, "email": staff["email"], "email_verified": "true", "name": "x", "sub": "9"})
+    try:
+        resp = _post(client)
+    finally:
+        patcher.stop()
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "GOOGLE_STAFF_NOT_ALLOWED"
+
+
+def test_staff_google_attempt_is_audited_and_creates_no_citizen(client, make, sql, google_configured):
+    staff = make.staff("DISPATCH")
+    patcher = _tokeninfo({"aud": CLIENT_ID, "email": staff["email"].upper(), "email_verified": "true", "name": "x", "sub": "9"})
+    try:
+        resp = _post(client)
+    finally:
+        patcher.stop()
+    assert resp.json()["error"]["code"] == "GOOGLE_STAFF_NOT_ALLOWED"  # email case does not matter
+    denied = sql.execute(
+        "SELECT result FROM audit_logs WHERE action = 'GOOGLE_LOGIN_DENIED' AND entity_id = %s", (staff["user_id"],)
+    ).fetchone()
+    assert denied is not None and denied["result"] == "DENIED"
+    assert sql.execute("SELECT COUNT(*) AS n FROM users WHERE email = %s", (staff["email"],)).fetchone()["n"] == 1
+
+
+def test_staff_email_cannot_register_as_a_citizen(client, make):
+    staff = make.staff("DISPATCH")
+    for email in (staff["email"], staff["email"].upper()):
+        resp = client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "Strong-pass1!", "full_name": "Impostor"},
+        )
+        assert resp.status_code == 409
+        assert resp.json()["error"]["code"] == "DUPLICATE_EMAIL"
+
+
 def test_google_only_account_is_told_to_set_a_password_first(client, make, sql):
     citizen = make.citizen()
     sql.execute("UPDATE user_auth SET password_hash = NULL WHERE user_id = %s", (citizen["user_id"],))

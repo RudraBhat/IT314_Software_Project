@@ -67,20 +67,6 @@ function severityBadge(sev: string) {
   }
 }
 
-function darkSeverityBadge(sev: string) {
-  switch (sev) {
-    case "CRITICAL":
-      return "bg-red-950/80 text-red-200 border-red-700/60 font-bold";
-    case "HIGH":
-      return "bg-orange-950/80 text-orange-200 border-orange-700/60 font-semibold";
-    case "MODERATE":
-    case "WARNING":
-      return "bg-amber-950/80 text-amber-200 border-amber-700/60 font-medium";
-    default:
-      return "bg-emerald-950/80 text-emerald-200 border-emerald-700/60 font-medium";
-  }
-}
-
 function formatRelativeTime(dateStr: string) {
   try {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -565,30 +551,26 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
           <button
             onClick={handleBroadcastSos}
             disabled={sosLoading}
-            className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 active:scale-95 text-white px-2.5 sm:px-3.5 py-1 rounded-full text-xs font-extrabold shadow-md shadow-red-600/30 transition cursor-pointer shrink-0 animate-pulse"
+            className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 active:scale-95 text-white px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold shadow-xs transition cursor-pointer shrink-0"
             title={t.sosDisclaimer}
           >
-            <span className="text-sm">🚨</span>
-            <span className="hidden md:inline">{sosLoading ? t.sosBroadcasting : t.sosButton}</span>
-            <span className="md:hidden">SOS</span>
+            <span className="text-xs">🚨</span>
+            <span className="hidden sm:inline">{sosLoading ? t.sosBroadcasting : t.sosButton}</span>
+            <span className="sm:hidden">SOS</span>
           </button>
 
-          {backendOnline !== null && (
+          {backendOnline === false && (
             <span
-              className={`hidden xl:inline-flex items-center gap-1.5 text-[10.5px] px-2.5 py-0.5 rounded-full border font-medium ${
-                backendOnline
-                  ? "bg-emerald-950/40 text-emerald-300 border-emerald-600/40"
-                  : "bg-amber-950/40 text-amber-300 border-amber-600/40"
-              }`}
+              className="hidden xl:inline-flex items-center gap-1.5 text-[10.5px] px-2.5 py-0.5 rounded-full border font-medium bg-amber-950/40 text-amber-300 border-amber-600/40"
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${backendOnline ? "bg-emerald-400" : "bg-amber-400"}`} />
-              {backendOnline ? t.backendLive : t.backendUnreachable}
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              {t.backendUnreachable}
             </span>
           )}
 
           {/* Citizen Profile Pill */}
-          <div className="flex items-center gap-2 bg-sky-900/50 border border-sky-700/50 px-2.5 sm:px-3 py-1 rounded-full text-xs">
-            <span className="w-5 h-5 rounded-full bg-sky-500/30 text-sky-200 flex items-center justify-center text-[11px] font-bold">
+          <div className="flex items-center gap-2 bg-white/10 border border-white/15 px-2.5 sm:px-3 py-1 rounded-full text-xs">
+            <span className="w-5 h-5 rounded-full bg-sky-400 text-slate-950 flex items-center justify-center text-[10.5px] font-bold">
               {currentUser.name.charAt(0)}
             </span>
             <span className="font-medium text-white max-w-[90px] sm:max-w-[120px] truncate">{currentUser.name}</span>
@@ -598,7 +580,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
           {onViewPublicMap && (
             <button
               onClick={onViewPublicMap}
-              className="hidden lg:flex items-center gap-1 bg-sky-800/60 hover:bg-sky-700 text-sky-100 px-3 py-1 rounded-full text-xs font-semibold border border-sky-600/50 transition cursor-pointer"
+              className="hidden lg:flex items-center gap-1 bg-white/10 hover:bg-white/20 text-sky-100 px-3 py-1 rounded-full text-xs font-semibold border border-white/15 transition cursor-pointer"
               title="Open Full National Bhuvan-Style Map"
             >
               <span>🗺️</span>
@@ -710,17 +692,17 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
 
       {/* ─── Active Critical Advisory Top Banner ─── */}
       {publicAlerts.length > 0 && (
-        <div className="bg-gradient-to-r from-red-700 via-rose-700 to-amber-700 text-white px-4 md:px-8 py-2 text-xs font-semibold shadow-sm flex items-center justify-between">
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 md:px-8 py-2 text-xs font-medium flex items-center justify-between">
           <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="animate-pulse text-base">⚠️</span>
+              <span className="text-base">⚠️</span>
               <span className="truncate">
-                <strong>{t.activeAdvisories}:</strong> {publicAlerts[0].title} — {publicAlerts[0].description}
+                <strong className="font-bold text-amber-950">{t.activeAdvisories}:</strong> {publicAlerts[0].title} — {publicAlerts[0].description}
               </span>
             </div>
             <button
               onClick={() => setActiveTab("safety")}
-              className="text-[11px] font-bold bg-white/20 hover:bg-white/30 text-white px-2.5 py-0.5 rounded-full shrink-0 transition"
+              className="text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-full shrink-0 transition"
             >
               {t.tabSafety} →
             </button>
@@ -876,79 +858,71 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
           {/* TAB 1: OVERVIEW */}
           {activeTab === "overview" && (
             <div className="space-y-6">
-              {/* Emergency Banner Card */}
-              <div className="bg-gradient-to-r from-red-600 via-rose-600 to-orange-600 text-white rounded-2xl p-5 md:p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-semibold bg-white/20 backdrop-blur-xs px-2.5 py-0.5 rounded-full w-max">
-                    <span>📢</span> {t.call112}
-                  </div>
-                  <h2 className="text-lg md:text-xl font-bold">Experiencing a Life-Threatening Emergency?</h2>
-                  <p className="text-xs text-white/90 max-w-xl">
-                    {t.sosDisclaimer}
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    setActiveTab("report");
-                    setSubmitResult(null);
-                  }}
-                  className="bg-white hover:bg-slate-100 text-red-700 font-bold px-5 py-2.5 rounded-xl text-xs md:text-sm shadow transition cursor-pointer shrink-0"
-                >
-                  {t.reportDisasterBtn} →
-                </button>
-              </div>
-
-              {/* 24x7 Gujarat Emergency Helplines Quick-Dial Widget */}
-              <div className="bg-gradient-to-br from-sky-900 to-[#0c4a75] text-white rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between pb-3 border-b border-sky-800/80 mb-3.5">
+              {/* 24x7 Gujarat Emergency Helplines Quick-Dial Card */}
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 mb-4">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">📞</span>
-                    <h3 className="text-sm font-bold">{t.helplineTitle}</h3>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">{t.helplineTitle}</h3>
+                      <p className="text-[11px] text-slate-500">Official toll-free dispatch lines across Gujarat</p>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-extrabold uppercase bg-emerald-500 text-white px-2 py-0.5 rounded-full">
-                    {t.tollFree}
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    {t.tollFree} • 24x7
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <a
                     href="tel:112"
-                    className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-between border border-white/15"
+                    className="p-3.5 rounded-xl bg-slate-50 hover:bg-red-50/60 border border-slate-200/90 hover:border-red-200 transition flex items-center justify-between group"
                   >
                     <div>
-                      <div className="font-extrabold text-sm text-white">112</div>
-                      <div className="text-[10.5px] text-sky-200">National Emergency (Police, Fire, Medical)</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-extrabold text-base text-red-600">112</span>
+                        <span className="text-[10px] uppercase font-bold text-red-700 bg-red-100/70 px-1.5 py-0.2 rounded">Primary</span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">National Emergency (Police, Fire, Medical)</div>
                     </div>
-                    <span className="text-xs bg-red-600 font-bold px-2.5 py-1 rounded-lg shadow-xs">Call</span>
+                    <span className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-lg shadow-2xs group-hover:scale-105 transition-transform">
+                      Call
+                    </span>
                   </a>
                   <a
                     href="tel:108"
-                    className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-between border border-white/15"
+                    className="p-3.5 rounded-xl bg-slate-50 hover:bg-emerald-50/60 border border-slate-200/90 hover:border-emerald-200 transition flex items-center justify-between group"
                   >
                     <div>
-                      <div className="font-extrabold text-sm text-white">108</div>
-                      <div className="text-[10.5px] text-sky-200">Gujarat Emergency Medical & Ambulance</div>
+                      <div className="font-extrabold text-base text-emerald-700">108</div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">Gujarat Emergency Medical & Ambulance</div>
                     </div>
-                    <span className="text-xs bg-emerald-600 font-bold px-2.5 py-1 rounded-lg shadow-xs">Call</span>
+                    <span className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg shadow-2xs group-hover:scale-105 transition-transform">
+                      Call
+                    </span>
                   </a>
                   <a
                     href="tel:1077"
-                    className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-between border border-white/15"
+                    className="p-3.5 rounded-xl bg-slate-50 hover:bg-sky-50/60 border border-slate-200/90 hover:border-sky-200 transition flex items-center justify-between group"
                   >
                     <div>
-                      <div className="font-extrabold text-sm text-white">1077</div>
-                      <div className="text-[10.5px] text-sky-200">District Disaster Control Room</div>
+                      <div className="font-extrabold text-base text-sky-800">1077</div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">District Disaster Control Room</div>
                     </div>
-                    <span className="text-xs bg-sky-600 font-bold px-2.5 py-1 rounded-lg shadow-xs">Call</span>
+                    <span className="text-xs bg-sky-700 hover:bg-sky-800 text-white font-bold px-3 py-1.5 rounded-lg shadow-2xs group-hover:scale-105 transition-transform">
+                      Call
+                    </span>
                   </a>
                   <a
                     href="tel:1070"
-                    className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-between border border-white/15"
+                    className="p-3.5 rounded-xl bg-slate-50 hover:bg-sky-50/60 border border-slate-200/90 hover:border-sky-200 transition flex items-center justify-between group"
                   >
                     <div>
-                      <div className="font-extrabold text-sm text-white">1070</div>
-                      <div className="text-[10.5px] text-sky-200">Gujarat State Disaster Mgmt (GSDMA)</div>
+                      <div className="font-extrabold text-base text-sky-800">1070</div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">Gujarat State Disaster Mgmt (GSDMA)</div>
                     </div>
-                    <span className="text-xs bg-sky-600 font-bold px-2.5 py-1 rounded-lg shadow-xs">Call</span>
+                    <span className="text-xs bg-sky-700 hover:bg-sky-800 text-white font-bold px-3 py-1.5 rounded-lg shadow-2xs group-hover:scale-105 transition-transform">
+                      Call
+                    </span>
                   </a>
                 </div>
               </div>
@@ -1642,48 +1616,48 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
 
         {/* ── Far Right — Expanded Disaster GIS Map & Confirmed Incidents ── */}
         <div className="w-full lg:w-[380px] xl:w-[420px] shrink-0 space-y-4">
-          <div className="bg-[#0b1324] border border-slate-700/80 rounded-2xl p-4 shadow-xl sticky top-20 text-white">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs sticky top-20 text-slate-800">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-sky-950 border border-sky-500/50 flex items-center justify-center text-xs">
+                <div className="w-7 h-7 rounded-lg bg-sky-50 border border-sky-100 flex items-center justify-center text-xs text-sky-700">
                   🗺️
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
                     {t.liveMapTitle}
                   </h3>
-                  <p className="text-[10px] text-slate-400">Gujarat SEOC & NDMA Feeds</p>
+                  <p className="text-[10px] text-slate-500">Gujarat SEOC & NDMA Feeds</p>
                 </div>
               </div>
-              <span className="text-[10px] font-bold bg-sky-950/90 text-sky-400 border border-sky-500/50 px-2.5 py-0.5 rounded-full ring-1 ring-sky-500/30">
+              <span className="text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200 px-2.5 py-0.5 rounded-full">
                 {publicIncidents.length} Active
               </span>
             </div>
 
             {/* Expanded GIS Blue Map Container (360px - 420px tall) */}
-            <div className="citizen-compact-blue-map mt-3 relative w-full h-[390px] md:h-[400px] lg:h-[410px] rounded-xl overflow-hidden border-2 border-sky-600/60 bg-[#070d18] shadow-md ring-1 ring-sky-500/20">
+            <div className="citizen-compact-blue-map relative w-full h-[360px] md:h-[380px] lg:h-[390px] rounded-xl overflow-hidden border border-slate-200 bg-[#070d18] shadow-inner">
               <div ref={compactMapContainerRef} className="absolute inset-0 w-full h-full" />
 
               {/* Empty state when 0 active incidents */}
               {publicIncidents.length === 0 && (
-                <div className="absolute inset-0 bg-[#0b1324]/95 flex flex-col items-center justify-center p-4 text-center z-10 border border-sky-500/20">
+                <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center p-4 text-center z-10 border border-slate-200">
                   <div className="text-3xl mb-1">✅</div>
-                  <div className="text-xs font-bold text-sky-200">No active disasters reported in this area.</div>
-                  <p className="text-[10px] text-slate-400 mt-1">All monitored regional zones in Gujarat are normal.</p>
+                  <div className="text-xs font-bold text-slate-800">No active disasters reported in this area.</div>
+                  <p className="text-[10px] text-slate-500 mt-1">All monitored regional zones in Gujarat are normal.</p>
                 </div>
               )}
             </div>
 
             {/* Compact Incident List Summary */}
             <div className="mt-3.5 space-y-2">
-              <div className="text-[10.5px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+              <div className="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
                 <span>Confirmed Emergency Incidents</span>
-                <span className="text-[9.5px] text-sky-400 font-semibold">{publicIncidents.length} listed</span>
+                <span className="text-[9.5px] text-sky-700 font-semibold">{publicIncidents.length} listed</span>
               </div>
               {publicIncidents.length === 0 ? (
                 <div className="text-[11px] text-slate-400 italic py-1">No active verified incidents.</div>
               ) : (
-                <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
                   {publicIncidents.map((inc) => (
                     <div
                       key={inc.id}
@@ -1692,20 +1666,20 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                           leafletCompactMapRef.current.flyTo([inc.lat, inc.lon], 8, { duration: 0.8 });
                         }
                       }}
-                      className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-sky-500/60 hover:bg-sky-950/40 transition text-xs cursor-pointer group"
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-sky-400 hover:bg-sky-50/50 transition text-xs cursor-pointer group"
                       title="Click to view on map"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-100 text-[11.5px] truncate max-w-[150px] group-hover:text-sky-300 transition">
+                        <span className="font-bold text-slate-800 text-[11.5px] truncate max-w-[150px] group-hover:text-sky-800 transition">
                           {inc.title}
                         </span>
-                        <span className={`text-[9px] px-2 py-0.5 rounded font-bold border ${darkSeverityBadge(inc.severity)}`}>
+                        <span className={`text-[9px] px-2 py-0.5 rounded font-bold border ${severityBadge(inc.severity)}`}>
                           {inc.severity}
                         </span>
                       </div>
-                      <div className="text-[10.5px] text-slate-400 truncate mt-0.5 flex items-center justify-between">
+                      <div className="text-[10.5px] text-slate-500 truncate mt-0.5 flex items-center justify-between">
                         <span>{inc.location_name}</span>
-                        <span className="text-[9.5px] text-sky-400 font-medium opacity-0 group-hover:opacity-100 transition">📍 Locate</span>
+                        <span className="text-[9.5px] text-sky-700 font-medium opacity-0 group-hover:opacity-100 transition">📍 Locate</span>
                       </div>
                     </div>
                   ))}

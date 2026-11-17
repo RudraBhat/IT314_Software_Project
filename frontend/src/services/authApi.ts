@@ -13,7 +13,7 @@
 
 import { cookies } from "next/headers";
 
-import { API_URL, SESSION_COOKIE, cookieOptions } from "@/lib/session";
+import { API_URL, setSessionCookies } from "@/lib/session";
 
 import type { UserProfile } from "../types/resq";
 
@@ -46,11 +46,8 @@ function errorText(result: BackendResult, fallback: string): string {
   return typeof message === "string" && message ? message : fallback;
 }
 
-async function startSession(accessToken: string, expiresIn: unknown): Promise<void> {
-  const maxAge = Number(expiresIn) || 3600;
-  const jar = await cookies();
-  jar.set(SESSION_COOKIE, accessToken, cookieOptions(maxAge));
-  jar.set("drch_session", "1", cookieOptions(maxAge));
+async function startSession(accessToken: string, data: Record<string, any>): Promise<void> {
+  setSessionCookies(await cookies(), { ...data, access_token: accessToken });
 }
 
 export interface AuthApiResponse {
@@ -58,6 +55,8 @@ export interface AuthApiResponse {
   message?: string;
   user?: UserProfile;
   error?: string;
+  /** Backend error code, for example GOOGLE_STAFF_NOT_ALLOWED. */
+  errorCode?: string;
   isOffline?: boolean;
 }
 
@@ -156,7 +155,7 @@ export async function verifyTotpSetup(mfaSetupToken: string, code: string): Prom
     return { success: false, isOffline: res.status === 503, error: errorText(res, "Invalid authenticator code.") };
   }
   const token = res.data.access_token || res.data.token;
-  if (token) await startSession(token, res.data.expires_in);
+  if (token) await startSession(token, res.data);
   return {
     success: true,
     user: {
@@ -179,7 +178,12 @@ export async function backendGoogleLogin(
 ): Promise<AuthApiResponse & { mfa_required?: boolean }> {
   const res = await callBackend("/api/v1/auth/google", { body: { credential }, timeoutMs: 15000 });
   if (!res.ok) {
-    return { success: false, isOffline: res.status === 503, error: errorText(res, "Google authentication failed.") };
+    return {
+      success: false,
+      isOffline: res.status === 503,
+      error: errorText(res, "Google authentication failed."),
+      errorCode: typeof res.data?.error?.code === "string" ? res.data.error.code : undefined,
+    };
   }
   if (res.data.mfa_required) {
     // The MFA challenge token stays on the server; the user finishes on the password sign-in form.
@@ -191,7 +195,7 @@ export async function backendGoogleLogin(
   }
   const token = res.data.access_token || res.data.token;
   if (!token) return { success: false, error: "Authentication response missing access token." };
-  await startSession(token, res.data.expires_in);
+  await startSession(token, res.data);
 
   const isCitizen = (res.data.user?.role ?? res.data.role) === "NORMAL_USER";
   return {
