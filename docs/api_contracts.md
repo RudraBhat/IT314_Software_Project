@@ -362,6 +362,17 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 * **Audit:** each note writes an `INCIDENT_NOTE_ADDED` entry on the incident with the note id only; the text itself stays in `incident_notes`.
 * **Errors:** `404 NOT_FOUND` (unknown incident), `422` (empty, blank or over-long body), `401`/`403` for anyone who is not signed-in Disaster Management staff.
 
+### 4.7 CSV Exports of the Incident and Dispatch Queues
+* **Paths:** `GET /api/v1/dm/incidents/export` and `GET /api/v1/dm/dispatches/export`
+* **Auth:** Staff Session (`DISASTER_MGMT`), no extra permission. Rate limited to 10 exports per hour per user.
+* **Filters:** the same query parameters as the list they come from. Incidents: `scenario`, `status`, `priority`, `from`, `to`, `q`, `near_lat`, `near_lon`, `radius_km`. Dispatches: `status`, `overdue`, `active`, `incident_id`. Both share the list's filter code, so an export always matches what the screen shows. Invalid values answer `422`.
+* **Response (200):** `text/csv; charset=utf-8` attachment (`incidents-YYYYMMDD-HHMM.csv`, `dispatches-...`) with a UTF-8 byte order mark so Excel reads names correctly, `Cache-Control: no-store`, newest first, at most 5,000 rows. `X-Export-Truncated: true` means the cap cut the file; narrow the filters to get the rest.
+* **Columns:** incidents: reference, scenario, status, priority, reported urgency, people affected, address, landmark, latitude, longitude, submitted, updated, closed, evidence files, active dispatches. Dispatches: dispatch, incident, scenario, status, priority, agency, requested by, requested, acknowledged, overdue, escalated.
+* **Privacy:** the incident export never includes the reporter's name, phone or email, or the free-text description. Dispatch instructions and the agency's acknowledging contact are also left out. Dates are UTC.
+* **Spreadsheet safety:** any cell that begins with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with a quote so it cannot run as a formula when opened.
+* **Audit:** each export writes `INCIDENTS_EXPORTED` or `DISPATCHES_EXPORTED` with the actor, row count, whether it was truncated and the filters used.
+* **Errors:** `401`/`403` for anyone who is not signed-in Disaster Management staff with a verified second factor, `422` for invalid filters.
+
 ---
 
 ## 5. Field Operations API

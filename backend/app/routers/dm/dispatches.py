@@ -183,16 +183,13 @@ def create_dispatch(
 # ------------------------------------------------------------- queue and detail
 
 
-@router.get("/dispatches")
-def list_dispatches(
-    *,
-    page: Page,
-    status: Annotated[list[Literal["REQUESTED", "ACKNOWLEDGED", "DISPATCHED", "REJECTED", "FAILED", "COMPLETED"]] | None, Query()] = None,
-    overdue: bool = False,
-    active: bool = False,
-    incident_id: uuid.UUID | None = None,
-    principal: DMUser,
-):
+DispatchStatus = Literal["REQUESTED", "ACKNOWLEDGED", "DISPATCHED", "REJECTED", "FAILED", "COMPLETED"]
+
+
+def dispatch_filters(
+    *, status: list[DispatchStatus] | None, overdue: bool, active: bool, incident_id: uuid.UUID | None
+) -> Filters:
+    """The dispatch queue's filters, shared by the on-screen list and its CSV export."""
     f = Filters()
     f.params["timeout"] = _timeout()
     if status:
@@ -203,6 +200,20 @@ def list_dispatches(
         f.add("d.status = 'REQUESTED' AND d.created_at < now() - make_interval(mins => %(timeout)s)")
     if incident_id:
         f.add("d.incident_id = %(incident)s", incident=incident_id)
+    return f
+
+
+@router.get("/dispatches")
+def list_dispatches(
+    *,
+    page: Page,
+    status: Annotated[list[DispatchStatus] | None, Query()] = None,
+    overdue: bool = False,
+    active: bool = False,
+    incident_id: uuid.UUID | None = None,
+    principal: DMUser,
+):
+    f = dispatch_filters(status=status, overdue=overdue, active=active, incident_id=incident_id)
     where = f.where()
     with db.transaction() as conn:
         total = conn.execute(

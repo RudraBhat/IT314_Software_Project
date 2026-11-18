@@ -58,22 +58,19 @@ _SORTS = {
 }
 
 
-@router.get("/incidents")
-def list_incidents(
+def incident_filters(
     *,
-    page: Page,
-    scenario: Scenario | None = None,
-    status: Annotated[list[IncidentStatus] | None, Query()] = None,
-    priority: Annotated[list[Priority | Literal["UNASSIGNED"]] | None, Query()] = None,
-    from_: Annotated[date | None, Query(alias="from")] = None,
-    to: date | None = None,
-    q: Annotated[str | None, Query(max_length=100)] = None,
-    near_lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
-    near_lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
-    radius_km: Annotated[float, Query(gt=0, le=500)] = 10,
-    sort: Literal["newest", "oldest", "priority", "updated"] = "newest",
-    principal: DMUser,
-):
+    scenario: Scenario | None,
+    status: list[IncidentStatus] | None,
+    priority: list[Priority | Literal["UNASSIGNED"]] | None,
+    from_: date | None,
+    to: date | None,
+    q: str | None,
+    near_lat: float | None,
+    near_lon: float | None,
+    radius_km: float,
+) -> Filters:
+    """The queue's filters, shared by the on-screen list and its CSV export so they can never disagree."""
     f = Filters()
     if scenario:
         f.add("i.scenario = %(scenario)s::scenario_type", scenario=scenario_db(scenario))
@@ -106,7 +103,29 @@ def list_incidents(
         )
     elif (near_lat is None) != (near_lon is None):
         raise ApiError(422, "VALIDATION_FAILED", "near_lat and near_lon must be given together")
+    return f
 
+
+@router.get("/incidents")
+def list_incidents(
+    *,
+    page: Page,
+    scenario: Scenario | None = None,
+    status: Annotated[list[IncidentStatus] | None, Query()] = None,
+    priority: Annotated[list[Priority | Literal["UNASSIGNED"]] | None, Query()] = None,
+    from_: Annotated[date | None, Query(alias="from")] = None,
+    to: date | None = None,
+    q: Annotated[str | None, Query(max_length=100)] = None,
+    near_lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
+    near_lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    radius_km: Annotated[float, Query(gt=0, le=500)] = 10,
+    sort: Literal["newest", "oldest", "priority", "updated"] = "newest",
+    principal: DMUser,
+):
+    f = incident_filters(
+        scenario=scenario, status=status, priority=priority, from_=from_, to=to, q=q,
+        near_lat=near_lat, near_lon=near_lon, radius_km=radius_km,
+    )
     where = f.where()
     with db.transaction() as conn:
         total = conn.execute(
