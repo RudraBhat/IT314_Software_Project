@@ -377,7 +377,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
           // Preserve red for critical, orange for high, amber for moderate
           const color =
             inc.severity === "CRITICAL" ? "#dc2626" : inc.severity === "HIGH" ? "#ea580c" : "#d97706";
-          const iconSymbol = inc.category.includes("Flood") ? "🌊" : inc.category.includes("Fire") ? "🔥" : "🌀";
+          const iconSymbol = inc.category === "Cyclone / Coastal Flooding" ? "🌀" : inc.category.includes("Fire") ? "🔥" : "🌊";
 
           const icon = L.divIcon({
             className: "",
@@ -1103,9 +1103,9 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                           <span className="text-2xl">{dt.icon}</span>
                           <div>
                             <div className="text-xs font-bold text-slate-900 leading-tight">
-                              {dt.type.includes("Flood")
+                              {dt.type === "Flood / Urban Flood"
                                 ? t.catFlood
-                                : dt.type.includes("Cyclone")
+                                : dt.type === "Cyclone / Coastal Flooding"
                                 ? t.catCyclone
                                 : t.catFire}
                             </div>
@@ -1349,7 +1349,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                         >
                           <div className="flex items-center gap-3">
                             <span className="text-2xl">
-                              {report.category.includes("Flood") ? "🌊" : report.category.includes("Fire") ? "🔥" : "🌀"}
+                              {report.category === "Cyclone / Coastal Flooding" ? "🌀" : report.category.includes("Fire") ? "🔥" : "🌊"}
                             </span>
                             <div>
                               <div className="flex items-center gap-2">
