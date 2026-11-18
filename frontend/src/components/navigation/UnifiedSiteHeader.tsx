@@ -7,8 +7,8 @@ import { signOut } from "@/app/login/actions";
 
 export interface SessionInfo {
   authenticated: boolean;
-  dm: boolean;
-  citizen: boolean;
+  dm?: boolean;
+  citizen?: boolean;
   role: string | null;
   name: string | null;
 }

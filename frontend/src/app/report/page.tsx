@@ -47,6 +47,8 @@ const URGENCIES = [
 
 interface SessionInfo {
   authenticated: boolean;
+  dm?: boolean;
+  citizen?: boolean;
   role: string | null;
   name: string | null;
 }
