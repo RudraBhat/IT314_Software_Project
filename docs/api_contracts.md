@@ -934,7 +934,7 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 ### 8.2.1 Multilingual Disaster Classifier for Ingested Text
 When `DISASTER_CLASSIFIER_URL` is configured, the ingestion worker sends each new GNEWS/BLUESKY signal's sanitized text to the deployed IndicBERT disaster classifier. Source, timestamps, language hint, location, and verification link remain in the local signal record; the model API accepts text only. The worker sends PII-scrubbed original wording and does not translate it.
 
-* **Method:** `POST https://indicbert-disaster-api.onrender.com/predict` (configurable with `DISASTER_CLASSIFIER_URL`).
+* **Method:** `POST <DISASTER_CLASSIFIER_URL>` (for example `https://<classifier-host>/predict`; the real URL is set only in the local `.env` and the deployed service's environment).
 * **Request headers:** `Content-Type: application/json`, `Accept: application/json`; no authentication is currently required by this deployed endpoint.
 * **Request body:**
 ```json

@@ -45,7 +45,7 @@ services:
       - key: AI_TRIAGE_TOKEN
         sync: false
       - key: DISASTER_CLASSIFIER_URL
-        value: https://indicbert-disaster-api.onrender.com/predict
+        sync: false          # https://<classifier-host>/predict; set in the Render dashboard, empty = AI_TRIAGE_URL prelabel path
       - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: GOOGLE_CLIENT_ID
