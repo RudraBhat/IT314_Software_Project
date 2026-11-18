@@ -31,6 +31,7 @@ function Incidents() {
     from: params.get("from") ?? undefined,
     to: params.get("to") ?? undefined,
     q: params.get("q") ?? undefined,
+    withdrawal_requested: params.get("withdrawal_requested") === "true" ? true : undefined,
     sort: params.get("sort") ?? "newest",
     page: Number(params.get("page") ?? 1),
     limit: 25,
@@ -48,7 +49,7 @@ function Incidents() {
     router.replace(`${pathname}?${next.toString()}`);
   }
 
-  const activeFilters = ["scenario", "status", "priority", "from", "to", "q"].some((k) => params.has(k));
+  const activeFilters = ["scenario", "status", "priority", "from", "to", "q", "withdrawal_requested"].some((k) => params.has(k));
 
   return (
     <>
@@ -108,7 +109,17 @@ function Incidents() {
           <Field label="Reported to">
             {(id) => <Input id={id} type="date" value={query.to ?? ""} onChange={(e) => update({ to: e.target.value || null })} />}
           </Field>
-          <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+          <div className="flex items-end sm:col-span-2">
+            <label className="flex items-center gap-2 pb-2 text-sm">
+              <input
+                type="checkbox"
+                checked={query.withdrawal_requested === true}
+                onChange={(e) => update({ withdrawal_requested: e.target.checked ? "true" : null })}
+              />
+              Reporter asked to withdraw
+            </label>
+          </div>
+          <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
             <Button type="submit" variant="primary">Search</Button>
             {activeFilters && (
               <Button
@@ -161,6 +172,7 @@ function Incidents() {
                           {i.evidence_count} evidence · {i.active_dispatches} active dispatch{i.active_dispatches === 1 ? "" : "es"}
                           {i.canonical_incident_id && " · linked duplicate"}
                         </p>
+                        {i.withdrawal_requested && <p className="mt-0.5 text-xs font-medium text-high">Reporter asked to withdraw</p>}
                       </td>
                       <td className="px-3 py-3"><StatusBadge status={i.status} /></td>
                       <td className="px-3 py-3"><PriorityBadge priority={i.verified_priority} /></td>

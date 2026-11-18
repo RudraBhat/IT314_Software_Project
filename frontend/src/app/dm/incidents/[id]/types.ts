@@ -6,6 +6,7 @@ export type IncidentDetail = {
   reported_urgency: string | null;
   people_affected: number | null;
   status: string;
+  withdrawal_requested: boolean;
   verified_priority: string | null;
   priority_rationale: string | null;
   verified_at: string | null;

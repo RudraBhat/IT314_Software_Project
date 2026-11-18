@@ -1579,7 +1579,10 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                     {shelters.map((shelter) => (
                       <div key={shelter.id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-xs">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-slate-800">{shelter.name}</span>
+                          <span className="font-bold text-slate-800">
+                            {shelter.name}
+                            {shelter.is_simulated && <span className="ml-1.5 text-[9.5px] font-semibold text-slate-400">(sample data)</span>}
+                          </span>
                           <span
                             className={`text-[9.5px] px-2 py-0.5 rounded-full font-bold border ${
                               shelter.status === "OPERATIONAL"

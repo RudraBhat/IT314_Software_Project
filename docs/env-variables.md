@@ -46,7 +46,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `INGESTION_WORKER_ENABLED` | no | `true` in development, `false` elsewhere | Runs the in-process poller. Keep it disabled in staging when GitHub Actions owns the schedule. |
 | `GIT_SHA` | no | `dev` | Commit id shown by `/api/v1/health` (CD smoke test). |
 | `RATE_LIMIT_ENABLED` | no | `true` | Set `false` only in automated tests. |
-| `RESQ_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff`. |
+| `RESQ_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff` and `create-admin`. |
 | `RESQ_FIELD_PASSWORD` (S) | no | - | Non-interactive password for the field-team provisioning command in `python -m app.cli`. |
 | `DRCH_STAFF_PASSWORD` (S) | no | - | Backward-compatible alias for `RESQ_STAFF_PASSWORD`. |
 | `DRCH_FIELD_PASSWORD` (S) | no | - | Backward-compatible alias for `RESQ_FIELD_PASSWORD`. |

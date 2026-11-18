@@ -124,6 +124,37 @@ def send_invitation_email(
     return _send_raw_email(to_email, subject, text, html)
 
 
+def send_credentials_reset_email(to_email: str, recipient_name: str, role_name: str, token: str) -> bool:
+    """Tell a staff member an administrator reset their sign-in, with a single-use link to set it up again."""
+    settings = get_settings()
+    setup_link = f"{settings.frontend_url}/setup-account?token={token}"
+    hours = settings.invitation_token_hours
+    subject = "Your sign-in was reset — Gujarat Disaster Management Platform (DRCH)"
+    text = (
+        f"Hello {recipient_name},\n\n"
+        f"An administrator reset the sign-in for your {role_name} account. Your old password and authenticator "
+        f"no longer work. To get back in, open this link and choose a new password and set up your authenticator "
+        f"app again:\n{setup_link}\n\n"
+        f"The link works once and expires in {hours} hours.\n\n"
+        "If you did not expect this, contact your administrator before using the link.\n\n"
+        "Gujarat State Disaster Management Operations"
+    )
+    html = f"""<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2 style="color: #b91c1c;">Gujarat Disaster Response Coordination Hub</h2>
+    <p>Hello <strong>{recipient_name}</strong>,</p>
+    <p>An administrator reset the sign-in for your <strong>{role_name}</strong> account. Your old password and authenticator no longer work.</p>
+    <p style="margin: 30px 0;">
+        <a href="{setup_link}" style="background-color: #b91c1c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Set a new password</a>
+    </p>
+    <p style="font-size: 0.9em; color: #666;">Or copy and paste this link in your browser:<br/><a href="{setup_link}">{setup_link}</a></p>
+    <p style="font-size: 0.85em; color: #888;">The link works once and expires in {hours} hours. If you did not expect this, contact your administrator before using it.</p>
+</body>
+</html>"""
+    return _send_raw_email(to_email, subject, text, html)
+
+
 def send_verification_email(to_email: str, recipient_name: str) -> bool:
     """Citizen email-verification STUB (S1-03): the link only goes to the in-memory outbox and is never emailed.
 

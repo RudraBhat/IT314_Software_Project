@@ -242,3 +242,38 @@ def test_email_copy_is_sent_after_commit_and_dropped_on_rollback(make):
     assert mail and any("Committed" in s for s in subjects)
     assert not any("Rolled back" in s for s in subjects)
 
+
+
+# --------------------------------------------------------------------------- withdrawal flag for dispatchers
+
+
+def _queue(client, staff, **params):
+    r = client.get("/api/v1/dm/incidents", headers=staff["headers"], params={"limit": 100, **params})
+    assert r.status_code == 200, r.text
+    return {i["incident_id"]: i for i in r.json()["items"]}
+
+
+def test_dispatchers_see_which_reports_the_reporter_wants_withdrawn(client, make, sql):
+    staff = make.staff()
+    citizen = make.citizen()
+    iid = _report(client, citizen)
+    ref = client.get(f"/api/v1/dm/incidents/{iid}", headers=staff["headers"]).json()["incident_ref"]
+
+    assert _queue(client, staff, q=ref)[iid]["withdrawal_requested"] is False
+    assert iid not in _queue(client, staff, q=ref, withdrawal_requested="true")
+
+    client.post(f"/api/v1/me/incidents/{iid}/withdrawal-request", headers=citizen["headers"], json={"reason": "Duplicate"})
+    assert _queue(client, staff, q=ref)[iid]["withdrawal_requested"] is True
+    assert iid in _queue(client, staff, q=ref, withdrawal_requested="true")
+    assert client.get(f"/api/v1/dm/incidents/{iid}", headers=staff["headers"]).json()["withdrawal_requested"] is True
+
+    # once help has been sent the request is stale and the flag goes away
+    sql.execute("UPDATE incidents SET status = 'DISPATCHED', verified_priority = 'HIGH', verified_at = now() WHERE incident_id = %s", (iid,))
+    assert _queue(client, staff, q=ref)[iid]["withdrawal_requested"] is False
+    assert iid not in _queue(client, staff, q=ref, withdrawal_requested="true")
+    assert client.get(f"/api/v1/dm/incidents/{iid}", headers=staff["headers"]).json()["withdrawal_requested"] is False
+
+
+def test_the_flag_filter_rejects_a_non_boolean(client, make):
+    r = client.get("/api/v1/dm/incidents", headers=make.staff()["headers"], params={"withdrawal_requested": "maybe"})
+    assert r.status_code == 422
