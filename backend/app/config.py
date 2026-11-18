@@ -81,6 +81,7 @@ class Settings:
     news_rss_enabled: bool = False
     bluesky_search_enabled: bool = False
     bluesky_search_url: str = ""
+    disaster_classifier_url: str | None = None
     ingest_interval_seconds: int = 900
     ingestion_worker_enabled: bool = True
 
@@ -144,6 +145,7 @@ def get_settings() -> Settings:
         news_rss_enabled=_bool("NEWS_RSS_ENABLED", False),
         bluesky_search_enabled=_bool("BLUESKY_SEARCH_ENABLED", False),
         bluesky_search_url=os.getenv("BLUESKY_SEARCH_URL", "").strip(),
+        disaster_classifier_url=os.getenv("DISASTER_CLASSIFIER_URL") or None,
         ingest_interval_seconds=max(1, _int("INGEST_INTERVAL_SECONDS", 900)),
         # The local backend owns polling in development; staging/production use the
         # external scheduled trigger unless an operator explicitly enables this worker.

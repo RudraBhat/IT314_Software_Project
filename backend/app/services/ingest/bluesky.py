@@ -88,13 +88,14 @@ def parse_search_response(
         text = sanitise_signal_text(MENTION_RE.sub(" ", str(record.get("text") or "")))
         if not text or not mentions_hazard(text):
             continue
-        language = detect_language(text)
-        if language != "en":
-            continue
+        langs = record.get("langs") if isinstance(record.get("langs"), list) else []
+        declared_language = str(langs[0])[:10] if langs else None
+        # Latin text without a platform language hint stays undetermined instead of being
+        # mislabeled English; the classifier receives the original text and detects it itself.
+        language = detect_language(text, declared_language, latin_fallback="und")
         location = locate_gujarat_text(text)
         if location is None:
             continue
-        langs = record.get("langs") if isinstance(record.get("langs"), list) else []
         rows.append({
             "source": "BLUESKY",
             "source_uid": stable_uid("bluesky", uri),
