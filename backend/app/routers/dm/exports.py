@@ -46,6 +46,10 @@ def export_incidents(
     from_: Annotated[date | None, Query(alias="from")] = None,
     to: date | None = None,
     q: Annotated[str | None, Query(max_length=100)] = None,
+    withdrawal_requested: Annotated[
+        bool | None,
+        Query(description="true: only reports whose reporter asked to withdraw them"),
+    ] = None,
     near_lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
     near_lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
     radius_km: Annotated[float, Query(gt=0, le=500)] = 10,
@@ -55,8 +59,16 @@ def export_incidents(
     No reporter name, phone or email and no free-text description. Every export is audited.
     """
     f = incident_filters(
-        scenario=scenario, status=status, priority=priority, from_=from_, to=to, q=q,
-        near_lat=near_lat, near_lon=near_lon, radius_km=radius_km,
+        scenario=scenario,
+        status=status,
+        priority=priority,
+        from_=from_,
+        to=to,
+        q=q,
+        withdrawal_requested=withdrawal_requested,
+        near_lat=near_lat,
+        near_lon=near_lon,
+        radius_km=radius_km,
     )
     with db.transaction() as conn:
         rows = conn.execute(
@@ -83,6 +95,7 @@ def export_incidents(
                     "from": str(from_) if from_ else None,
                     "to": str(to) if to else None,
                     "q": (q or "").strip() or None,
+                    "withdrawal_requested": withdrawal_requested,
                     "near": [near_lat, near_lon, radius_km] if near_lat is not None and near_lon is not None else None,
                 },
             },

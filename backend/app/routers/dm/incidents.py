@@ -68,20 +68,17 @@ _SORTS = {
 
 def incident_filters(
     *,
-    page: Page,
     scenario: Scenario | None = None,
-    status: Annotated[list[IncidentStatus] | None, Query()] = None,
-    priority: Annotated[list[Priority | Literal["UNASSIGNED"]] | None, Query()] = None,
-    from_: Annotated[date | None, Query(alias="from")] = None,
+    status: list[IncidentStatus] | None = None,
+    priority: list[Priority | Literal["UNASSIGNED"]] | None = None,
+    from_: date | None = None,
     to: date | None = None,
-    q: Annotated[str | None, Query(max_length=100)] = None,
-    withdrawal_requested: Annotated[bool | None, Query(description="true: only reports whose reporter asked to withdraw them")] = None,
-    near_lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
-    near_lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
-    radius_km: Annotated[float, Query(gt=0, le=500)] = 10,
-    sort: Literal["newest", "oldest", "priority", "updated"] = "newest",
-    principal: DMUser,
-):
+    q: str | None = None,
+    withdrawal_requested: bool | None = None,
+    near_lat: float | None = None,
+    near_lon: float | None = None,
+    radius_km: float = 10,
+) -> Filters:
     f = Filters()
     if scenario:
         f.add("i.scenario = %(scenario)s::scenario_type", scenario=scenario_db(scenario))
@@ -129,6 +126,10 @@ def list_incidents(
     from_: Annotated[date | None, Query(alias="from")] = None,
     to: date | None = None,
     q: Annotated[str | None, Query(max_length=100)] = None,
+    withdrawal_requested: Annotated[
+        bool | None,
+        Query(description="true: only reports whose reporter asked to withdraw them"),
+    ] = None,
     near_lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
     near_lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
     radius_km: Annotated[float, Query(gt=0, le=500)] = 10,
@@ -136,8 +137,16 @@ def list_incidents(
     principal: DMUser,
 ):
     f = incident_filters(
-        scenario=scenario, status=status, priority=priority, from_=from_, to=to, q=q,
-        near_lat=near_lat, near_lon=near_lon, radius_km=radius_km,
+        scenario=scenario,
+        status=status,
+        priority=priority,
+        from_=from_,
+        to=to,
+        q=q,
+        withdrawal_requested=withdrawal_requested,
+        near_lat=near_lat,
+        near_lon=near_lon,
+        radius_km=radius_km,
     )
     where = f.where()
     with db.transaction() as conn:
