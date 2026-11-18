@@ -16,6 +16,7 @@ import httpx
 
 from app import db
 from app.config import get_settings
+from app.services.ai_provider import scrub_pii
 from app.services.ingest.base import Adapter
 from app.services.ingest.bluesky import BlueskySearchAdapter
 from app.services.ingest.news import GoogleNewsAdapter
@@ -24,6 +25,21 @@ from app.services.ingest.signals import ReplaySignalAdapter
 
 logger = logging.getLogger("drch.ingest")
 ALLOWED_TRIAGE_LABELS = {"CYCLONE", "INDUSTRIAL_FIRE", "URBAN_FLOODING", "OTHER"}
+CLASSIFIER_LABELS = {
+    "fire": "Fire",
+    "earthquake": "Earthquake",
+    "cyclone": "Cyclone",
+    "flood": "Flood",
+    "non_disaster": "Non-Disaster",
+}
+CLASSIFIER_SCENARIOS = {
+    "cyclone": "CYCLONE",
+    "flood": "URBAN_FLOODING",
+    # Generic fire does not establish the project's narrower industrial-fire scenario.
+    "fire": None,
+    "earthquake": None,
+    "non_disaster": None,
+}
 SOCIAL_SIGNAL_SOURCES = {"BLUESKY", "GNEWS"}
 MAX_SOCIAL_TRIAGE_PER_RUN = 50
 # Shared by the in-process worker, the protected manual endpoint, and the scheduled
@@ -118,6 +134,84 @@ def _prelabel(text: str, settings=None) -> tuple[str | None, float | None, dict[
         return None, None, None
 
 
+def _classify_with_indicbert(
+    text: str, settings=None,
+) -> tuple[str | None, float | None, dict[str, Any] | None]:
+    """Call the configured multilingual text classifier and keep its raw class for review."""
+    settings = settings or get_settings()
+    url = getattr(settings, "disaster_classifier_url", None)
+    if not url:
+        return None, None, None
+    try:
+        response = httpx.post(
+            url,
+            json={"text": scrub_pii(text)},
+            headers={"Accept": "application/json"},
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        raw = response.json()
+        if not isinstance(raw, dict):
+            raise TypeError("classifier response was not an object")
+
+        raw_prediction = str(raw.get("prediction", "")).strip()
+        prediction_key = raw_prediction.casefold().replace("-", "_").replace(" ", "_")
+        prediction = CLASSIFIER_LABELS.get(prediction_key)
+        confidence_value = raw.get("confidence")
+        if prediction is None or isinstance(confidence_value, bool):
+            raise ValueError("classifier response had an unknown label or invalid confidence")
+        confidence = float(confidence_value)
+        if not 0 <= confidence <= 1:
+            raise ValueError("classifier confidence was outside [0, 1]")
+
+        probabilities: dict[str, float] = {}
+        raw_probabilities = raw.get("probabilities")
+        if raw_probabilities is not None:
+            if not isinstance(raw_probabilities, dict) or len(raw_probabilities) > len(CLASSIFIER_LABELS):
+                raise ValueError("classifier probabilities were malformed")
+            for key, value in raw_probabilities.items():
+                normalized_key = str(key).strip().casefold().replace("-", "_").replace(" ", "_")
+                canonical = CLASSIFIER_LABELS.get(normalized_key)
+                if canonical is None or isinstance(value, bool):
+                    raise ValueError("classifier probabilities had an unknown class or value")
+                score = float(value)
+                if not 0 <= score <= 1:
+                    raise ValueError("classifier probability was outside [0, 1]")
+                probabilities[canonical] = round(score, 6)
+
+        scenario = CLASSIFIER_SCENARIOS[prediction_key]
+        threshold = getattr(settings, "ai_low_confidence_threshold", 0.6)
+        low_confidence = confidence < threshold
+        suggested_scenario = scenario if scenario and not low_confidence else None
+        uncertainty = None
+        if low_confidence:
+            uncertainty = "Classifier confidence is below the review threshold; choose a scenario manually."
+        elif prediction_key == "fire":
+            uncertainty = "The model's generic Fire class does not confirm an industrial fire; review before choosing a scenario."
+        elif prediction_key == "earthquake":
+            uncertainty = "Earthquake is outside the platform's supported scenarios; dispatcher review is required."
+        elif prediction_key == "non_disaster":
+            uncertainty = "The model predicted Non-Disaster. Keep pending for human review; it was not dismissed automatically."
+
+        details: dict[str, Any] = {
+            "model": "indicbert-disaster-api",
+            "priority": None,
+            "uncertainty": uncertainty,
+            "factors": [{"name": "disaster_classifier", "detail": prediction, "weight": round(confidence, 6)}],
+            "classification": {
+                "prediction": prediction,
+                "is_disaster": prediction_key != "non_disaster",
+                "confidence": round(confidence, 6),
+                "probabilities": probabilities,
+            },
+        }
+        return suggested_scenario, round(confidence, 6), details
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
+        logger.warning("Multilingual signal classifier unavailable (%s); signal remains for human review",
+                       _safe_error_message(exc))
+        return None, None, None
+
+
 def _safe_error_message(exc: Exception) -> str:
     """Keep feed URLs, response bodies and source text out of run history."""
     if isinstance(exc, httpx.HTTPStatusError):
@@ -154,7 +248,8 @@ def _set_incremental_watermark(adapter: Adapter, settings) -> None:
 
 def _triage_unprocessed_social_signals(sources: list[str], settings) -> int:
     """Classify a bounded queue of newly stored social signals, at most once per text version."""
-    if not sources or not settings.database_url or not settings.ai_triage_url:
+    classifier_url = getattr(settings, "disaster_classifier_url", None)
+    if not sources or not settings.database_url or not (classifier_url or settings.ai_triage_url):
         return 0
     with db.transaction() as conn:
         rows = conn.execute(
@@ -170,7 +265,10 @@ def _triage_unprocessed_social_signals(sources: list[str], settings) -> int:
 
     processed = 0
     for row in rows:
-        label, confidence, details = _prelabel(row["content_text"], settings)
+        if classifier_url:
+            label, confidence, details = _classify_with_indicbert(row["content_text"], settings)
+        else:
+            label, confidence, details = _prelabel(row["content_text"], settings)
         with db.transaction() as conn:
             updated = conn.execute(
                 """
@@ -486,7 +584,7 @@ def run_ingestion(source: str = "ALL", settings=None) -> list[dict[str, Any]]:
         try:
             triaged = _triage_unprocessed_social_signals(social_sources, settings)
             if triaged:
-                logger.info("Triaged %s new social signals (limit %s per run)",
+                logger.info("Classified %s new social signals (limit %s per run)",
                             triaged, MAX_SOCIAL_TRIAGE_PER_RUN)
         except Exception:
             logger.exception("Social triage queue failed; pending signals remain available for review")
