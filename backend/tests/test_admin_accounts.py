@@ -457,6 +457,71 @@ def test_only_an_mfa_verified_administrator_can_sign_someone_out(make, client):
     assert client.get("/api/v1/dm/dashboard", headers=target["headers"]).status_code == 200  # nothing changed
 
 
+# --------------------------------------------------------------------------- edit a person's details
+
+DETAILS = {"full_name": "Meera Shah", "designation": "Duty Officer", "reason": "Name was misspelled at invitation"}
+
+
+def _edit(client, headers, user_id, body=DETAILS):
+    return client.put(f"{URL}/{user_id}/profile", headers=headers, json=body)
+
+
+def test_editing_details_changes_the_name_and_is_audited_with_before_and_after(make, client, sql):
+    admin, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    before = sql.execute("SELECT full_name, designation, email FROM users WHERE user_id = %s", (staff["user_id"],)).fetchone()
+
+    r = _edit(client, headers, staff["user_id"])
+    assert r.status_code == 200
+    assert r.json() == {"user_id": str(staff["user_id"]), "full_name": "Meera Shah", "designation": "Duty Officer"}
+
+    row = _find(client, headers, q=staff["email"])["items"][0]
+    assert row["full_name"] == "Meera Shah" and row["designation"] == "Duty Officer"
+    assert sql.execute("SELECT email FROM users WHERE user_id = %s", (staff["user_id"],)).fetchone()["email"] == before["email"]
+
+    entry = sql.execute(
+        "SELECT actor_id, rationale, before_state, after_state FROM audit_logs "
+        "WHERE entity_id = %s AND action = 'PROFILE_UPDATED'",
+        (staff["user_id"],),
+    ).fetchone()
+    assert entry["actor_id"] == admin["user_id"] and entry["rationale"] == DETAILS["reason"]
+    assert entry["before_state"] == {"full_name": before["full_name"], "designation": before["designation"]}
+    assert entry["after_state"] == {"full_name": "Meera Shah", "designation": "Duty Officer"}
+
+
+def test_a_blank_designation_clears_it_and_whitespace_is_trimmed(make, client):
+    _, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    assert _edit(client, headers, staff["user_id"]).status_code == 200
+    cleared = _edit(client, headers, staff["user_id"], {**DETAILS, "full_name": "  Meera Shah  ", "designation": "   "})
+    assert cleared.status_code == 200
+    assert cleared.json()["full_name"] == "Meera Shah" and cleared.json()["designation"] is None
+
+
+def test_editing_details_guards(make, client):
+    admin, headers = _admin(make)
+    staff = make.staff("DISPATCH")
+    assert _edit(client, headers, staff["user_id"]).status_code == 200
+    same = _edit(client, headers, staff["user_id"])
+    assert same.status_code == 409 and same.json()["error"]["code"] == "NO_CHANGE"
+    assert _edit(client, headers, admin["user_id"]).status_code == 200  # your own details are editable
+    assert _edit(client, headers, make.citizen()["user_id"]).status_code == 404
+    assert _edit(client, headers, uuid.uuid4()).status_code == 404
+    for bad in ({**DETAILS, "full_name": "M"}, {**DETAILS, "full_name": "   "}, {**DETAILS, "reason": "no"},
+                {**DETAILS, "designation": "x" * 121}, {"reason": DETAILS["reason"]}):
+        assert _edit(client, headers, staff["user_id"], bad).status_code == 422, bad
+
+
+def test_only_an_mfa_verified_administrator_can_edit_details(make, client):
+    target = make.staff("DISPATCH")
+    admin = make.user("APP_MGMT")
+    assert _edit(client, {}, target["user_id"]).status_code == 401
+    assert _edit(client, make.token(admin, mfa=False), target["user_id"]).status_code == 401
+    assert _edit(client, make.citizen()["headers"], target["user_id"]).status_code == 403
+    assert _edit(client, make.field_team_user()["headers"], target["user_id"]).status_code == 403
+    assert _edit(client, make.staff("SUPERVISOR")["headers"], target["user_id"]).status_code == 403
+
+
 # --------------------------------------------------------------------------- system status
 
 

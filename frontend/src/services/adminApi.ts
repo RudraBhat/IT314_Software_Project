@@ -186,6 +186,12 @@ export const getSystemStatus = () => request<SystemStatus>("system");
 /** Check the audit log's hash chain. The check is itself recorded in the log. */
 export const verifyAudit = () => request<AuditVerification>("audit/verify", { method: "POST", body: {} });
 
+export type ProfileResult = { user_id: string; full_name: string; designation: string | null };
+
+/** Correct a staff member's name or designation. The email address cannot be changed. Reason is audited. */
+export const updateProfile = (userId: string, details: { full_name: string; designation: string | null }, reason: string) =>
+  request<ProfileResult>(`accounts/${encodeURIComponent(userId)}/profile`, { method: "PUT", body: { ...details, reason } });
+
 /** End every session of an active account (it stays usable and the person signs in again). Reason is audited. */
 export const signOutAccount = (userId: string, reason: string) =>
   request<StatusChangeResult & { signed_out: boolean }>(`accounts/${encodeURIComponent(userId)}/sign-out`, { method: "POST", body: { reason } });

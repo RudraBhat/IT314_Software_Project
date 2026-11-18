@@ -212,7 +212,7 @@ def _lock_staff_account(conn, user_id: uuid.UUID) -> dict:
     """Lock and return a staff account (citizens are not manageable here: 404)."""
     row = conn.execute(
         """
-        SELECT u.user_id, u.email, u.full_name, r.code AS role, u.status::text AS status,
+        SELECT u.user_id, u.email, u.full_name, u.designation, r.code AS role, u.status::text AS status,
                a.mfa_enabled, a.password_hash IS NOT NULL AS has_password
         FROM users u
         JOIN roles r ON r.role_id = u.role_id
@@ -596,6 +596,42 @@ def system_status(principal: AdminUser):
         },
         "checked_at": datetime.now(UTC),
     }
+
+
+class ProfileChange(BaseModel):
+    full_name: str = Field(min_length=2, max_length=120)
+    designation: str | None = Field(default=None, max_length=120)
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.put("/accounts/{user_id}/profile", dependencies=[rate_limit("admin-account", 30, 3600)])
+def update_profile(user_id: uuid.UUID, body: ProfileChange, principal: AdminUser):
+    """Correct a staff member's name or designation, with a reason (audited with before and after).
+
+    The email address is the sign-in identity and is never changed here. Applies to every staff role,
+    including your own account. Citizens are not manageable here: 404.
+    """
+    name = body.full_name.strip()
+    designation = (body.designation or "").strip() or None
+    if len(name) < 2:
+        raise ApiError(422, "VALIDATION_FAILED", "Enter the person's full name")
+    with db.transaction() as conn:
+        target = _lock_staff_account(conn, user_id)
+        if name == target["full_name"] and designation == target["designation"]:
+            raise conflict("NO_CHANGE", "These are already this person's details.")
+        conn.execute("UPDATE users SET full_name = %s, designation = %s WHERE user_id = %s", (name, designation, user_id))
+        audit.record(
+            conn,
+            actor=principal,
+            action="PROFILE_UPDATED",
+            entity_type="user",
+            entity_id=user_id,
+            rationale=body.reason.strip(),
+            before={"full_name": target["full_name"], "designation": target["designation"]},
+            after={"full_name": name, "designation": designation},
+            ip=principal.ip,
+        )
+    return {"user_id": str(user_id), "full_name": name, "designation": designation}
 
 
 class PermissionChange(BaseModel):

@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Badge, Button, Card, Dialog, EmptyState, ErrorState, Field, Input, LoadingRows, Notice, Pagination, Select, Textarea } from "@/components/ui";
 import { useAction } from "@/components/use-action";
 import { formatDateTime, timeAgo } from "@/lib/format";
-import { disableAccount, enableAccount, exportAccounts, listAccounts, resetCredentials, setPermissions, signOutAccount, type AccountStatus, type AccountsPage, type StaffAccount } from "@/services/adminApi";
+import { disableAccount, enableAccount, exportAccounts, listAccounts, resetCredentials, setPermissions, signOutAccount, updateProfile, type AccountStatus, type AccountsPage, type StaffAccount } from "@/services/adminApi";
 import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
 
 import type { Tone } from "@/components/ui";
@@ -30,7 +30,7 @@ const STATUS_TONE: Record<AccountStatus, Tone> = {
 const ROLES = Object.keys(ROLE_LABEL) as InvitableRole[];
 const STATUSES: AccountStatus[] = ["ACTIVE", "PENDING_SETUP", "DISABLED", "LOCKED"];
 
-type Action = "disable" | "enable" | "reset" | "access" | "signout";
+type Action = "disable" | "enable" | "reset" | "access" | "signout" | "details";
 
 const PERMISSION_INFO: { code: string; name: string; hint: string }[] = [
   { code: "DISPATCH", name: "Dispatch", hint: "Dispatch field teams to verified incidents" },
@@ -60,6 +60,8 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
   const [reason, setReason] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [granted, setGranted] = useState<string[]>([]);
+  const [name, setName] = useState("");
+  const [designation, setDesignation] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -88,6 +90,8 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
   function ask(account: StaffAccount, action: Action) {
     setReason("");
     setGranted(account.permissions);
+    setName(account.full_name);
+    setDesignation(account.designation ?? "");
     setChanging({ account, action });
   }
 
@@ -99,6 +103,18 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
         `access-${account.user_id}`,
         () => setPermissions(account.user_id, granted, reason.trim()),
         `${account.full_name}'s access was updated.`,
+      );
+      if (saved !== undefined) {
+        setChanging(null);
+        setRetry((n) => n + 1);
+      }
+      return;
+    }
+    if (action === "details") {
+      const saved = await run(
+        `details-${account.user_id}`,
+        () => updateProfile(account.user_id, { full_name: name.trim(), designation: designation.trim() || null }, reason.trim()),
+        `${name.trim()}'s details were updated.`,
       );
       if (saved !== undefined) {
         setChanging(null);
@@ -215,23 +231,36 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
       <Dialog
         open={changing !== null}
         onClose={() => setChanging(null)}
-        title={changing?.action === "access" ? `Edit access for ${changing.account.full_name}` : changing?.action === "reset" ? `Reset sign-in for ${changing.account.full_name}?` : changing?.action === "signout" ? `Sign ${changing.account.full_name} out everywhere?` : changing?.action === "disable" ? `Disable ${changing.account.full_name}?` : `Enable ${changing?.account.full_name ?? ""}?`}
+        title={changing?.action === "details" ? `Edit details for ${changing.account.full_name}` : changing?.action === "access" ? `Edit access for ${changing.account.full_name}` : changing?.action === "reset" ? `Reset sign-in for ${changing.account.full_name}?` : changing?.action === "signout" ? `Sign ${changing.account.full_name} out everywhere?` : changing?.action === "disable" ? `Disable ${changing.account.full_name}?` : `Enable ${changing?.account.full_name ?? ""}?`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setChanging(null)}>Cancel</Button>
             <Button
-              variant={changing?.action === "enable" || changing?.action === "access" ? "primary" : "danger"}
+              variant={changing?.action === "enable" || changing?.action === "access" || changing?.action === "details" ? "primary" : "danger"}
               busy={busy !== null}
-              disabled={reason.trim().length < 5 || (changing?.action === "access" && sameSet(granted, changing.account.permissions))}
+              disabled={
+                reason.trim().length < 5 ||
+                (changing?.action === "access" && sameSet(granted, changing.account.permissions)) ||
+                (changing?.action === "details" &&
+                  (name.trim().length < 2 || (name.trim() === changing.account.full_name && designation.trim() === (changing.account.designation ?? ""))))
+              }
               onClick={confirm}
             >
-              {changing?.action === "access" ? "Save access" : changing?.action === "reset" ? "Reset sign-in" : changing?.action === "signout" ? "Sign out everywhere" : changing?.action === "disable" ? "Disable account" : "Enable account"}
+              {changing?.action === "details" ? "Save details" : changing?.action === "access" ? "Save access" : changing?.action === "reset" ? "Reset sign-in" : changing?.action === "signout" ? "Sign out everywhere" : changing?.action === "disable" ? "Disable account" : "Enable account"}
             </Button>
           </>
         }
       >
         {changing && (
           <div className="space-y-4">
+            {changing.action === "details" && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Full name">{(id) => <Input id={id} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />}</Field>
+                <Field label="Designation" hint="Optional, for example Duty Officer.">
+                  {(id) => <Input id={id} value={designation} maxLength={120} onChange={(e) => setDesignation(e.target.value)} />}
+                </Field>
+              </div>
+            )}
             {changing.action === "access" && (
               <fieldset className="space-y-2">
                 <legend className="mb-1 text-sm font-medium">What {changing.account.full_name} can do</legend>
@@ -251,8 +280,10 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
                 ))}
               </fieldset>
             )}
-            <Notice tone={changing.action === "enable" || changing.action === "access" ? "info" : "high"}>
-              {changing.action === "access"
+            <Notice tone={changing.action === "enable" || changing.action === "access" || changing.action === "details" ? "info" : "high"}>
+              {changing.action === "details"
+                ? `The email address (${changing.account.email}) cannot be changed: it is how they sign in. The old and new values are recorded in the audit log.`
+                : changing.action === "access"
                 ? "The change applies on their next request; they are not signed out."
                 : changing.action === "reset"
                 ? `${changing.account.email} is signed out now and their password and authenticator stop working. They get an emailed link, valid once, to choose a new password and set up their authenticator again. You never see either.`
@@ -294,6 +325,9 @@ function AccountRow({ account, onAction }: { account: StaffAccount; onAction: (a
           >
             History
           </Link>
+          <Button size="sm" variant="ghost" onClick={() => onAction(account, "details")} aria-label={`Edit details for ${account.full_name}`}>
+            Edit details
+          </Button>
           {!account.is_you && (
             <>
             {account.role === "DISASTER_MGMT" && account.status !== "DISABLED" && (
