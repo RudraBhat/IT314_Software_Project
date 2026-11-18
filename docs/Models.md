@@ -8,8 +8,6 @@ A model that classifies social-media posts as disasters. It has two parts:
 Both are served as FastAPI apps on Render, with model files stored on Hugging Face.
 This README covers the whole path: data, training, export, deployment and testing.
 
-> **Status: prototype.** Read the "Data and honesty notes" sections before quoting any number.
-
 ## Live services
 
 | Service | URL | Model files on Hugging Face |
