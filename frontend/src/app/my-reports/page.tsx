@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { SiteHeader, NavLink } from "@/components/Brand";
+import { UnifiedSiteHeader } from "@/components/navigation/UnifiedSiteHeader";
 import Link from "next/link";
 import { latestInformationRequest, REPLY_MAX_LENGTH, REPLY_MIN_LENGTH } from "@/components/citizen/InformationRequestReply";
 import { fetchMyReports, replyToInformationRequest, requestWithdrawal, ReportData } from "@/services/citizenApi";
 import { ReportPhotos } from "@/components/ReportPhotos";
 import { isInGujarat } from "@/lib/geo";
+import { incidentProgress } from "@/lib/incidentProgress";
 
 const STATUS_CONFIG: Record<
   string,
@@ -43,7 +44,7 @@ const STATUS_CONFIG: Record<
     color: "#64748b",
   },
   REJECTED: {
-    label: "Dismissed / Duplicate",
+    label: "Not accepted",
     badgeClass: "bg-rose-50 text-rose-800 border-rose-200",
     step: 1,
     color: "#f43f5e",
@@ -135,15 +136,12 @@ export default function MyReportsPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       {/* Header */}
-      <SiteHeader subtitle="My Incident Reports" maxWidth="max-w-5xl">
+      <UnifiedSiteHeader activeHref="/my-reports">
         <span aria-live="polite" className="hidden items-center gap-1.5 font-mono text-[11px] text-sky-200/80 xl:flex">
           <span aria-hidden="true" className="size-1.5 animate-ping rounded-full bg-emerald-400" />
           Auto-refresh 15s · {lastRefreshed ? lastRefreshed.toLocaleTimeString() : "…"}
         </span>
-        <NavLink href="/report" variant="primary">+ Report<span className="hidden sm:inline"> Incident</span></NavLink>
-        <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
-        <NavLink href="/account" hideBelow="sm">Account</NavLink>
-      </SiteHeader>
+      </UnifiedSiteHeader>
 
       {/* Main Content */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 md:p-8">
@@ -225,6 +223,7 @@ export default function MyReportsPage() {
             {reports.map((report) => {
               const currentStatus = report.status || report.verification_status || "SUBMITTED";
               const statusInfo = getStatusInfo(currentStatus);
+              const progress = incidentProgress(currentStatus, report.timeline ?? []);
               const isSelected = selectedReport?.id === report.id;
               const informationRequest = latestInformationRequest(report.timeline);
               const replyLength = (replyText[report.id] || "").trim().length;
@@ -391,12 +390,16 @@ export default function MyReportsPage() {
                     </section>
                   )}
 
-                  {/* Visual 4-Stage Progression Timeline */}
+                  {/* Visual 4-Stage Progression Timeline. A rejected report, or one closed without being resolved,
+                      did not travel these stages, so it gets a plain note instead (see lib/incidentProgress). */}
+                  {progress.kind === "ended" ? (
+                    <p className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600">{progress.note}</p>
+                  ) : (
                   <div className="pt-2">
                     <div className="grid grid-cols-4 gap-1.5 sm:gap-2 relative">
                       {STAGES.map((stage) => {
-                        const isPast = statusInfo.step > stage.id;
-                        const isCurrent = statusInfo.step === stage.id;
+                        const isPast = progress.step > stage.id;
+                        const isCurrent = progress.step === stage.id;
 
                         return (
                           <div
@@ -441,6 +444,7 @@ export default function MyReportsPage() {
                       })}
                     </div>
                   </div>
+                  )}
 
                   {/* Detailed Timeline Drawer */}
                   {isSelected && (

@@ -201,6 +201,57 @@ def test_closure_needs_permission_reason_and_resolved_dependencies(client, make,
     assert row["closed_at"] is None
 
 
+def _close_and_reopen(client, closer, incident_id, version):
+    """Close an incident and reopen it, returning the reopen response."""
+    closed = client.post(
+        f"{BASE}/incidents/{incident_id}/closure",
+        headers=closer["headers"],
+        json={"reason": "Closing for the test", "override": True, "override_rationale": "Nothing is open", "version": version},
+    )
+    assert closed.status_code == 200, closed.text
+    return client.post(
+        f"{BASE}/incidents/{incident_id}/reopen",
+        headers=closer["headers"],
+        json={"reason": "It needs more work", "version": closed.json()["version"]},
+    )
+
+
+def test_a_reopened_resolved_incident_can_be_dispatched_again(client, make):
+    staff = make.staff("CLOSURE", "DISPATCH")
+    inc = make.incident(status="VERIFIED", verified_priority="HIGH")
+    resolved = client.post(
+        f"{BASE}/incidents/{inc['incident_id']}/resolution",
+        headers=staff["headers"],
+        json={"rationale": "Water has receded", "version": 1},
+    )
+    assert resolved.json()["status"] == "RESOLVED"
+
+    reopened = _close_and_reopen(client, staff, inc["incident_id"], resolved.json()["version"])
+    assert reopened.status_code == 200 and reopened.json()["status"] == "VERIFIED"  # not stranded as RESOLVED
+    detail = client.get(f"{BASE}/incidents/{inc['incident_id']}", headers=staff["headers"]).json()
+    assert detail["allowed_actions"]["dispatch"] is True and detail["allowed_actions"]["resolve"] is True
+
+
+def test_a_reopened_rejected_report_goes_back_for_a_fresh_decision(client, make):
+    staff = make.staff("CLOSURE")
+    inc = make.incident()
+    rejected = client.post(
+        f"{BASE}/incidents/{inc['incident_id']}/verification",
+        headers=staff["headers"],
+        json={"decision": "REJECTED", "rationale": "Looked like a duplicate", "version": 1},
+    )
+    assert rejected.json()["status"] == "REJECTED"
+
+    reopened = _close_and_reopen(client, staff, inc["incident_id"], rejected.json()["version"])
+    assert reopened.status_code == 200 and reopened.json()["status"] == "SUBMITTED"
+    verified = client.post(
+        f"{BASE}/incidents/{inc['incident_id']}/verification",
+        headers=staff["headers"],
+        json={"decision": "VERIFIED", "rationale": "It was genuine after all", "priority": "HIGH", "version": reopened.json()["version"]},
+    )
+    assert verified.status_code == 200 and verified.json()["status"] == "VERIFIED"
+
+
 def test_duplicate_candidates_link_dismiss_and_merge(client, make, sql):
     staff = make.staff()
     a = make.incident(latitude=21.1702, longitude=72.8311)

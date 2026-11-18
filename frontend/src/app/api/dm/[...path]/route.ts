@@ -71,7 +71,8 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/dm/[...path
   const responseHeaders: Record<string, string> = {
     "content-type": upstream.headers.get("content-type") ?? "application/json",
   };
-  for (const name of ["x-content-type-options", "cache-control", "content-security-policy"]) {
+  // content-disposition and x-export-truncated let a CSV export keep its file name and report a cut-off.
+  for (const name of ["x-content-type-options", "cache-control", "content-security-policy", "content-disposition", "x-export-truncated"]) {
     const value = upstream.headers.get(name);
     if (value) responseHeaders[name] = value;
   }
