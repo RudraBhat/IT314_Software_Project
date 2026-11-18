@@ -169,7 +169,11 @@ def save_confusion_matrix(labels, preds, classes, path):
 def predict_image(image_path, ckpt_path="best_model.pt", review_threshold=0.6):
     """Predict one image file. Returns top-3 and a needs_review flag."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    state = torch.load(ckpt_path, map_location=device)
+    state = torch.load(
+        ckpt_path,
+        map_location=device,
+        weights_only=True
+    )
     classes = state["classes"]
     model = DisasterClassifier(state["model_name"], len(classes)).to(device)
     model.load_state_dict(state["model"])

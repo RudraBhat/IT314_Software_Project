@@ -211,6 +211,8 @@ These defaults are chosen to be safer on a typical Colab T4. If you have a large
 """
 
 MODEL_NAME = "google/muril-base-cased"
+MODEL_REVISION = "7fe26954373ccc26551d62f4c7127f3a9892ae05"
+
 MAX_LENGTH = 192
 TRAIN_BATCH_SIZE = 8
 EVAL_BATCH_SIZE = 16
@@ -233,8 +235,10 @@ set_seed(RANDOM_SEED)
 torch.backends.cuda.matmul.allow_tf32 = True
 
 print("Loading tokenizer:", MODEL_NAME)
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-
+tokenizer = AutoTokenizer.from_pretrained(
+    MODEL_NAME,
+    revision=MODEL_REVISION
+)
 # Check typical token lengths so you can see how much truncation MAX_LENGTH may cause.
 lengths = []
 all_texts = df["text"].astype(str).tolist()
@@ -319,6 +323,7 @@ print("Validation batches:", len(val_loader))
 
 model = AutoModelForSequenceClassification.from_pretrained(
     MODEL_NAME,
+    revision=MODEL_REVISION,
     num_labels=len(LABELS),
     id2label=id2label,
     label2id=label2id,
@@ -535,7 +540,10 @@ plt.show()
 del model
 torch.cuda.empty_cache()
 
-model = AutoModelForSequenceClassification.from_pretrained(BEST_MODEL_DIR).to(DEVICE)
+model = AutoModelForSequenceClassification.from_pretrained(
+    BEST_MODEL_DIR,
+    local_files_only=True,
+).to(DEVICE)  # nosec B615 - loading local checkpoint, not downloading from Hub
 val_metrics, val_true, val_pred = evaluate_model(model, val_loader)
 
 print("Best-checkpoint validation metrics:")

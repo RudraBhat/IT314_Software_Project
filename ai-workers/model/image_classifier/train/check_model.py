@@ -79,7 +79,11 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ------------------------------------------------------------ 1. model
-    state = torch.load(args.ckpt, map_location=device)
+    state = torch.load(
+        args.ckpt,
+        map_location=device,
+        weights_only=True
+    )
     classes = state["classes"]
     img_size = int(state["img_size"])  # make sure preprocessing matches training
     model = C.DisasterClassifier(state["model_name"], len(classes)).to(device)

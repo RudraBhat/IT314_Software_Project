@@ -321,15 +321,17 @@ def main() -> int:
     print("Model directory:", model_dir)
 
     print("Loading MuRIL tokenizer...")
+    # Loading from a local checkpoint; no Hugging Face Hub download.
     tokenizer = AutoTokenizer.from_pretrained(
         str(model_dir),
         local_files_only=True,
-    )
+    )  # nosec B615
     print("Loading fine-tuned MuRIL classifier...")
+    # Loading from a local checkpoint; no Hugging Face Hub download.
     model = AutoModelForSequenceClassification.from_pretrained(
         str(model_dir),
         local_files_only=True,
-    )
+    )  # nosec B615
 
     id2label = get_id2label(model_dir, model.config)
     print("Model class order:", [id2label[i] for i in range(len(LABELS))])

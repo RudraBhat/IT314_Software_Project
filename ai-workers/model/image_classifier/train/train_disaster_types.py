@@ -170,7 +170,11 @@ def main():
 
     # ------------------------------------- final test evaluation (run once)
     print("\nLoading best model for final TEST evaluation...")
-    state = torch.load(ckpt_path, map_location=device)
+    state = torch.load(
+        ckpt_path,
+        map_location=device,
+        weights_only=True
+    )
     model.load_state_dict(state["model"])
     _, test_acc, test_f1, y_true, y_pred = C.evaluate(
         model, test_loader, device, show_progress=True)
