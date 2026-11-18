@@ -353,6 +353,15 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 * **Response (200 OK):** `{ method: "rules+text", advisory: true, rules: { radius_m, window_hours, weights, note }, candidates[] }`, best score first. Each candidate keeps the earlier fields (`incident_id`, `incident_ref`, `status`, `scenario`, `address_text`, `submitted_at`, `people_affected`, `description_excerpt`, `distance_m`, `minutes_apart`, `same_address`, `rationale`) and adds `text_similarity` (0-1, character-trigram cosine of the two descriptions), `score` (0-1, weighted from wording, distance, time gap and same address), `method` and `explanation`. The full description is never returned.
 * `weights` are reasoned defaults until they are tuned on labelled duplicate pairs. Nothing is linked or merged automatically; the dispatcher decides with `POST /api/v1/dm/incidents/{id}/duplicates/{candidate_id}/decision` (`LINK`, `MERGE` or `DISMISS`, unchanged).
 
+### 4.6 Internal Incident Notes
+* **Paths:** `GET /api/v1/dm/incidents/{id}/notes` and `POST /api/v1/dm/incidents/{id}/notes`
+* **Auth:** Staff Session (`DISASTER_MGMT`), no extra permission. Notes are never returned to citizens or field teams.
+* **Purpose:** A shared log for the dispatch team on one incident (for example what was agreed on a call), so the next shift can pick up where the last stopped. Append-only: there is no edit or delete, a correction is a new note.
+* **`GET` response (200):** `{"items": [{"note_id", "body", "created_at", "author_name", "mine"}]}`, newest first. `mine` is true for notes the caller wrote.
+* **`POST` body:** `{"body": "..."}`, 1 to 1,000 characters after trimming. Response `201` is the created note in the same shape. Allowed on any incident, including a closed one. Rate limited to 60 notes per hour per user.
+* **Audit:** each note writes an `INCIDENT_NOTE_ADDED` entry on the incident with the note id only; the text itself stays in `incident_notes`.
+* **Errors:** `404 NOT_FOUND` (unknown incident), `422` (empty, blank or over-long body), `401`/`403` for anyone who is not signed-in Disaster Management staff.
+
 ---
 
 ## 5. Field Operations API
