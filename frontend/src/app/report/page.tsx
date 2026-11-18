@@ -501,7 +501,8 @@ export default function ReportIncidentPage() {
 
       {/* Header */}
       <SiteHeader subtitle="Citizen Emergency Dispatch" maxWidth="max-w-5xl">
-        {!session?.authenticated && <NavLink href="/login?next=/report">Sign In</NavLink>}
+        {/* session is null until /api/session resolves; only show Sign In once signed-out is confirmed */}
+        {session && !session.authenticated && <NavLink href="/login?next=/report">Sign In</NavLink>}
         <NavLink href="/my-reports">My Reports</NavLink>
         <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
         <NavLink href="/" hideBelow="sm">Public Map</NavLink>
