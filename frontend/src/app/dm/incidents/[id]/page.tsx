@@ -12,6 +12,7 @@ import { AiPanel } from "./ai-panel";
 import { DecisionPanel } from "./decision-panel";
 import { DispatchPanel, MessagesPanel } from "./dispatch-panel";
 import { DuplicatesPanel } from "./duplicates-panel";
+import { NotesPanel } from "./notes-panel";
 import type { IncidentDetail } from "./types";
 
 const moderationLabel: Record<string, string> = {
@@ -142,6 +143,7 @@ export default function IncidentPage() {
 
           <DispatchPanel incident={i} reload={reload} />
           <MessagesPanel incident={i} reload={reload} />
+          <NotesPanel incidentId={i.incident_id} closed={i.status === "CLOSED"} />
 
           <Card title="Status history">
             <ol className="space-y-3">

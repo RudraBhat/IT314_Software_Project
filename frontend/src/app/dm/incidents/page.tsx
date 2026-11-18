@@ -5,8 +5,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { PriorityBadge, StatusBadge } from "@/components/badges";
-import { Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, PageHeader, Pagination, Select } from "@/components/ui";
-import { useQuery } from "@/lib/api";
+import { Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Notice, PageHeader, Pagination, Select } from "@/components/ui";
+import { useAction } from "@/components/use-action";
+import { downloadCsv, useQuery } from "@/lib/api";
 import { INCIDENT_STATUSES, PRIORITIES, SCENARIOS, formatNumber, label, scenarioLabel, timeAgo } from "@/lib/format";
 import type { IncidentRow, Paged } from "@/lib/types";
 
@@ -23,6 +24,8 @@ function Incidents() {
   const router = useRouter();
   const pathname = usePathname();
   const [q, setQ] = useState(params.get("q") ?? "");
+  const { run, busy } = useAction();
+  const [cut, setCut] = useState(false);
 
   const query = {
     scenario: params.get("scenario") ?? undefined,
@@ -51,9 +54,32 @@ function Incidents() {
 
   const activeFilters = ["scenario", "status", "priority", "from", "to", "q", "withdrawal_requested"].some((k) => params.has(k));
 
+  async function exportCsv() {
+    // The same filters as the list on screen; the sort and page do not apply to a download.
+    const done = await run(
+      "export",
+      () => downloadCsv("incidents/export", { scenario: query.scenario, status: query.status, priority: query.priority, from: query.from, to: query.to, q: query.q }, "incidents.csv"),
+      "Export downloaded.",
+    );
+    if (done) setCut(done.truncated);
+  }
+
   return (
     <>
-      <PageHeader title="Incidents" description="Server-side filtered queue of every reported incident." />
+      <PageHeader
+        title="Incidents"
+        description="Server-side filtered queue of every reported incident."
+        actions={
+          <Button onClick={exportCsv} busy={busy === "export"} disabled={!data || data.total === 0} title="Download the incidents matching these filters as CSV. It leaves out reporter details and descriptions, and is recorded in the audit log.">
+            Export CSV
+          </Button>
+        }
+      />
+      {cut && (
+        <div className="mb-4">
+          <Notice tone="high">The export stopped at 5,000 incidents. Narrow the filters (for example by date) to get the rest.</Notice>
+        </div>
+      )}
 
       <Card className="mb-6" bodyClassName="p-4">
         <form

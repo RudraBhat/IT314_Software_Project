@@ -361,6 +361,31 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 * **Response (200 OK):** `{ method: "rules+text", advisory: true, rules: { radius_m, window_hours, weights, note }, candidates[] }`, best score first. Each candidate keeps the earlier fields (`incident_id`, `incident_ref`, `status`, `scenario`, `address_text`, `submitted_at`, `people_affected`, `description_excerpt`, `distance_m`, `minutes_apart`, `same_address`, `rationale`) and adds `text_similarity` (0-1, character-trigram cosine of the two descriptions), `score` (0-1, weighted from wording, distance, time gap and same address), `method` and `explanation`. The full description is never returned.
 * `weights` are reasoned defaults until they are tuned on labelled duplicate pairs. Nothing is linked or merged automatically; the dispatcher decides with `POST /api/v1/dm/incidents/{id}/duplicates/{candidate_id}/decision` (`LINK`, `MERGE` or `DISMISS`, unchanged).
 
+### 4.6 Internal Incident Notes
+* **Paths:** `GET /api/v1/dm/incidents/{id}/notes` and `POST /api/v1/dm/incidents/{id}/notes`
+* **Auth:** Staff Session (`DISASTER_MGMT`), no extra permission. Notes are never returned to citizens or field teams.
+* **Purpose:** A shared log for the dispatch team on one incident (for example what was agreed on a call), so the next shift can pick up where the last stopped. Append-only: there is no edit or delete, a correction is a new note.
+* **`GET` response (200):** `{"items": [{"note_id", "body", "created_at", "author_name", "mine"}]}`, newest first. `mine` is true for notes the caller wrote.
+* **`POST` body:** `{"body": "..."}`, 1 to 1,000 characters after trimming. Response `201` is the created note in the same shape. Allowed on any incident, including a closed one. Rate limited to 60 notes per hour per user.
+* **Audit:** each note writes an `INCIDENT_NOTE_ADDED` entry on the incident with the note id only; the text itself stays in `incident_notes`.
+* **Errors:** `404 NOT_FOUND` (unknown incident), `422` (empty, blank or over-long body), `401`/`403` for anyone who is not signed-in Disaster Management staff.
+
+### 4.7 CSV Exports of the Incident and Dispatch Queues
+* **Paths:** `GET /api/v1/dm/incidents/export` and `GET /api/v1/dm/dispatches/export`
+* **Auth:** Staff Session (`DISASTER_MGMT`), no extra permission. Rate limited to 10 exports per hour per user.
+* **Filters:** the same query parameters as the list they come from. Incidents: `scenario`, `status`, `priority`, `from`, `to`, `q`, `near_lat`, `near_lon`, `radius_km`. Dispatches: `status`, `overdue`, `active`, `incident_id`. Both share the list's filter code, so an export always matches what the screen shows. Invalid values answer `422`.
+* **Response (200):** `text/csv; charset=utf-8` attachment (`incidents-YYYYMMDD-HHMM.csv`, `dispatches-...`) with a UTF-8 byte order mark so Excel reads names correctly, `Cache-Control: no-store`, newest first, at most 5,000 rows. `X-Export-Truncated: true` means the cap cut the file; narrow the filters to get the rest.
+* **Columns:** incidents: reference, scenario, status, priority, reported urgency, people affected, address, landmark, latitude, longitude, submitted, updated, closed, evidence files, active dispatches. Dispatches: dispatch, incident, scenario, status, priority, agency, requested by, requested, acknowledged, overdue, escalated.
+* **Privacy:** the incident export never includes the reporter's name, phone or email, or the free-text description. Dispatch instructions and the agency's acknowledging contact are also left out. Dates are UTC.
+* **Spreadsheet safety:** any cell that begins with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with a quote so it cannot run as a formula when opened.
+* **Audit:** each export writes `INCIDENTS_EXPORTED` or `DISPATCHES_EXPORTED` with the actor, row count, whether it was truncated and the filters used.
+* **Errors:** `401`/`403` for anyone who is not signed-in Disaster Management staff with a verified second factor, `422` for invalid filters.
+
+### 4.8 Reopening a Closed Incident
+* **Path:** `POST /api/v1/dm/incidents/{id}/reopen`. Body `{"reason": "...", "version": n}`. Requires the `CLOSURE` permission. Only a `CLOSED` incident can be reopened; the reason is audited.
+* **Where it goes:** back to where work can continue, based on the status it was closed from. `RESOLVED` returns as `VERIFIED` (it can be dispatched or resolved again) and `REJECTED` returns as `SUBMITTED` (it needs a fresh decision), because neither of those two statuses has a way forward. `SUBMITTED`, `NEEDS_INFORMATION`, `VERIFIED` and `DISPATCHED` return as they were. An incident with no priority never returns as `VERIFIED` or `DISPATCHED`; it returns as `SUBMITTED`, because verification requires a priority.
+* **Citizen view:** a report that was rejected, or closed without ever being resolved, is shown with a plain explanation instead of the four-stage progress bar (Submitted, Verified, Dispatched, Resolved). A closed report that was resolved still shows the finished path.
+
 ---
 
 ## 5. Field Operations API

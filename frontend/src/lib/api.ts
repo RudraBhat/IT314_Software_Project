@@ -91,6 +91,36 @@ function serializeParams(params?: QueryParams): string {
   return search.toString();
 }
 
+/**
+ * Download a CSV the server builds from the same filters as a list, and save it with the server's file name.
+ * Resolves to `truncated: true` when the server cut the file at its row limit, so the screen can say so.
+ */
+export async function downloadCsv(path: string, params: QueryParams, fallbackName: string): Promise<{ truncated: boolean }> {
+  const query = serializeParams(params);
+  const response = await fetch(`/api/dm/${path.replace(/^\/+/, "")}${query ? `?${query}` : ""}`);
+  if (!response.ok) {
+    let message = `Request failed (${response.status}).`;
+    let code = "REQUEST_FAILED";
+    try {
+      const failure = JSON.parse(await response.text()) as ApiFailure;
+      if (typeof failure.error?.message === "string") message = failure.error.message;
+      if (typeof failure.error?.code === "string") code = failure.error.code;
+    } catch {
+      // The body was not JSON; keep the generic message.
+    }
+    throw new ApiError(message, response.status, code, null);
+  }
+  const blob = await response.blob();
+  const filename = /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+  return { truncated: response.headers.get("x-export-truncated") === "true" };
+}
+
 export function useQuery<T>(path: string | null, params?: QueryParams) {
   const query = serializeParams(params);
   const [refresh, setRefresh] = useState(0);

@@ -292,3 +292,28 @@ def test_dispatch_shared_transitions_invariants():
     assert "REJECTED" in TERMINAL_DISPATCH
     assert "FAILED" in TERMINAL_DISPATCH
 
+
+
+def test_reopen_never_strands_an_incident():
+    from app.services.incidents import TRANSITIONS, reopen_target
+
+    # Resolved work resumes as verified; a rejected report returns for a fresh decision.
+    assert reopen_target("RESOLVED", "HIGH") == "VERIFIED"
+    assert reopen_target("REJECTED", None) == "SUBMITTED"
+    assert reopen_target("REJECTED", "HIGH") == "SUBMITTED"
+    # Other states are restored as they were.
+    assert reopen_target("SUBMITTED", None) == "SUBMITTED"
+    assert reopen_target("NEEDS_INFORMATION", None) == "NEEDS_INFORMATION"
+    assert reopen_target("VERIFIED", "LOW") == "VERIFIED"
+    assert reopen_target("DISPATCHED", "LOW") == "DISPATCHED"
+    # Never resume as verified or dispatched without the priority verification requires.
+    assert reopen_target("VERIFIED", None) == "SUBMITTED"
+    assert reopen_target("DISPATCHED", None) == "SUBMITTED"
+    assert reopen_target("RESOLVED", None) == "SUBMITTED"
+    # No history to go on: start again at the beginning.
+    assert reopen_target(None, None) == "SUBMITTED"
+
+    # Whatever it returns can be worked on: it is never a status with no way forward.
+    for previous in ("SUBMITTED", "NEEDS_INFORMATION", "VERIFIED", "DISPATCHED", "RESOLVED", "REJECTED", None):
+        for priority in ("HIGH", None):
+            assert TRANSITIONS[reopen_target(previous, priority)], (previous, priority)
