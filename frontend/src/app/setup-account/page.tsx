@@ -144,7 +144,7 @@ function SetupAccountContent() {
 
   return (
     <div className="min-h-screen bg-[#070d18] text-slate-100 flex flex-col font-sans">
-      <SiteHeader subtitle="Staff Account Setup" maxWidth="max-w-5xl" />
+      <SiteHeader subtitle="Gujarat Emergency Portal" maxWidth="max-w-7xl" />
 
       <main className="flex-1 flex items-center justify-center p-4 py-12">
         <div className="bg-[#0b1324] border border-slate-700/80 rounded-2xl shadow-2xl max-w-lg w-full p-6 sm:p-8 space-y-6">

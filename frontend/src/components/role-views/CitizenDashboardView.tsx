@@ -527,7 +527,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
       `}</style>
 
       {/* ─── Blue Header (ResQ AI Bhuvan-inspired Identity) ─── */}
-      <SiteHeader subtitle="Citizen Safety Portal" brandHref="/" maxWidth="max-w-none">
+      <SiteHeader subtitle="Gujarat Emergency Portal" brandHref="/" maxWidth="max-w-7xl">
         <div className="flex items-center gap-2.5">
           {/* Trilingual Language Selector */}
           <div className="flex items-center rounded-full bg-sky-950/70 p-0.5 border border-sky-600/50 text-[11px] font-bold">
