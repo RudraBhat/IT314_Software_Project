@@ -36,7 +36,18 @@ The notebook uses a validation split from the synthetic training dataset for che
 """
 
 # Colab already provides PyTorch. Do not reinstall/upgrade torch here.
-!pip -q install "transformers>=4.45,<6" sentencepiece scikit-learn matplotlib pandas tqdm
+import subprocess
+import sys
+
+subprocess.check_call([
+    sys.executable, "-m", "pip", "install",
+    "transformers>=4.45,<6",
+    "sentencepiece",
+    "scikit-learn",
+    "matplotlib",
+    "pandas",
+    "tqdm"
+])
 
 """## 2. Check that a GPU is available"""
 
@@ -80,7 +91,10 @@ if not torch.cuda.is_available():
 
 DEVICE = torch.device("cuda")
 print("GPU:", torch.cuda.get_device_name(0))
-!nvidia-smi
+
+import subprocess
+
+subprocess.run(["nvidia-smi"], check=False)
 
 """## 3. Mount Google Drive and load the training CSV"""
 
