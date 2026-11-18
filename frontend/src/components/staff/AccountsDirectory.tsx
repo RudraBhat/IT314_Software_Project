@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Badge, Button, Card, Dialog, EmptyState, ErrorState, Field, Input, LoadingRows, Notice, Pagination, Select, Textarea } from "@/components/ui";
 import { useAction } from "@/components/use-action";
 import { formatDateTime, timeAgo } from "@/lib/format";
-import { disableAccount, enableAccount, exportAccounts, listAccounts, resetCredentials, setPermissions, type AccountStatus, type AccountsPage, type StaffAccount } from "@/services/adminApi";
+import { disableAccount, enableAccount, exportAccounts, listAccounts, resetCredentials, setPermissions, signOutAccount, type AccountStatus, type AccountsPage, type StaffAccount } from "@/services/adminApi";
 import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
 
 import type { Tone } from "@/components/ui";
@@ -29,7 +29,7 @@ const STATUS_TONE: Record<AccountStatus, Tone> = {
 const ROLES = Object.keys(ROLE_LABEL) as InvitableRole[];
 const STATUSES: AccountStatus[] = ["ACTIVE", "PENDING_SETUP", "DISABLED", "LOCKED"];
 
-type Action = "disable" | "enable" | "reset" | "access";
+type Action = "disable" | "enable" | "reset" | "access" | "signout";
 
 const PERMISSION_INFO: { code: string; name: string; hint: string }[] = [
   { code: "DISPATCH", name: "Dispatch", hint: "Dispatch field teams to verified incidents" },
@@ -105,10 +105,11 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
       }
       return;
     }
-    const call = action === "disable" ? disableAccount : action === "enable" ? enableAccount : resetCredentials;
+    const call = { disable: disableAccount, enable: enableAccount, reset: resetCredentials, signout: signOutAccount }[action];
     const message = {
       disable: `${account.full_name} was disabled and signed out.`,
       enable: `${account.full_name} was enabled.`,
+      signout: `${account.full_name} was signed out of every device.`,
       reset: `${account.full_name}'s sign-in was reset and they were emailed a setup link.`,
     }[action];
     const done = await run(`${action}-${account.user_id}`, () => call(account.user_id, reason.trim()), message);
@@ -213,7 +214,7 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
       <Dialog
         open={changing !== null}
         onClose={() => setChanging(null)}
-        title={changing?.action === "access" ? `Edit access for ${changing.account.full_name}` : changing?.action === "reset" ? `Reset sign-in for ${changing.account.full_name}?` : changing?.action === "disable" ? `Disable ${changing.account.full_name}?` : `Enable ${changing?.account.full_name ?? ""}?`}
+        title={changing?.action === "access" ? `Edit access for ${changing.account.full_name}` : changing?.action === "reset" ? `Reset sign-in for ${changing.account.full_name}?` : changing?.action === "signout" ? `Sign ${changing.account.full_name} out everywhere?` : changing?.action === "disable" ? `Disable ${changing.account.full_name}?` : `Enable ${changing?.account.full_name ?? ""}?`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setChanging(null)}>Cancel</Button>
@@ -223,7 +224,7 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
               disabled={reason.trim().length < 5 || (changing?.action === "access" && sameSet(granted, changing.account.permissions))}
               onClick={confirm}
             >
-              {changing?.action === "access" ? "Save access" : changing?.action === "reset" ? "Reset sign-in" : changing?.action === "disable" ? "Disable account" : "Enable account"}
+              {changing?.action === "access" ? "Save access" : changing?.action === "reset" ? "Reset sign-in" : changing?.action === "signout" ? "Sign out everywhere" : changing?.action === "disable" ? "Disable account" : "Enable account"}
             </Button>
           </>
         }
@@ -254,6 +255,8 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
                 ? "The change applies on their next request; they are not signed out."
                 : changing.action === "reset"
                 ? `${changing.account.email} is signed out now and their password and authenticator stop working. They get an emailed link, valid once, to choose a new password and set up their authenticator again. You never see either.`
+                : changing.action === "signout"
+                ? `${changing.account.email} is signed out of every device on their next request. Their account keeps working: they sign in again with their password and authenticator. Use this after a lost or shared device.`
                 : changing.action === "disable"
                 ? `${changing.account.email} will be signed out on their next request and cannot sign in again until you enable the account. Nothing is deleted.`
                 : changing.account.status === "DISABLED" && (!changing.account.mfa_enabled || changing.account.last_login_at === null)
@@ -287,6 +290,11 @@ function AccountRow({ account, onAction }: { account: StaffAccount; onAction: (a
             {account.role === "DISASTER_MGMT" && account.status !== "DISABLED" && (
               <Button size="sm" variant="ghost" onClick={() => onAction(account, "access")} aria-label={`Edit access for ${account.full_name}`}>
                 Edit access
+              </Button>
+            )}
+            {account.status === "ACTIVE" && (
+              <Button size="sm" variant="ghost" onClick={() => onAction(account, "signout")} aria-label={`Sign ${account.full_name} out everywhere`}>
+                Sign out
               </Button>
             )}
             {account.status === "ACTIVE" && (

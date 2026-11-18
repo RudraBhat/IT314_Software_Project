@@ -379,6 +379,82 @@ def test_only_an_mfa_verified_administrator_can_reset_a_sign_in(make, client):
     assert client.get("/api/v1/dm/dashboard", headers=target["headers"]).status_code == 200  # nothing changed
 
 
+# --------------------------------------------------------------------------- sign out everywhere
+
+SIGN_OUT_REASON = {"reason": "Laptop was lost on the train"}
+
+
+def _sign_out(client, headers, user_id, body=SIGN_OUT_REASON):
+    return client.post(f"{URL}/{user_id}/sign-out", headers=headers, json=body)
+
+
+def _staff_session(client, staff) -> dict:
+    """Sign a staff member in through the real login so a refresh token exists."""
+    first = client.post("/api/v1/auth/login", json={"email": staff["email"], "password": staff["password"]}).json()
+    code = pyotp.TOTP(staff["totp_secret"]).now()
+    done = client.post("/api/v1/auth/mfa/verify", json={"mfa_token": first["mfa_token"], "code": code})
+    assert done.status_code == 200, done.text
+    return done.json()
+
+
+def test_sign_out_ends_every_session_but_keeps_the_account_usable(make, client, sql):
+    admin, headers = _admin(make)
+    staff = make.user("DISASTER_MGMT", ["DISPATCH"])
+    session = _staff_session(client, staff)
+    bearer = {"Authorization": f"Bearer {session['access_token']}"}
+    assert client.get("/api/v1/dm/dashboard", headers=bearer).status_code == 200
+
+    r = _sign_out(client, headers, staff["user_id"])
+    assert r.status_code == 200
+    assert r.json() == {"user_id": str(staff["user_id"]), "status": "ACTIVE", "signed_out": True}
+
+    assert client.get("/api/v1/dm/dashboard", headers=bearer).status_code == 401  # access token dead
+    refreshed = client.post("/api/v1/auth/refresh", json={"refresh_token": session["refresh_token"]})
+    assert refreshed.status_code == 401  # and it cannot quietly renew
+    live = sql.execute(
+        "SELECT count(*) AS n FROM refresh_tokens WHERE user_id = %s AND revoked_at IS NULL", (staff["user_id"],)
+    ).fetchone()["n"]
+    assert live == 0
+    assert _find(client, headers, q=staff["email"])["items"][0]["status"] == "ACTIVE"  # not disabled
+
+    entry = sql.execute(
+        "SELECT actor_id, rationale FROM audit_logs WHERE entity_id = %s AND action = 'ACCOUNT_SIGNED_OUT'",
+        (staff["user_id"],),
+    ).fetchone()
+    assert entry["actor_id"] == admin["user_id"] and entry["rationale"] == SIGN_OUT_REASON["reason"]
+
+    # They can sign straight back in with their password and authenticator.
+    again = client.post("/api/v1/auth/login", json={"email": staff["email"], "password": staff["password"]})
+    assert again.status_code == 200 and again.json()["mfa_required"] is True
+
+
+def test_sign_out_guards(make, client):
+    admin, headers = _admin(make)
+    me = _sign_out(client, headers, admin["user_id"])
+    assert me.status_code == 409 and me.json()["error"]["code"] == "CANNOT_SIGN_OUT_SELF"
+    assert _sign_out(client, headers, make.citizen()["user_id"]).status_code == 404
+    assert _sign_out(client, headers, uuid.uuid4()).status_code == 404
+
+    pending = make.staff("DISPATCH")
+    assert _reset(client, headers, pending["user_id"]).status_code == 200
+    refused = _sign_out(client, headers, pending["user_id"])
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "NOT_ACTIVE"
+
+    for bad in ({}, {"reason": "no"}):
+        assert _sign_out(client, headers, make.staff("DISPATCH")["user_id"], bad).status_code == 422
+
+
+def test_only_an_mfa_verified_administrator_can_sign_someone_out(make, client):
+    target = make.staff("DISPATCH")
+    admin = make.user("APP_MGMT")
+    assert _sign_out(client, {}, target["user_id"]).status_code == 401
+    assert _sign_out(client, make.token(admin, mfa=False), target["user_id"]).status_code == 401
+    assert _sign_out(client, make.citizen()["headers"], target["user_id"]).status_code == 403
+    assert _sign_out(client, make.field_team_user()["headers"], target["user_id"]).status_code == 403
+    assert _sign_out(client, make.staff("SUPERVISOR")["headers"], target["user_id"]).status_code == 403
+    assert client.get("/api/v1/dm/dashboard", headers=target["headers"]).status_code == 200  # nothing changed
+
+
 # --------------------------------------------------------------------------- system status
 
 

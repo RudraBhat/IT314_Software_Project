@@ -174,6 +174,10 @@ export const getSystemStatus = () => request<SystemStatus>("system");
 /** Check the audit log's hash chain. The check is itself recorded in the log. */
 export const verifyAudit = () => request<AuditVerification>("audit/verify", { method: "POST", body: {} });
 
+/** End every session of an active account (it stays usable and the person signs in again). Reason is audited. */
+export const signOutAccount = (userId: string, reason: string) =>
+  request<StatusChangeResult & { signed_out: boolean }>(`accounts/${encodeURIComponent(userId)}/sign-out`, { method: "POST", body: { reason } });
+
 export type ResetResult = { user_id: string; status: AccountStatus; invitation_expires_at: string; email_configured: boolean };
 
 /** Clear a person's password and authenticator and email them a one-time setup link. Reason is audited. */

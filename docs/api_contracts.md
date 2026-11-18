@@ -992,6 +992,12 @@ Staff accounts (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`) are never created wit
 * **Enable:** an account that had finished setup becomes `ACTIVE` and any lockout is cleared; one that never finished setup goes back to `PENDING_SETUP` and needs a new invitation link (resend it from the pending list). Old sessions stay ended. Returns `{"user_id", "status"}`. Audit action `ACCOUNT_ENABLED`.
 * **Errors:** `409 CANNOT_DISABLE_SELF`, `409 LAST_ADMIN` (the last active administrator cannot be disabled), `409 ALREADY_DISABLED`, `409 NOT_DISABLED`, `404` for a citizen or unknown account.
 
+#### Sign a person out everywhere
+* **Path:** `POST /api/v1/admin/accounts/{user_id}/sign-out`. Same authentication and rate limit as disable. Body `{"reason": "..."}`, 5 to 500 characters, audited as `ACCOUNT_SIGNED_OUT`.
+* **Effect:** For an account that has finished setup and is not disabled: bumps `token_version` (access tokens stop working on the next request) and revokes every refresh token (`ADMIN_SIGN_OUT`), so no session can renew. The account stays usable; the person signs in again with their password and authenticator. Use it after a lost or shared device; use disable to block the person, or reset sign-in when the password or authenticator is lost.
+* **Response:** `{"user_id": "...", "status": "ACTIVE", "signed_out": true}` (`status` is the account's unchanged status).
+* **Errors:** `409 CANNOT_SIGN_OUT_SELF`, `409 NOT_ACTIVE` (disabled or awaiting setup: no sessions to end), `404` for a citizen or unknown account.
+
 #### Reset a person's sign-in
 * **Path:** `POST /api/v1/admin/accounts/{user_id}/reset-credentials`. Same authentication and rate limit as disable. Body `{"reason": "..."}`, 5 to 500 characters, audited.
 * **Effect:** for an `ACTIVE` staff account whose person lost their phone or password. The account goes back to `PENDING_SETUP`, the password stays but the authenticator is removed, sessions end, lockout and any pending password reset are cleared, and a single-use setup link (same expiry as invitations) is emailed to them. They choose a new password and enrol a new authenticator on `/setup-account`. The administrator never sees the link, a password or an authenticator secret. Returns `{"user_id", "status": "PENDING_SETUP", "invitation_expires_at", "email_configured"}`; `email_configured` is false when no SMTP host is set, so no email left the server. Audit action `ACCOUNT_CREDENTIALS_RESET`.

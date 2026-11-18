@@ -28,6 +28,7 @@ from app.config import get_settings
 from app.errors import ApiError, conflict, not_found
 from app.ratelimit import rate_limit
 from app.services import email as email_service
+from app.services import sessions
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -300,6 +301,38 @@ def enable_account(user_id: uuid.UUID, body: StatusChange, principal: AdminUser)
             ip=principal.ip,
         )
     return {"user_id": str(user_id), "status": restored}
+
+
+# --------------------------------------------------------------------------- sign a person out everywhere
+
+
+@router.post("/accounts/{user_id}/sign-out", dependencies=[rate_limit("admin-account", 30, 3600)])
+def sign_out_everywhere(user_id: uuid.UUID, body: StatusChange, principal: AdminUser):
+    """End every session of an active staff account, for example after a lost or shared device.
+
+    Unlike disabling, the account stays usable: the person just has to sign in again with their password
+    and authenticator. Access tokens stop working on the next request and refresh tokens are revoked, so a
+    session cannot quietly renew itself. Needs a reason (audited). You cannot do this to yourself.
+    """
+    if user_id == principal.user_id:
+        raise conflict("CANNOT_SIGN_OUT_SELF", "Use Sign out to end your own session")
+    with db.transaction() as conn:
+        target = _lock_staff_account(conn, user_id)
+        if target["status"] not in ("ACTIVE", "LOCKED"):
+            raise conflict("NOT_ACTIVE", "Only an account that has finished setup and is not disabled has sessions to end")
+        conn.execute("UPDATE user_auth SET token_version = token_version + 1 WHERE user_id = %s", (user_id,))
+        sessions.revoke_all(conn, user_id, "ADMIN_SIGN_OUT")
+        audit.record(
+            conn,
+            actor=principal,
+            action="ACCOUNT_SIGNED_OUT",
+            entity_type="user",
+            entity_id=user_id,
+            rationale=body.reason.strip(),
+            after={"role": target["role"]},
+            ip=principal.ip,
+        )
+    return {"user_id": str(user_id), "status": target["status"], "signed_out": True}
 
 
 # --------------------------------------------------------------------------- reset a person's sign-in
