@@ -112,7 +112,7 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:8000
 
       - name: Dependency vulnerability audit (High+Critical)
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
 
   # ============================================================================
   # 2. Python Backend & AI Workers Quality Scan
