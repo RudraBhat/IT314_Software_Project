@@ -12,7 +12,7 @@ pytestmark = pytest.mark.db
 URL = "/api/v1/admin/accounts"
 SAFE_KEYS = {
     "user_id", "email", "full_name", "role", "designation", "status", "mfa_enabled", "last_login_at",
-    "is_locked", "permissions", "team_name", "created_at", "is_you",
+    "is_locked", "permissions", "team_name", "created_at", "is_you", "active_sessions",
 }
 
 
@@ -403,6 +403,7 @@ def test_sign_out_ends_every_session_but_keeps_the_account_usable(make, client, 
     session = _staff_session(client, staff)
     bearer = {"Authorization": f"Bearer {session['access_token']}"}
     assert client.get("/api/v1/dm/dashboard", headers=bearer).status_code == 200
+    assert _find(client, headers, q=staff["email"])["items"][0]["active_sessions"] == 1
 
     r = _sign_out(client, headers, staff["user_id"])
     assert r.status_code == 200
@@ -415,7 +416,8 @@ def test_sign_out_ends_every_session_but_keeps_the_account_usable(make, client, 
         "SELECT count(*) AS n FROM refresh_tokens WHERE user_id = %s AND revoked_at IS NULL", (staff["user_id"],)
     ).fetchone()["n"]
     assert live == 0
-    assert _find(client, headers, q=staff["email"])["items"][0]["status"] == "ACTIVE"  # not disabled
+    after = _find(client, headers, q=staff["email"])["items"][0]
+    assert after["status"] == "ACTIVE" and after["active_sessions"] == 0  # not disabled, no live session
 
     entry = sql.execute(
         "SELECT actor_id, rationale FROM audit_logs WHERE entity_id = %s AND action = 'ACCOUNT_SIGNED_OUT'",

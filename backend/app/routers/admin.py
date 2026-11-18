@@ -50,7 +50,11 @@ SELECT u.user_id, u.email, u.full_name, r.code AS role, u.designation,
        ) AS permissions,
        (SELECT res.name FROM field_team_members m
         JOIN resources res ON res.resource_id = m.resource_id
-        WHERE m.user_id = u.user_id LIMIT 1) AS team_name
+        WHERE m.user_id = u.user_id LIMIT 1) AS team_name,
+       (SELECT COUNT(DISTINCT rt.family_id) FROM refresh_tokens rt
+        WHERE rt.user_id = u.user_id AND rt.revoked_at IS NULL
+          AND rt.token_version = a.token_version
+          AND rt.idle_expires_at > now() AND rt.absolute_expires_at > now()) AS active_sessions
 {from_} {where}
 ORDER BY u.created_at DESC, u.user_id LIMIT %(limit)s OFFSET %(offset)s
 """
@@ -120,6 +124,7 @@ def list_accounts(
             "is_locked": r["locked_until"] is not None and r["locked_until"] > now,
             "permissions": r["permissions"],
             "team_name": r["team_name"],
+            "active_sessions": r["active_sessions"],
             "created_at": r["created_at"],
             "is_you": r["user_id"] == principal.user_id,
         }

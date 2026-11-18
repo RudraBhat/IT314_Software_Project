@@ -301,7 +301,7 @@ function AccountRow({ account, onAction }: { account: StaffAccount; onAction: (a
                 Edit access
               </Button>
             )}
-            {account.status === "ACTIVE" && (
+            {account.status === "ACTIVE" && account.active_sessions > 0 && (
               <Button size="sm" variant="ghost" onClick={() => onAction(account, "signout")} aria-label={`Sign ${account.full_name} out everywhere`}>
                 Sign out
               </Button>
@@ -336,6 +336,12 @@ function AccountRow({ account, onAction }: { account: StaffAccount; onAction: (a
         </span>
         <span title={account.last_login_at ? formatDateTime(account.last_login_at) : undefined}>
           Last sign-in: <span className="font-medium text-foreground">{never ? "never" : timeAgo(account.last_login_at)}</span>
+        </span>
+        <span>
+          Signed in on:{" "}
+          <span className={account.active_sessions > 0 ? "font-medium text-foreground" : undefined}>
+            {account.active_sessions === 0 ? "no devices" : account.active_sessions === 1 ? "1 device" : `${account.active_sessions} devices`}
+          </span>
         </span>
         <span>Added {formatDateTime(account.created_at)}</span>
       </div>

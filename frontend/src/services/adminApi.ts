@@ -21,6 +21,8 @@ export type StaffAccount = {
   is_locked: boolean;
   permissions: string[];
   team_name: string | null;
+  /** Devices currently signed in (sessions that can still renew). */
+  active_sessions: number;
   created_at: string;
   is_you: boolean;
 };
