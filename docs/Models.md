@@ -102,6 +102,14 @@ python train_indicbert.py --train-csv ../data/disaster_multilingual_train_v2_150
     --test-csv ../data/tweets_multilingual.csv --output-dir outputs
 ```
 
+Extra training notes:
+
+* Run `python train_indicbert.py --help` for all options.
+* If Hugging Face asks for access to the base model, set `HF_TOKEN` to a read token first.
+* Outputs in `outputs/`: the best model folder (`indicbert_disaster_classifier_v2_best/`) and its zip,
+  training history, validation and held-out confusion matrices, per-language metrics and prediction CSVs.
+* The `data/` columns used: training `text`, `label`, `language`, `scenario_group`; test `text`, `label`, `language`.
+
 ## 1.3 Two models: why the deployed one is not the best one
 
 We trained two models.
@@ -161,6 +169,15 @@ This writes `model_int8.onnx`, `spiece.model`, `tokenizer_config.json`, `special
 * ONNX Runtime CPU inference, one worker, one intra-op thread, serialised requests, to stay inside 512 MB.
   The last health check showed a peak RSS of about 387 MB. Re-check after changing the model.
 * The label order in `app.py` must match `label_mapping.json` or the service refuses to start.
+* GitHub repo contents: `.python-version` (at the repo root, containing `3.11.11`), `app.py`, `requirements.txt`,
+  `render.yaml`, `.gitignore`, `README.md`. Render's native Python runtime uses `.python-version` or the
+  `PYTHON_VERSION` variable (the variable wins); do not rely on `runtime.txt`.
+* The Hugging Face repo must contain `model_int8.onnx`, `spiece.model`, `tokenizer_config.json`,
+  `special_tokens_map.json`, `label_mapping.json`, `config.json`.
+* Extra env var: `MODEL_DIR=/tmp/indicbert_model`. Keep `HF_TOKEN` secret and never commit it.
+* Model files download into Render's ephemeral `/tmp` at startup, so restarts or spin-downs re-download them.
+  This setup reduces overhead but does not guarantee the model fits a 512 MB instance.
+* API routes: `GET /`, `GET /health`, `POST /predict`, `GET /docs`. Example body: `{"text": "તમારો સંદેશ અહીં લખો"}`.
 
 ## 1.6 Testing the deployed API
 
@@ -170,7 +187,10 @@ pip install -r requirements.txt
 python test_text_api.py --api-url https://indicbert-disaster-api.onrender.com   # --limit 20 for a quick try
 ```
 
-All 512 requests succeeded. Results (accuracy 0.658, macro-F1 0.659) are in `text_classifier/testing/results/`.
+Defaults: `--csv ../data/tweets_multilingual.csv`, output to `results/`. The script waits for a sleeping
+Render service to wake up and sends requests one at a time. Saved files: `api_test_report.txt`,
+`metrics_summary.json`, `metrics_by_language.csv`, `metrics_by_augmentation.csv` and
+`tweets_multilingual_api_predictions.csv`. All 512 requests succeeded. Results (accuracy 0.658, macro-F1 0.659) are in `text_classifier/testing/results/`.
 
 | Class | Precision | Recall | F1 | Support |
 |---|---:|---:|---:|---:|
@@ -218,6 +238,13 @@ pip install -r requirements.txt
 python train_disaster_types.py --data-root /path/to/data_disaster_types --out-dir outputs
 ```
 
+`--data-root` can also be set once with the `DISASTER_DATA_ROOT` environment variable. CPU-only run:
+
+```bash
+python train_disaster_types.py --data-root /path/to/data_disaster_types --out-dir outputs \
+    --model-name mobilenetv3_large_100 --img-size 192 --epochs 6 --unfreeze-last-fraction 0.3
+```
+
 The deployed model is ConvNeXt-Tiny at 224 x 224. The checkpoint `best_model.pt` is not in this package;
 a copy was shared at https://drive.google.com/file/d/1h8_TlYqEoUh_M_RfgIbnNGz2qmAOqk9a/view?usp=sharing
 and the app downloads it from Hugging Face (`Dhruvil-14/disaster-classifier` by default).
@@ -228,7 +255,7 @@ and the app downloads it from Hugging Face (`Dhruvil-14/disaster-classifier` by 
 python check_model.py --data-root /path/to/data_disaster_types --ckpt outputs/best_model.pt --out-dir model_check
 ```
 
-Saves metrics, per-class F1, confusion matrices, a confidence-threshold table, and image grids of
+To also predict a single image, add `--image photo.jpg`. It saves metrics, per-class F1, confusion matrices, a confidence-threshold table, and image grids of
 correct, wrong and most-confident-wrong predictions. On the 3,195-image test split:
 accuracy 0.8391, macro-F1 0.8153.
 
@@ -245,7 +272,9 @@ accuracy 0.8391, macro-F1 0.8153.
 Weakest classes: `other_disaster`, then `hurricane`. Common confusions: `other_disaster` <-> `not_disaster`,
 `hurricane` <-> `flood`. In an exploratory threshold check, a 0.6 threshold flagged about 10.5% of images
 for review; that threshold was explored on the test set and is not a tuned recommendation. A confident
-prediction is not verified evidence of an incident.
+prediction is not verified evidence of an incident. Judge the model by per-class F1 and recall, not accuracy alone;
+rare or ambiguous classes (`landslide`, `earthquake`, `other_disaster`) need attention, which is what the review flag is for.
+Notes from the saved evaluation run are in `image_classifier/train/model_check_notes.md`.
 
 ## 2.4 Deployment
 
@@ -255,6 +284,9 @@ prediction is not verified evidence of an incident.
   (optional `HF_MODEL_FILENAME`, default `best_model.pt`). The checkpoint must contain the keys
   `classes`, `img_size`, `model_name` and `model`.
 * `needs_review` is set when confidence is below a threshold (default 0.75, with per-class overrides in `app.py`).
+* Hugging Face setup: create a Model repo, upload `best_model.pt`, keep it public, and copy the ID (`USERNAME/REPO_NAME`).
+* Render setup: choose the Python runtime and the Free plan; do not add the `.pt` file to Git.
+* Local run: set `HF_MODEL_REPO_ID`, then `pip install -r requirements.txt` and `uvicorn app:app --reload`.
 * Free-tier caution: limited RAM and an ephemeral disk mean a large checkpoint may run out of memory,
   and the file is re-downloaded after a restart.
 
@@ -282,6 +314,16 @@ The full test split (3,195 images) was run through the API: 3,192 requests succe
 Accuracy 0.8396, macro-F1 0.8160, which matches the notebook evaluation (0.8391 / 0.8153). Per-image
 results are in `image_classifier/testing/results/deployment_test_results.csv`. The saved report
 shows the run against a local server (`http://127.0.0.1:8000`) rather than the Render URL.
+
+---
+
+## 2.6 Planned follow-up (from the Sprint 1 notes)
+
+`image_classifier/train/model_check_notes.md` lists these open items: confirm the checkpoint and `classes.json`;
+test at least 50 images through the prediction endpoint and compare with the reported accuracy; and implement a
+class mapping to incident types (`fire` to INDUSTRIAL_FIRE, `flood` to URBAN_FLOODING, `hurricane` to CYCLONE,
+`earthquake` to EARTHQUAKE; `landslide` and `other_disaster` out of scope; `not_disaster` no suggestion).
+Treat these as planned work, not done. The full-split API run above already covers the 50-image check.
 
 ---
 
