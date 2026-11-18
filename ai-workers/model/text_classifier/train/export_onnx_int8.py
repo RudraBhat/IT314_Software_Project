@@ -53,8 +53,18 @@ def main():
     model_dir, export_dir = Path(args.model_dir), Path(args.export_dir)
     export_dir.mkdir(parents=True, exist_ok=True)
 
-    model = AutoModelForSequenceClassification.from_pretrained(str(model_dir)).eval()
-    tokenizer = AlbertTokenizer.from_pretrained(str(model_dir), use_fast=False, keep_accents=True)
+    # These files are loaded from the local trained model directory.
+    model = AutoModelForSequenceClassification.from_pretrained(
+        str(model_dir),
+        local_files_only=True,
+    ).eval()  # nosec B615
+
+    tokenizer = AlbertTokenizer.from_pretrained(
+        str(model_dir),
+        local_files_only=True,
+        use_fast=False,
+        keep_accents=True,
+    )  # nosec B615
 
     enc = tokenizer("test message", return_tensors="pt", truncation=True,
                     max_length=args.max_length, padding="max_length")
