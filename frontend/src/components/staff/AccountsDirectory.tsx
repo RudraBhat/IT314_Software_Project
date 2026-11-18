@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Badge, Button, Card, Dialog, EmptyState, ErrorState, Field, Input, LoadingRows, Notice, Pagination, Select, Textarea } from "@/components/ui";
@@ -285,8 +286,16 @@ function AccountRow({ account, onAction }: { account: StaffAccount; onAction: (a
         <Badge tone="neutral">{ROLE_LABEL[account.role] ?? account.role}</Badge>
         <Badge tone={STATUS_TONE[account.status] ?? "neutral"}>{STATUS_LABEL[account.status] ?? account.status}</Badge>
         {account.is_locked && <Badge tone="high">Locked after failed sign-ins</Badge>}
-        {!account.is_you && (
-          <span className="ml-auto flex gap-1">
+        <span className="ml-auto flex items-center gap-1">
+          <Link
+            href={`/admin/audit?user=${encodeURIComponent(account.user_id)}`}
+            className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface-muted hover:text-foreground"
+            aria-label={`See the audit history of ${account.full_name}`}
+          >
+            History
+          </Link>
+          {!account.is_you && (
+            <>
             {account.role === "DISASTER_MGMT" && account.status !== "DISABLED" && (
               <Button size="sm" variant="ghost" onClick={() => onAction(account, "access")} aria-label={`Edit access for ${account.full_name}`}>
                 Edit access
@@ -309,8 +318,9 @@ function AccountRow({ account, onAction }: { account: StaffAccount; onAction: (a
                 Disable
               </Button>
             )}
-          </span>
-        )}
+            </>
+          )}
+        </span>
       </div>
       <p className="text-xs text-muted">
         {account.email}

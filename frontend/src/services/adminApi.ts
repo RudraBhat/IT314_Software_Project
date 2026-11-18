@@ -136,10 +136,20 @@ export type AuditPage = {
   facets: { actions: string[] };
 };
 
-export type AuditQuery = { q?: string; action?: string; result?: AuditResult | ""; from?: string; to?: string; page?: number };
+export type AuditQuery = {
+  q?: string;
+  action?: string;
+  result?: AuditResult | "";
+  /** Only entries made by or about this account. */
+  user_id?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+};
 
 export async function listAudit(query: AuditQuery): Promise<AuditPage> {
   const params = new URLSearchParams();
+  if (query.user_id) params.set("user_id", query.user_id);
   if (query.q?.trim()) params.set("q", query.q.trim());
   if (query.action) params.set("action", query.action);
   if (query.result) params.set("result", query.result);

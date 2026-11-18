@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Notice, PageHeader, Pagination, Select } from "@/components/ui";
 import { useAction } from "@/components/use-action";
@@ -39,6 +41,20 @@ function who(person: AuditPerson | null): string {
  * donations) are never shown, and citizens are never named. Read-only, with a hash-chain check.
  */
 export default function AdminAuditPage() {
+  // useSearchParams needs a Suspense boundary so the page can still be prerendered.
+  return (
+    <Suspense fallback={<LoadingRows rows={5} />}>
+      <AuditView />
+    </Suspense>
+  );
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function AuditView() {
+  const requestedUser = useSearchParams().get("user") ?? "";
+  // Only a well-formed id is sent; anything else is ignored rather than turned into an error.
+  const userId = UUID.test(requestedUser) ? requestedUser : "";
   const { run, busy } = useAction();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -60,11 +76,11 @@ export default function AdminAuditPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const key = JSON.stringify({ q: debouncedSearch, action, result, from, to, page, retry });
+  const key = JSON.stringify({ q: debouncedSearch, action, result, from, to, page, retry, userId });
 
   useEffect(() => {
     let active = true;
-    listAudit({ q: debouncedSearch, action, result, from, to, page })
+    listAudit({ q: debouncedSearch, action, result, from, to, page, user_id: userId })
       .then((data) => {
         if (!active) return;
         setState({ key, data });
@@ -81,6 +97,12 @@ export default function AdminAuditPage() {
   const loading = !state || state.key !== key;
   const data = state?.data;
   const dateOrderWrong = Boolean(from && to && from > to);
+  // Name the person from the entries themselves; the log never names citizens, so this stays staff-only.
+  const subject = userId
+    ? data?.items
+        .map((e) => (e.actor?.user_id === userId ? e.actor : e.entity_id === userId ? e.target : null))
+        .find((p) => p?.name) ?? null
+    : null;
 
   async function verify() {
     const outcome = await run("verify", () => verifyAudit());
@@ -103,6 +125,15 @@ export default function AdminAuditPage() {
           <Notice tone={verification.valid ? "info" : "critical"}>
             {verification.valid ? "Intact. " : "Problem found. "}
             {verification.message} Checked {formatDateTime(verification.verified_at)}.
+          </Notice>
+        </div>
+      )}
+
+      {userId && (
+        <div className="mb-4">
+          <Notice tone="info">
+            Showing entries made by or about {subject ? who(subject) : "one account"}.{" "}
+            <Link href="/admin/audit" className="font-medium underline">Show everyone</Link>
           </Notice>
         </div>
       )}
