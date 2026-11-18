@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 
+import { AccountsDirectory } from "@/components/staff/AccountsDirectory";
 import { InviteAccountDialog } from "@/components/staff/InviteAccountDialog";
+import { NeedsAttention } from "@/components/staff/NeedsAttention";
 import { PendingInvitations } from "@/components/staff/PendingInvitations";
 import { Notice, PageHeader } from "@/components/ui";
 
@@ -13,7 +15,7 @@ export default function AdminAccountsPage() {
     <>
       <PageHeader
         title="Platform accounts"
-        description="Invite Disaster Management staff, Field Team responders and other administrators."
+        description="See who has access, and invite Disaster Management staff, Field Team responders and other administrators."
         actions={
           <InviteAccountDialog
             roles={["DISASTER_MGMT", "FIELD_TEAM", "APP_MGMT"]}
@@ -21,11 +23,15 @@ export default function AdminAccountsPage() {
           />
         }
       />
+      <NeedsAttention refreshKey={invitedCount} />
       <Notice tone="info">
         Every invitee sets their own password and authenticator from the emailed link. Field Team
         responders are linked to their team at invitation time, so they can see assignments as soon
         as setup is complete.
       </Notice>
+      <div className="mt-6">
+        <AccountsDirectory refreshKey={invitedCount} />
+      </div>
       <PendingInvitations refreshKey={invitedCount} />
     </>
   );

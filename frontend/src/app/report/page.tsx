@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { SiteHeader, NavLink } from "@/components/Brand";
+import { UnifiedSiteHeader, type SessionInfo } from "@/components/navigation/UnifiedSiteHeader";
 import Link from "next/link";
 import { isInGujarat, GUJARAT_CENTER, GUJARAT_BOUNDS } from "@/lib/geo";
 import {
@@ -46,11 +46,6 @@ const URGENCIES = [
   { id: "CRITICAL", label: "Critical / Life Threat", color: "border-red-500 text-red-800 bg-red-50" },
 ];
 
-interface SessionInfo {
-  authenticated: boolean;
-  role: string | null;
-  name: string | null;
-}
 
 const DRAFT_STORAGE_KEY = "resq_incident_report_draft";
 
@@ -110,14 +105,16 @@ export default function ReportIncidentPage() {
         if (data) {
           setSession({
             authenticated: !!data.authenticated,
+            dm: !!data.dm,
+            citizen: !!data.citizen,
             role: data.role || null,
             name: data.name || null,
           });
         } else {
-          setSession({ authenticated: false, role: null, name: null });
+          setSession({ authenticated: false, dm: false, citizen: false, role: null, name: null });
         }
       })
-      .catch(() => setSession({ authenticated: false, role: null, name: null }));
+      .catch(() => setSession({ authenticated: false, dm: false, citizen: false, role: null, name: null }));
 
     // Restore draft if saved (sessionStorage is client-only, so this has to run after mount)
     try {
@@ -500,13 +497,7 @@ export default function ReportIncidentPage() {
       </div>
 
       {/* Header */}
-      <SiteHeader subtitle="Citizen Emergency Dispatch" maxWidth="max-w-5xl">
-        {/* session is null until /api/session resolves; only show Sign In once signed-out is confirmed */}
-        {session && !session.authenticated && <NavLink href="/login?next=/report">Sign In</NavLink>}
-        <NavLink href="/my-reports">My Reports</NavLink>
-        <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
-        <NavLink href="/" hideBelow="sm">Public Map</NavLink>
-      </SiteHeader>
+      <UnifiedSiteHeader activeHref="/report" session={session} />
 
       {/* Main Container */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 md:p-8">

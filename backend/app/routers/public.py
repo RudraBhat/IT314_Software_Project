@@ -146,6 +146,41 @@ def list_public_campaigns():
     return rows
 
 
+class PublicShelter(BaseModel):
+    id: str
+    name: str
+    type: str  # SHELTER | RELIEF_CAMP | MEDICAL_POST
+    lat: float
+    lon: float
+    address: str
+    district: str | None
+    total_capacity: int | None
+    current_occupancy: int | None
+    available_beds: int | None
+    contact_number: str | None
+    status: str  # OPERATIONAL | FULL
+    notes: str | None
+    is_simulated: bool = False
+
+
+@router.get("/shelters", response_model=list[PublicShelter], summary="Open relief shelters and medical posts")
+def list_public_shelters():
+    """Shelters that are open or full; closed ones are hidden. Coordinates are rounded to 4 decimals."""
+    with db.transaction() as conn:
+        rows = conn.execute(
+            """
+            SELECT shelter_id::text AS id, name, type, round(latitude::numeric, 4)::float AS lat,
+                   round(longitude::numeric, 4)::float AS lon, address_text AS address, district,
+                   total_capacity, current_occupancy,
+                   CASE WHEN total_capacity IS NULL OR current_occupancy IS NULL THEN NULL
+                        ELSE GREATEST(total_capacity - current_occupancy, 0) END AS available_beds,
+                   contact_number, status, notes, is_simulated
+            FROM shelters WHERE status <> 'CLOSED' ORDER BY name LIMIT 500
+            """
+        ).fetchall()
+    return rows
+
+
 @router.get("/alerts", response_model=list[PublicAlert], summary="Active early warnings and external alerts")
 def list_public_alerts():
     with db.transaction() as conn:
