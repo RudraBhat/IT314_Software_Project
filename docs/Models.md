@@ -1,184 +1,309 @@
-# Multilingual Disaster Detection (Text + Image)
+# Disaster Detection from Social Media: Text and Image Classifiers
 
-This project detects disasters from **text** (Hindi, Gujarati, Hinglish, Roman Gujarati and English) and from **images**. It contains the data tools, the model training and evaluation code, and two deployed APIs.
+A prototype that classifies social-media posts as disasters. It has two parts:
 
-The text model predicts one of five classes:
+* a **text classifier** for short multilingual messages (English, Hindi, Gujarati, Hinglish, romanised Gujarati), and
+* an **image classifier** for disaster photos.
 
-| Class | Notes |
-|---|---|
-| `Fire` | |
-| `Earthquake` | |
-| `Cyclone` | Hurricane tweets are merged into this class, because a hurricane is a tropical cyclone |
-| `Flood` | |
-| `Non-Disaster` | Includes hard negatives such as metaphors ("my inbox is a flood"), documentaries and drills |
+Both are served as FastAPI apps on Render, with model files stored on Hugging Face.
+This README covers the whole path: data, training, export, deployment and testing.
 
----
+> **Status: prototype.** Read the "Data and honesty notes" sections before quoting any number.
 
-## Live demos
+## Live services
 
-| Model | URL |
-|---|---|
-| Text classifier (IndicBERT) | https://indicbert-disaster-api.onrender.com |
-| Image classifier | https://disaster-classifier-api.onrender.com |
-
-If a service has been idle, the first request may be slow while Render starts it again.
-
----
-
-## Which text model is deployed, and why
-
-We fine-tuned **MuRIL** (`google/muril-base-cased`), which is our best text model. It is too large to deploy on Render, so the live text API serves a **smaller IndicBERT-based model** instead.
-
-- **MuRIL** is used for training experiments, local evaluation and as the quality reference (results below). The trained checkpoint (`muril_disaster_classifier_best.zip`) is large and is not stored in the repository.
-- **MuRIL** drive link - https://drive.google.com/drive/folders/104V_1fC0FthZ8jAX043E72WID2KDmEvL?usp=sharing
-- **IndicBERT** is the deployed model, chosen because it fits Render's size and memory limits. A smaller model usually gives up some accuracy, so the live service should be expected to score at or below the MuRIL numbers in this README.
-
----
-
-## Project structure
-
-```
-Project/
-|
-├── text/
-│   ├── MuRIL/
-│   │   ├── fine_tune_muril_disaster_classifier.py   Colab notebook export: fine-tunes MuRIL
-│   │   ├── test_muril_local.py                      local evaluation on the held-out test CSV
-│   │   ├── muril_local_test_report.txt              evaluation report (summarized below)
-│   │   ├── tweets_multilingual.csv                  held-out test set (512 rows)
-│   │   └── muril_disaster_classifier_best.zip       trained checkpoint (large, not in git)
-│   └── data tools/
-│       ├── build_multilingual_tweets.py             builds the noisy multilingual seed/test data
-│       ├── generate_tweets_llm.py                   generates more tweets with the Claude or Groq API
-│       ├── human_style_tweets.csv                   100 English tweets for quick checks
-│       ├── check_hurricane_cyclone.py / .ipynb      Hurricane vs Cyclone label analysis
-│       └── groq_vs_anthropic_key.xlsx               notes on choosing an API provider
-└── image/                                      image classifier code and API
-```
-
----
-
-## Text pipeline
-
-### 1. Data
-
-| File | Purpose | Details |
+| Service | URL | Model files on Hugging Face |
 |---|---|---|
-| `disaster_multilingual_train_12500.csv` | Training and validation | Columns `text`, `label`, `language`. Synthetic, with equally sized class x language groups. Only `text` is given to the model; `language` is used for stratified splitting and per-language reports. |
-| `tweets_multilingual.csv` | Final held-out test | 512 rows: 480 hand-written tweets (120 seeds, each with 3 noisy copies; Hurricane relabeled Cyclone) plus 32 synthetic Fire rows. Languages: `hi`, `gu`, `hinglish`, `gu_roman`. |
-| `human_style_tweets.csv` | Quick English sanity check | 100 tweets with a `style` column for error analysis. |
+| Text API | https://indicbert-disaster-api.onrender.com | `Dhruvil-14/indicbert-disaster-api` |
+| Image API | https://disaster-classifier-api.onrender.com | `Dhruvil-14/disaster-classifier` |
 
-The test set is **never** used for training, tuning, epoch selection or checkpoint selection.
+Both run on Render's free tier, so the first request after idle time can take a
+while while the service wakes up and downloads its model. Docs are at `/docs`, health at `/health`.
 
-### 2. Training (MuRIL)
+* Text: `POST /predict` with `{"text": "..."}`
+* Image: `POST /predict` with a multipart field named `file`
 
-Run `fine_tune_muril_disaster_classifier.py` in Google Colab with a GPU (it is a Colab notebook exported as a script).
+## Repository layout
 
-| Setting | Value |
-|---|---|
-| Base model | `google/muril-base-cased` |
-| Max sequence length | 192 tokens |
-| Batch size | 8, with gradient accumulation 4 (effective 32) |
-| Learning rate / weight decay | 2e-5 / 0.01 |
-| Max epochs | 6, early stopping after 2 epochs without improvement |
-| Checkpoint selection | Best validation macro-F1 (not accuracy) |
-| Validation split | 15%, stratified by class and language |
-| Precision | FP16 mixed precision |
+```
+models/
+├── README.md                     # this file
+├── text_classifier/
+│   ├── README.md
+│   ├── data/                     # synthetic training CSV + test CSV
+│   ├── train/                    # IndicBERT fine-tuning + ONNX INT8 export
+│   ├── MuRIL/                    # larger, more accurate model (not deployed)
+│   ├── deployment/               # FastAPI app for Render
+│   └── testing/                  # live-API test script + saved results
+└── image_classifier/
+    ├── README.md
+    ├── train/                    # training + evaluation scripts
+    ├── deployment/               # FastAPI app for Render
+    └── testing/                  # API test script + saved results
+```
 
-### 3. Local evaluation
+---
+
+# Part 1: Text classifier
+
+**Task.** Classify a short, tweet-style message into one of five classes:
+`Fire`, `Earthquake`, `Cyclone`, `Flood`, `Non-Disaster`.
+**Languages.** English (`en`), Hindi (`hi`), Gujarati (`gu`), Hinglish (`hinglish`), romanised Gujarati (`gu_roman`).
+
+## 1.1 Data collection
+
+### Training data is synthetic
+
+We could not collect real social-media posts for training. We applied for social-media
+API access (to pull real posts), but **our API key requests were rejected**, so no
+real posts could be collected programmatically. The training data is therefore **synthetic**.
+
+* File: `text_classifier/data/disaster_multilingual_train_v2_15000.csv`, 15,000 rows.
+* Balanced: 3,000 rows per class and 3,000 per language, i.e. 600 per class x language pair.
+* Written as templated scenarios, informed by public disaster-management and news
+  sources (e.g. Gujarat Institute of Disaster Management, IMD, state disaster-management
+  authorities and Indian news sites; the URLs are listed per row in `reference_urls`).
+  Every row is tagged `synthetic_authored_reference_informed`.
+* Ten message styles: local news, eyewitness, impact/recovery, help request, official alert,
+  casual reply, routine update, casual chat, event announcement and fact-check.
+  The last four exist mostly to teach `Non-Disaster` (hard negatives such as workshops or metaphors).
+* 340 `scenario_group` values, used to keep near-duplicate scenarios out of validation (see 1.2).
+* Columns used for training: `text`, `label`, `language`, `scenario_group`.
+
+### Test data is separate and was not used in training
+
+* File: `text_classifier/data/tweets_multilingual.csv`, 512 rows.
+* It was collected/assembled separately from the training data, and was **never used for
+  training, validation or early stopping**. Every number below comes from it.
+* It labels cyclones as `Hurricane`; training and test scripts map that to `Cyclone`.
+* Composition: Cyclone 144, Earthquake 112, Flood 112, Non-Disaster 112, Fire 32.
+  Languages: `gu` 128, `hi` 128, `hinglish` 136, `gu_roman` 120. There are **no English test rows**.
+
+### Data and honesty notes
+
+* **Neither dataset is real social-media data.** The test set is more realistic than the
+  training set, but we could not verify it against real platform data because API access was refused.
+* **Validation scores are optimistic** because training and validation are both synthetic.
+  Trust the held-out test numbers, not validation numbers.
+* Per the file's own metadata, 360 of the 512 test rows are marked `augmented` (typo/emoji
+  noise added), and the 32 Fire rows are tagged `synthetic_supplement_not_original_holdout`.
+  So Fire results come from synthetic rows, and the Fire sample is small.
+* Test rows are tweet-like (news, eyewitness, official, help, metaphor, hard negatives).
+* Real tweets are still needed for a fair measurement.
+
+## 1.2 Training
+
+* Base model: [`ai4bharat/indic-bert`](https://huggingface.co/ai4bharat/indic-bert); script `text_classifier/train/train_indicbert.py`.
+* Validation is split by `scenario_group` inside every class x language pair, so
+  near-duplicate scenarios do not leak between train and validation.
+* Defaults: max length 160, batch size 16, learning rate 2e-5, up to 6 epochs, early
+  stopping after 2 epochs without macro-F1 gain. A GPU (Colab T4 / Kaggle) is strongly recommended.
 
 ```bash
-pip install torch transformers sentencepiece scikit-learn pandas matplotlib
-python test_muril_local.py --model-zip muril_disaster_classifier_best.zip --test-csv tweets_multilingual.csv
+cd text_classifier/train
+pip install -r requirements.txt
+python train_indicbert.py --train-csv ../data/disaster_multilingual_train_v2_15000.csv \
+    --test-csv ../data/tweets_multilingual.csv --output-dir outputs
 ```
 
-It runs on CPU by default (`--device cuda` if you have a GPU), maps Hurricane to Cyclone, and writes results to `muril_local_test_results/`: row-level predictions, metrics by language and by augmentation, a JSON summary, a text report and a confusion-matrix image (the image needs `matplotlib`).
+## 1.3 Two models: why the deployed one is not the best one
 
----
+We trained two models.
 
-## Results (MuRIL on the held-out multilingual test set)
+1. **MuRIL** (`google/muril-base-cased`, in `text_classifier/MuRIL/`) is the **better classifier**,
+   but it is **large** (a BERT-base-sized model with roughly 237 M parameters), too heavy for a
+   free Render instance with 512 MB RAM. It was evaluated locally and **not deployed**.
+2. **IndicBERT**, exported to **ONNX INT8**, is **smaller**, so we **trained it as the second model and deployed it**.
 
-Full report: `text/MuRIL/muril_local_test_report.txt`.
+Held-out test set (512 rows):
 
-### Overall (512 rows)
+| Model | Where evaluated | Accuracy | Macro-F1 |
+|---|---|---:|---:|
+| MuRIL (fp32 PyTorch, CPU) | local | **0.791** | **0.814** |
+| IndicBERT ONNX INT8 | live Render API | 0.658 | 0.659 |
 
-| Metric | Value |
-|---|---|
-| Accuracy | 0.791 |
-| Macro F1 | 0.814 |
-| Weighted F1 | 0.793 |
+Accuracy by language:
 
-### Per class
+| Language | Rows | MuRIL | IndicBERT INT8 (deployed) |
+|---|---:|---:|---:|
+| `hi` | 128 | 0.867 | 0.805 |
+| `gu` | 128 | 0.844 | 0.813 |
+| `hinglish` | 136 | 0.750 | 0.537 |
+| `gu_roman` | 120 | 0.700 | 0.475 |
+
+Caveats on this comparison:
+
+* The two numbers measure different things: MuRIL is the full-precision local model, IndicBERT is the
+  quantised model through the live API. We have no separate full-precision IndicBERT test score, so we cannot say how much of the
+  gap comes from the model and how much from INT8 quantisation.
+* The MuRIL script reads an earlier 12,500-row training file and splits randomly by class x language,
+  whereas IndicBERT uses the 15,000-row v2 file with a scenario-grouped split.
+* The two models were not trained under identical conditions, so treat the comparison as indicative.
+
+MuRIL details: max length 192, batch 8 with gradient accumulation, lr 2e-5, up to 6 epochs, early stopping,
+seed 42. Its weak spots: 39 of 112 Earthquake messages were predicted `Non-Disaster`, and 25 of 144 Cyclone
+messages were predicted `Earthquake`. Full report: `text_classifier/MuRIL/muril_local_test_report.txt`.
+
+## 1.4 Export for deployment
+
+The API needs ONNX INT8 files, not the PyTorch checkpoint:
+
+```bash
+python export_onnx_int8.py --model-dir outputs/indicbert_disaster_classifier_v2_best \
+    --export-dir outputs/hf_export          # add --upload-repo USER/REPO with HF_TOKEN to upload
+```
+
+This writes `model_int8.onnx`, `spiece.model`, `tokenizer_config.json`, `special_tokens_map.json`,
+`label_mapping.json` and `config.json`. Upload them to a Hugging Face model repository.
+
+## 1.5 Deployment
+
+* Push `text_classifier/deployment/` to GitHub and create a Render web service from it. Model weights are **not** committed to Git.
+* Set `PYTHON_VERSION=3.11.11` (also pinned in `.python-version`), `HF_MODEL_REPO=Dhruvil-14/indicbert-disaster-api`,
+  `HF_REVISION=main`, `MAX_LENGTH=160`, and `HF_TOKEN` only if the repo is private.
+* Build: `pip install --no-cache-dir -r requirements.txt`. Start: `uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1`. Health check: `/health`.
+* ONNX Runtime CPU inference, one worker, one intra-op thread, serialised requests, to stay inside 512 MB.
+  The last health check showed a peak RSS of about 387 MB. Re-check after changing the model.
+* The label order in `app.py` must match `label_mapping.json` or the service refuses to start.
+
+## 1.6 Testing the deployed API
+
+```bash
+cd text_classifier/testing
+pip install -r requirements.txt
+python test_text_api.py --api-url https://indicbert-disaster-api.onrender.com   # --limit 20 for a quick try
+```
+
+All 512 requests succeeded. Results (accuracy 0.658, macro-F1 0.659) are in `text_classifier/testing/results/`.
 
 | Class | Precision | Recall | F1 | Support |
+|---|---:|---:|---:|---:|
+| Fire | 0.619 | 0.813 | 0.703 | 32 |
+| Earthquake | 0.584 | 0.777 | 0.667 | 112 |
+| Cyclone | 0.868 | 0.500 | 0.634 | 144 |
+| Flood | 0.720 | 0.482 | 0.578 | 112 |
+| Non-Disaster | 0.601 | 0.875 | 0.713 | 112 |
+
+Romanised and mixed-script text (`gu_roman`, `hinglish`) is much weaker than native script, and
+Cyclone and Flood recall is low. Treat these as a prototype baseline.
+
+---
+
+# Part 2: Image classifier
+
+**Task.** Classify a disaster image into one of seven classes: `earthquake`, `fire`, `flood`,
+`hurricane`, `landslide`, `other_disaster`, `not_disaster`. The API also returns a confidence score,
+the top-3 predictions and a `needs_review` flag for low-confidence results.
+
+## 2.1 Data collection
+
+* Dataset: the [CrisisNLP / MEDIC "Disaster types" task set](https://crisisnlp.qcri.org/crisis-image-datasets-asonam20)
+  (about 3.2 GB), real social-media images with crowd-sourced labels. It is **not included** in this package.
+* Download and extract so that one folder holds `data/` and the three TSV files
+  `consolidated_disaster_types_{train,dev,test}_final.tsv`. The TSV paths contain an extra
+  `aidr_disaster_types/` folder that does not exist after extraction; the code strips it.
+  If the training log reports many missing images, the paths do not match your layout.
+* The data is released for research use: read its terms and cite Alam et al., ASONAM 2020 (arXiv:2011.08916).
+* Limits: social-media images only (drone imagery untested) and noisy crowd-sourced labels.
+
+## 2.2 Training
+
+* Scripts: `image_classifier/train/train_disaster_types.py` and shared code in `disaster_common.py` (PyTorch + timm).
+* The best epoch is chosen by dev macro-F1. Outputs: `best_model.pt`, `classes.json`, `confusion_matrix.png`.
+
+| Hardware | Model | Image size | Epochs | `--unfreeze-last-fraction` |
 |---|---|---|---|---|
-| Fire | 0.968 | 0.938 | 0.952 | 32 |
-| Earthquake | 0.657 | 0.634 | 0.646 | 112 |
-| Cyclone | 1.000 | 0.694 | 0.820 | 144 |
-| Flood | 0.911 | 0.821 | 0.864 | 112 |
-| Non-Disaster | 0.651 | 1.000 | 0.789 | 112 |
+| GPU | `convnext_tiny` | 224 | 12 | 1 |
+| CPU only | `mobilenetv3_large_100` | 192 | 6 | 0.3 |
 
-### Per language
+```bash
+cd image_classifier/train
+pip install -r requirements.txt
+python train_disaster_types.py --data-root /path/to/data_disaster_types --out-dir outputs
+```
 
-| Language | Rows | Accuracy | Macro F1 |
-|---|---|---|---|
-| Hindi (`hi`) | 128 | 0.867 | 0.885 |
-| Gujarati (`gu`) | 128 | 0.844 | 0.856 |
-| Hinglish (`hinglish`) | 136 | 0.750 | 0.765 |
-| Roman Gujarati (`gu_roman`) | 120 | 0.700 | 0.722 |
+The deployed model is ConvNeXt-Tiny at 224 x 224. The checkpoint `best_model.pt` is not in this package;
+a copy was shared at https://drive.google.com/file/d/1h8_TlYqEoUh_M_RfgIbnNGz2qmAOqk9a/view?usp=sharing
+and the app downloads it from Hugging Face (`Dhruvil-14/disaster-classifier` by default).
 
-### Confusion matrix (rows = true class, columns = predicted)
+## 2.3 Evaluation
 
-| True \ Predicted | Fire | Earthquake | Cyclone | Flood | Non-Disaster |
-|---|---|---|---|---|---|
-| Fire | 30 | 2 | 0 | 0 | 0 |
-| Earthquake | 1 | 71 | 0 | 1 | 39 |
-| Cyclone | 0 | 25 | 100 | 8 | 11 |
-| Flood | 0 | 10 | 0 | 92 | 10 |
-| Non-Disaster | 0 | 0 | 0 | 0 | 112 |
+```bash
+python check_model.py --data-root /path/to/data_disaster_types --ckpt outputs/best_model.pt --out-dir model_check
+```
 
-### Reading the results
+Saves metrics, per-class F1, confusion matrices, a confidence-threshold table, and image grids of
+correct, wrong and most-confident-wrong predictions. On the 3,195-image test split:
+accuracy 0.8391, macro-F1 0.8153.
 
-- **Script matters.** Text written in Devanagari or Gujarati script scores clearly higher than Roman-script text (Hinglish and Roman Gujarati), which has no standard spelling.
-- **Main weakness: disasters predicted as Non-Disaster.** 39 Earthquake, 11 Cyclone and 10 Flood rows were predicted as Non-Disaster. That is why Non-Disaster has perfect recall but only 0.65 precision.
-- **Cyclone/Earthquake mix-up.** 25 of 144 Cyclone rows were predicted as Earthquake. The row-level predictions in `muril_local_test_results/` show which tweets are affected.
-- **Noise is handled well.** Original (un-augmented) rows score 0.796 accuracy and noisy copies 0.789, so typos and slang did not hurt much.
-- **Augmented-only macro F1 of 0.631** (over all five classes) is not a real weakness: Fire appears only in the un-augmented rows, so that class has no support in the augmented subset. Over the classes present it is 0.789.
+| Class | Precision | Recall | F1 | Support |
+|---|---:|---:|---:|---:|
+| earthquake | 0.836 | 0.871 | 0.853 | 404 |
+| fire | 0.899 | 0.925 | 0.912 | 280 |
+| flood | 0.869 | 0.878 | 0.874 | 599 |
+| hurricane | 0.740 | 0.696 | 0.717 | 352 |
+| landslide | 0.853 | 0.869 | 0.861 | 268 |
+| not_disaster | 0.888 | 0.907 | 0.898 | 990 |
+| other_disaster | 0.632 | 0.556 | 0.592 | 302 |
+
+Weakest classes: `other_disaster`, then `hurricane`. Common confusions: `other_disaster` <-> `not_disaster`,
+`hurricane` <-> `flood`. In an exploratory threshold check, a 0.6 threshold flagged about 10.5% of images
+for review; that threshold was explored on the test set and is not a tuned recommendation. A confident
+prediction is not verified evidence of an incident.
+
+## 2.4 Deployment
+
+* Push `image_classifier/deployment/` to GitHub; create a Render web service (Python, Free plan).
+* Build: `pip install -r requirements.txt`. Start: `uvicorn app:app --host 0.0.0.0 --port $PORT`. Health check: `/health`.
+* Upload `best_model.pt` to a **public** Hugging Face model repo and set `HF_MODEL_REPO_ID` on Render
+  (optional `HF_MODEL_FILENAME`, default `best_model.pt`). The checkpoint must contain the keys
+  `classes`, `img_size`, `model_name` and `model`.
+* `needs_review` is set when confidence is below a threshold (default 0.75, with per-class overrides in `app.py`).
+* Free-tier caution: limited RAM and an ephemeral disk mean a large checkpoint may run out of memory,
+  and the file is re-downloaded after a restart.
+
+```javascript
+const form = new FormData();
+form.append("file", imageFile);   // field name must be "file"
+const res = await fetch("https://disaster-classifier-api.onrender.com/predict", { method: "POST", body: form });
+const result = await res.json();
+```
+
+Example response (shortened):
+`{"prediction": "flood", "confidence": 0.91, "top3": [{"label": "flood", "confidence": 0.91}], "needs_review": false}`
+
+## 2.5 Testing the API
+
+```bash
+cd image_classifier/testing
+pip install -r requirements.txt
+python test_image_api.py --api-url https://disaster-classifier-api.onrender.com \
+    --tsv /path/to/data_disaster_types/consolidated_disaster_types_test_final.tsv \
+    --data-dir /path/to/data_disaster_types/data --limit 20     # drop --limit for the full split
+```
+
+The full test split (3,195 images) was run through the API: 3,192 requests succeeded and 3 failed.
+Accuracy 0.8396, macro-F1 0.8160, which matches the notebook evaluation (0.8391 / 0.8153). Per-image
+results are in `image_classifier/testing/results/deployment_test_results.csv`. The saved report
+shows the run against a local server (`http://127.0.0.1:8000`) rather than the Render URL.
 
 ---
 
-## Limitations
+# Summary
 
-- **The data is synthetic.** Both the training data and the test set were generated and hand-written, not collected from real users. Scores on real tweets will probably be lower. Test on real, independently labeled posts before relying on the model.
-- **Fire is tested on synthetic rows.** The 32 Fire test rows were written as a supplement because the original test set had no Fire examples. The Fire score (0.95) is a diagnostic, not an independent benchmark.
-- **Hurricane is merged into Cyclone.** The model cannot tell the two apart by design.
-- **Gujarati and Roman Gujarati text should be reviewed by a native speaker**, because the data was not written by one.
-- **The deployed model is not MuRIL.** Numbers above describe MuRIL; the live IndicBERT service has not been measured on this test set here.
+| | Text | Image |
+|---|---|---|
+| Training data | Synthetic, 15,000 rows, 5 languages | Real social-media images (MEDIC), crowd-labelled |
+| Test data | Separate 512-row tweet-style set, not used in training; not scraped from social platforms | Official MEDIC test split, 3,195 images |
+| Best model | MuRIL: acc 0.791, macro-F1 0.814 (local, not deployed: too large) | ConvNeXt-Tiny: acc 0.840, macro-F1 0.816 |
+| Deployed model | IndicBERT ONNX INT8: acc 0.658, macro-F1 0.659 | ConvNeXt-Tiny (same as best) |
+| Main weakness | Romanised Gujarati and Hinglish; Flood/Cyclone recall | `other_disaster`, `hurricane` |
 
----
+## Known limitations and next steps
 
-## Ideas for improvement
-
-- Add more real or independently written examples, especially Earthquake and Cyclone tweets in Roman script.
-- Add more Non-Disaster hard negatives and re-check Earthquake vs Non-Disaster errors.
-- Evaluate the deployed IndicBERT model on `tweets_multilingual.csv` with the same script, so both models are compared on the same data.
-- To deploy MuRIL, use a larger host, or try a smaller version of it (distillation or quantization).
-
----
-
-## Image classifier
-
-The image classifier is deployed at https://disaster-classifier-api.onrender.com. Its code is in `image/`.
-
-<!-- Add here: image model name, dataset, classes, accuracy, and how to call the API. -->
-
----
-
-## Other data tools (text)
-
-| File | What it does |
-|---|---|
-| `build_multilingual_tweets.py` | Writes the 120 hand-made seed tweets and adds noise (typos, slang, hashtags, emoji, code-mixing) to make the test set. |
-| `generate_tweets_llm.py` | Generates large, varied multilingual tweets with the Claude API or the Groq free tier. It filters wrong-script text and duplicates, drops text too close to the test set, and assigns train/validation splits by call group. |
-| `check_hurricane_cyclone.py` / `.ipynb` | TF-IDF baseline used to decide whether to merge Hurricane and Cyclone. |
-| `groq_vs_anthropic_key.xlsx` | Comparison of API providers for data generation. |
+* Our social-media API key applications were rejected, so no real posts were collected; the text training
+  data is synthetic and the text test set is not real platform data.
+* The Fire test class is small (32 rows, synthetic supplement) and the test set has no English rows.
+* Close the quality gap on the deployed text model: try a larger instance to serve MuRIL, or distil/quantise MuRIL, and collect real tweets.
+* Image: social-media only, noisy labels, weak `other_disaster` class.
+* Free Render instances sleep when idle; expect slow first requests.
