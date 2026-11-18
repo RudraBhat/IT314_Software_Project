@@ -12,6 +12,7 @@ import resource
 from pathlib import Path
 from contextlib import asynccontextmanager
 
+import tempfile
 import numpy as np
 import onnxruntime as ort
 from huggingface_hub import hf_hub_download
@@ -22,7 +23,13 @@ from transformers import AlbertTokenizer
 HF_MODEL_REPO = os.getenv("HF_MODEL_REPO", "").strip()
 HF_REVISION = os.getenv("HF_REVISION", "main")
 HF_TOKEN = os.getenv("HF_TOKEN") or None  # Required only for a private HF model repo.
-MODEL_DIR = Path(os.getenv("MODEL_DIR", "/tmp/indicbert_model"))
+
+MODEL_DIR = Path(
+    os.getenv(
+        "MODEL_DIR",
+        str(Path(tempfile.gettempdir()) / "indicbert_model")
+    )
+)
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_LENGTH = int(os.getenv("MAX_LENGTH", "160"))
@@ -84,12 +91,13 @@ async def lifespan(app: FastAPI):
             f"Label mapping mismatch. Expected {LABELS}, found {stored_labels}"
         )
 
+    # Loads an existing local model; no Hub download occurs.
     tokenizer = AlbertTokenizer.from_pretrained(
         str(MODEL_DIR),
         local_files_only=True,
         use_fast=False,
         keep_accents=True,
-    )
+    )  # nosec B615
 
     options = ort.SessionOptions()
     options.intra_op_num_threads = 1
