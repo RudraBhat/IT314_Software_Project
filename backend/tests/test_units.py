@@ -1,11 +1,17 @@
 """Unit tests that need no database."""
 
+import base64
+import struct
 import uuid
+import zlib
 
 import pyotp
+import pytest
 
 from app import security
+from app.errors import ApiError
 from app.services.ai_provider import UnavailableProvider, apply_guardrails
+from app.uploads import sniff_image_type, strip_image_metadata
 
 
 def test_root_and_health(client):
@@ -317,3 +323,87 @@ def test_reopen_never_strands_an_incident():
     for previous in ("SUBMITTED", "NEEDS_INFORMATION", "VERIFIED", "DISPATCHED", "RESOLVED", "REJECTED", None):
         for priority in ("HIGH", None):
             assert TRANSITIONS[reopen_target(previous, priority)], (previous, priority)
+
+
+# --------------------------------------------------------------------------- photo metadata stripping (#180)
+
+
+def _seg(marker: int, body: bytes) -> bytes:
+    return bytes([0xFF, marker]) + struct.pack(">H", len(body) + 2) + body
+
+
+def _exif(orientation: int | None, order: str = "<") -> bytes:
+    tags = [(0x8825, 4, 1, 999)]  # GPS IFD pointer: must not survive
+    if orientation is not None:
+        tags.append((0x0112, 3, 1, orientation))
+    ifd = struct.pack(order + "H", len(tags))
+    for tag, kind, n, value in tags:
+        packed = struct.pack(order + "HH", value, 0) if kind == 3 else struct.pack(order + "I", value)
+        ifd += struct.pack(order + "HHI", tag, kind, n) + packed
+    head = (b"II" if order == "<" else b"MM") + struct.pack(order + "HI", 42, 8)
+    return b"Exif\0\0" + head + ifd + struct.pack(order + "I", 0) + b"GPS 23.0225N 72.5714E"
+
+
+def _jpeg(exif: bytes) -> bytes:
+    return (
+        b"\xff\xd8"
+        + _seg(0xE0, b"JFIF\0\x01\x01\0\0\x01\0\x01\0\0")
+        + _seg(0xE1, exif)
+        + _seg(0xFE, b"taken by someone")
+        + _seg(0xDB, b"\0" + bytes(64))
+        + _seg(0xDA, b"\x01\x01\0\0\x3f\0")
+        + b"\x12\x34\xff\x00\x56"
+        + b"\xff\xd9"
+    )
+
+
+def test_jpeg_metadata_is_stripped_but_orientation_is_kept():
+    for order in ("<", ">"):
+        original = _jpeg(_exif(6, order))
+        clean = strip_image_metadata(original, "image/jpeg")
+        assert b"GPS" not in clean and b"taken by someone" not in clean
+        assert clean.startswith(b"\xff\xd8\xff\xe0")  # JFIF stays first
+        assert clean.endswith(b"\x12\x34\xff\x00\x56\xff\xd9")  # image data untouched
+        assert b"\x01\x12" in clean or b"\x12\x01" in clean  # orientation tag rebuilt
+    no_orientation = strip_image_metadata(_jpeg(_exif(None)), "image/jpeg")
+    assert b"\xff\xe1" not in no_orientation and b"Exif" not in no_orientation
+
+
+def test_png_text_and_exif_chunks_and_trailing_data_are_stripped():
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    )
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+    ihdr_end = 8 + 25
+    dirty = png[:ihdr_end] + chunk(b"tEXt", b"Author\0Jane") + chunk(b"eXIf", b"MM\0*GPS") + png[ihdr_end:] + b"hidden"
+    assert strip_image_metadata(dirty, "image/png") == png
+    assert strip_image_metadata(png, "image/png") == png
+
+
+def test_webp_exif_and_xmp_chunks_are_stripped_and_flags_cleared():
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return kind + struct.pack("<I", len(data)) + data + (b"\0" if len(data) % 2 else b"")
+
+    vp8x = chunk(b"VP8X", bytes([0x0C | 0x10]) + bytes(9))
+    image = chunk(b"VP8L", b"\x2f\0\0\0\0")
+    body = vp8x + image + chunk(b"EXIF", b"GPS 23N") + chunk(b"XMP ", b"<x:xmpmeta/>")
+    dirty = b"RIFF" + struct.pack("<I", len(body) + 4) + b"WEBP" + body
+    clean = strip_image_metadata(dirty, "image/webp")
+    assert b"GPS" not in clean and b"xmpmeta" not in clean
+    assert sniff_image_type(clean) == "image/webp"
+    assert struct.unpack("<I", clean[4:8])[0] == len(clean) - 8
+    assert clean[20] == 0x10  # EXIF/XMP flags cleared, alpha flag kept
+
+
+def test_unwalkable_images_are_refused_not_stored_with_metadata():
+    for data, mime in [
+        (b"\xff\xd8\xff\xe1\xff\xff", "image/jpeg"),
+        (b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR", "image/png"),
+        (b"RIFF\0\0\0\0WEBP", "image/webp"),
+    ]:
+        with pytest.raises(ApiError) as err:
+            strip_image_metadata(data, mime)
+        assert err.value.status == 415

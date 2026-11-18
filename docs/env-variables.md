@@ -28,7 +28,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `DISPATCH_ACK_TIMEOUT_MINUTES` | no | `15` | Minutes before an unacknowledged dispatch is escalated. |
 | `AI_TRIAGE_URL` | no | - | URL of the triage service (`.../triage`). Unset = triage returns `UNAVAILABLE`. |
 | `AI_TRIAGE_TOKEN` (S) | no | - | Bearer token sent to the triage service; set the same value on `ai-workers`. |
-| `DISASTER_CLASSIFIER_URL` | no | - | Optional multilingual classifier URL for newly ingested `GNEWS`/`BLUESKY` signals. The current service uses `https://indicbert-disaster-api.onrender.com/predict`, accepts `{"text":"..."}`, and requires no token. If unset, ingestion retains the existing `AI_TRIAGE_URL` prelabel path. |
+| `DISASTER_CLASSIFIER_URL` | no | - | Optional multilingual classifier URL for newly ingested `GNEWS`/`BLUESKY` signals. Set the real URL only in the local `.env` and the deployed service's environment, never in committed files. The service exposes `POST /predict`, accepts `{"text":"..."}`, and requires no token. If unset, ingestion retains the existing `AI_TRIAGE_URL` prelabel path. |
 | `AI_LOW_CONFIDENCE_THRESHOLD` | no | `0.6` | Below this a suggestion is `LOW_CONFIDENCE`. |
 | `AI_IMAGE_SERVICE_URL` | no | - | Base URL of the disaster image classifier (`ai-workers/model`, `POST /predict`), for example `http://localhost:8002` when started with `uvicorn app:app --port 8002` (it must not point at the backend's own port 8000). Unset = photo analysis returns `AI_PHOTO_UNAVAILABLE` (503). |
 | `GOOGLE_MAPS_API_KEY` (S) | no | - | Optional geocoder; falls back to OpenStreetMap Nominatim. |

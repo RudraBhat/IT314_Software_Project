@@ -134,11 +134,23 @@ export default function IncidentPage() {
                     <Badge tone={e.scan_state === "CLEAN" ? "low" : e.scan_state === "QUARANTINED" ? "critical" : "medium"}>
                       {moderationLabel[e.scan_state] ?? e.scan_state}
                     </Badge>
+                    {e.scan_state === "CLEAN" && (
+                      // Opened on request only, never loaded automatically: each view is audited.
+                      <a
+                        href={`/api/dm/incidents/${i.incident_id}/evidence/${e.evidence_id}/content`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-info hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                        aria-label={`View photo ${e.file_name}`}
+                      >
+                        View photo
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
-            <p className="mt-3 text-xs text-muted">File previews need the evidence storage service, which is not configured yet.</p>
+            <p className="mt-3 text-xs text-muted">Approved photos open in a new tab; each view is recorded in the audit log.</p>
           </Card>
 
           <DispatchPanel incident={i} reload={reload} />

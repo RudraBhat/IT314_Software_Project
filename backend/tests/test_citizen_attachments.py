@@ -1,7 +1,9 @@
 """Citizen photo attachments (NU-FR-05): upload, list, download, remove, limits, isolation, moderation."""
 
 import base64
+import struct
 import uuid
+import zlib
 
 import pytest
 
@@ -16,14 +18,20 @@ PAYLOAD = {
     "latitude": 23.0225,
     "longitude": 72.5714,
 }
-# A valid 1x1 PNG; extra trailing bytes make distinct files with the same signature.
+# A valid 1x1 PNG.
 PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 )
 
 
+def _chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+
 def _png(n: int = 0) -> bytes:
-    return PNG + bytes([n]) * n
+    """A distinct valid 1x1 grey PNG per n (uploads are stripped, so trailing junk no longer differs)."""
+    ihdr = _chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0))
+    return PNG[:8] + ihdr + _chunk(b"IDAT", zlib.compress(bytes([0, n]))) + _chunk(b"IEND", b"")
 
 
 def _incident(client, citizen) -> str:
@@ -171,3 +179,50 @@ def test_only_moderators_can_open_photos_and_removed_photos_are_gone(client, mak
 
     client.delete(f"/api/v1/me/incidents/{iid}/attachments/{evidence_id}", headers=citizen["headers"])
     assert client.get(url, headers=make.staff("MODERATOR")["headers"]).status_code == 404
+
+
+def test_photo_metadata_is_stripped_before_storage(client, make, sql):
+    citizen = make.citizen()
+    iid = _incident(client, citizen)
+    tagged = PNG[:33] + _chunk(b"tEXt", b"GPS\x0023.0225N 72.5714E") + PNG[33:]
+    meta = _upload(client, citizen, iid, data=tagged).json()
+    assert meta["size_bytes"] == len(PNG)
+    stored = sql.execute("SELECT content FROM evidence_blobs WHERE evidence_id = %s", (meta["evidence_id"],)).fetchone()
+    assert bytes(stored["content"]) == PNG
+
+
+def _approve(client, make, evidence_id):
+    r = client.post(
+        f"/api/v1/dm/moderation/{evidence_id}/decision",
+        json={"decision": "APPROVE", "reason": "Clear photo of the flooded road"},
+        headers=make.staff("MODERATOR")["headers"],
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_dispatcher_can_open_only_approved_photos_and_views_are_audited(client, make, sql):
+    citizen = make.citizen()
+    iid = _incident(client, citizen)
+    evidence_id = _upload(client, citizen, iid, data=_png(7)).json()["evidence_id"]
+    dispatcher = make.staff("DISPATCH")
+    url = f"/api/v1/dm/incidents/{iid}/evidence/{evidence_id}/content"
+
+    assert client.get(url, headers=dispatcher["headers"]).status_code == 404  # still pending
+    _approve(client, make, evidence_id)
+    r = client.get(url, headers=dispatcher["headers"])
+    assert r.status_code == 200 and r.content == _png(7)
+    assert r.headers["x-content-type-options"] == "nosniff" and "no-store" in r.headers["cache-control"]
+    viewed = sql.execute(
+        "SELECT actor_id FROM audit_logs WHERE entity_id = %s AND action = 'EVIDENCE_VIEWED'", (evidence_id,)
+    ).fetchall()
+    assert [v["actor_id"] for v in viewed] == [dispatcher["user_id"]]
+
+
+def test_approved_photo_route_rejects_citizens_and_other_incidents(client, make):
+    citizen = make.citizen()
+    iid, other_iid = _incident(client, citizen), _incident(client, citizen)
+    evidence_id = _upload(client, citizen, iid, data=_png(8)).json()["evidence_id"]
+    _approve(client, make, evidence_id)
+    assert client.get(f"/api/v1/dm/incidents/{iid}/evidence/{evidence_id}/content", headers=citizen["headers"]).status_code == 403
+    wrong = client.get(f"/api/v1/dm/incidents/{other_iid}/evidence/{evidence_id}/content", headers=make.staff()["headers"])
+    assert wrong.status_code == 404

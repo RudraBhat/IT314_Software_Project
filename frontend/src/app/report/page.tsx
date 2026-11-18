@@ -5,13 +5,13 @@ import { UnifiedSiteHeader, type SessionInfo } from "@/components/navigation/Uni
 import Link from "next/link";
 import { isInGujarat, GUJARAT_CENTER, GUJARAT_BOUNDS } from "@/lib/geo";
 import {
-  ATTACHMENT_LIMITS,
   createReport,
   fetchPublicIncidents,
-  uploadAttachment,
+  uploadReportPhotos,
   type PublicIncident,
   type Scenario,
 } from "@/services/citizenApi";
+import { ReportPhotoPicker } from "@/components/citizen/ReportPhotoPicker";
 import { findNearbyIncidents } from "@/services/duplicateDetection";
 import { URGENT_NEEDS, preTriage } from "@/services/preTriage";
 import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
@@ -92,7 +92,6 @@ export default function ReportIncidentPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<{ reference: string; status: string; photoNote?: string } | null>(null);
   const [photos, setPhotos] = useState<File[]>([]);
-  const [photoError, setPhotoError] = useState<string | null>(null);
 
   // Validation
   const validLocation = isInGujarat(latitude, longitude);
@@ -457,18 +456,7 @@ export default function ReportIncidentPage() {
         return;
       }
       // The report is already filed; photos are added afterwards and a failure never undoes the report.
-      let photoNote: string | undefined;
-      if (photos.length > 0 && res.data?.incident_id) {
-        let sent = 0;
-        for (const photo of photos) {
-          const uploaded = await uploadAttachment(res.data.incident_id, photo);
-          if (!uploaded.error) sent += 1;
-        }
-        photoNote =
-          sent === photos.length
-            ? `${sent} photo${sent === 1 ? "" : "s"} attached. A moderator will review them.`
-            : `${sent} of ${photos.length} photos attached. You can add the rest later from My Reports.`;
-      }
+      const photoNote = res.data?.incident_id ? await uploadReportPhotos(res.data.incident_id, photos) : undefined;
       setSuccessResult({ reference: refNumber, status: res.data?.status || "SUBMITTED", photoNote });
       sessionStorage.removeItem(DRAFT_STORAGE_KEY);
     } catch (err) {
@@ -805,50 +793,7 @@ export default function ReportIncidentPage() {
               </div>
 
               {/* Photos (optional, NU-FR-05): sent after the report is filed */}
-              <div>
-                <label htmlFor="report-photos" className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                  Photos (optional)
-                </label>
-                <input
-                  id="report-photos"
-                  type="file"
-                  accept={ATTACHMENT_LIMITS.types.join(",")}
-                  multiple
-                  onChange={(e) => {
-                    const chosen = Array.from(e.target.files ?? []);
-                    e.target.value = "";
-                    const tooBig = chosen.find((f) => f.size > ATTACHMENT_LIMITS.maxBytes);
-                    const wrongType = chosen.find((f) => !ATTACHMENT_LIMITS.types.includes(f.type));
-                    if (wrongType) return setPhotoError(`${wrongType.name} is not a JPEG, PNG or WebP image.`);
-                    if (tooBig) return setPhotoError(`${tooBig.name} is larger than ${ATTACHMENT_LIMITS.maxBytes / (1024 * 1024)} MB.`);
-                    const next = [...photos, ...chosen].slice(0, ATTACHMENT_LIMITS.maxFiles);
-                    setPhotoError(photos.length + chosen.length > ATTACHMENT_LIMITS.maxFiles ? `At most ${ATTACHMENT_LIMITS.maxFiles} photos.` : null);
-                    setPhotos(next);
-                  }}
-                  className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-slate-700 hover:file:bg-slate-200"
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Up to {ATTACHMENT_LIMITS.maxFiles} JPEG, PNG or WebP photos, {ATTACHMENT_LIMITS.maxBytes / (1024 * 1024)} MB each. Moderators review photos before they are used.
-                </p>
-                {photoError && <p role="alert" className="text-xs text-red-600 mt-1">{photoError}</p>}
-                {photos.length > 0 && (
-                  <ul className="mt-2 space-y-1">
-                    {photos.map((photo, index) => (
-                      <li key={`${photo.name}-${index}`} className="flex items-center justify-between gap-2 text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800">
-                        <span className="truncate">{photo.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => setPhotos(photos.filter((_, i) => i !== index))}
-                          className="text-slate-500 hover:text-slate-800 cursor-pointer"
-                          aria-label={`Remove ${photo.name}`}
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <ReportPhotoPicker inputId="report-photos" label="Photos (optional)" photos={photos} onChange={setPhotos} disabled={isSubmitting} />
 
               {hint.level && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900" role="status" aria-live="polite">

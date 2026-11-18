@@ -248,9 +248,10 @@
 ### 2.6 Photo Attachments (NU-FR-05)
 * **Upload:** `POST /api/v1/me/incidents/{id}/attachments`, citizen only, own open incident. The photo is the raw request body with `Content-Type: image/jpeg|image/png|image/webp` and an optional percent-encoded `X-Filename`. Returns `201` with `{evidence_id, file_name, mime_type, size_bytes, status, uploaded_at}`; the same photo again returns `200` with the first.
 * **List / download / remove:** `GET .../attachments` (`{items, max_attachments}`), `GET .../attachments/{evidence_id}` (the image, `nosniff`, not cached), `DELETE .../attachments/{evidence_id}` (deletes the file and keeps an audit record).
-* **Limits:** 5 MB per photo, 5 photos per report. The type is checked from the file's bytes, not the header. `status` is `Awaiting review` until a moderator decides (`Approved`, `Held for review`); removed photos are not listed.
+* **Limits:** 5 MB per photo, 5 photos per report. The type is checked from the file's bytes, not the header. Before storage the server strips metadata without re-encoding: JPEG EXIF/XMP (APP1), IPTC (APP13) and comments (only the orientation tag is kept); PNG `eXIf`, `tEXt`, `zTXt`, `iTXt`, `tIME` chunks and any bytes after `IEND`; WebP `EXIF` and `XMP ` chunks. `size_bytes` and duplicate detection use the stripped file; a file whose structure cannot be read is `415 INVALID_IMAGE`. `status` is `Awaiting review` until a moderator decides (`Approved`, `Held for review`); removed photos are not listed.
 * **Errors:** `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE` / `INVALID_IMAGE`, `409 TOO_MANY_ATTACHMENTS` / `INCIDENT_CLOSED`, `404` for anyone else's report or photo, `429 RATE_LIMITED`.
 * **Storage:** bytes live in `evidence_blobs` (migration 11); metadata and moderation state stay in `evidence_files`, so photos appear in the moderation queue (`GET /api/v1/dm/moderation/queue`), where a moderator opens the image with `GET /api/v1/dm/moderation/{evidence_id}/content` (`MODERATOR` permission, audited). A photo is never shown publicly before a moderator approves it.
+* **Dispatcher view:** `GET /api/v1/dm/incidents/{incident_id}/evidence/{evidence_id}/content` returns an approved (`CLEAN`) photo on that incident to any DM user (`nosniff`, `no-store`, restrictive CSP). Pending, quarantined, removed or other-incident photos are `404`; citizens get `403`. Each view writes an `EVIDENCE_VIEWED` audit entry.
 
 ### 2.7 Account: Profile, Password, Notifications
 * **Profile:** `GET /api/v1/me/profile` returns `{user_id, email, full_name, phone, preferred_language, alerts: {in_app, email, sms}, created_at, has_password}`; `has_password` is `false` for a Google sign-in account that never set one. `PATCH /api/v1/me/profile` accepts any of `full_name`, `phone`, `preferred_language` (`en`, `hi`, `gu`), `email_alerts`, `sms_alerts`. The email is the sign-in identity and is not editable; in-app notifications cannot be turned off; email and SMS are stored preferences only. Invalid values return `422`; changes are audited.
@@ -934,7 +935,7 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 ### 8.2.1 Multilingual Disaster Classifier for Ingested Text
 When `DISASTER_CLASSIFIER_URL` is configured, the ingestion worker sends each new GNEWS/BLUESKY signal's sanitized text to the deployed IndicBERT disaster classifier. Source, timestamps, language hint, location, and verification link remain in the local signal record; the model API accepts text only. The worker sends PII-scrubbed original wording and does not translate it.
 
-* **Method:** `POST https://indicbert-disaster-api.onrender.com/predict` (configurable with `DISASTER_CLASSIFIER_URL`).
+* **Method:** `POST <DISASTER_CLASSIFIER_URL>` (for example `https://<classifier-host>/predict`; the real URL is set only in the local `.env` and the deployed service's environment).
 * **Request headers:** `Content-Type: application/json`, `Accept: application/json`; no authentication is currently required by this deployed endpoint.
 * **Request body:**
 ```json
