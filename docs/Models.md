@@ -1,6 +1,6 @@
 # Disaster Detection from Social Media: Text and Image Classifiers
 
-A prototype that classifies social-media posts as disasters. It has two parts:
+A model that classifies social-media posts as disasters. It has two parts:
 
 * a **text classifier** for short multilingual messages (English, Hindi, Gujarati, Hinglish, romanised Gujarati), and
 * an **image classifier** for disaster photos.
