@@ -88,6 +88,13 @@
 * **updates:** only published broadcast updates. Fields: `update_id`, `scenario`, `title`, `body`, `area_label`, `published_at`; newest first, at most 50.
 * **Privacy:** no author or approver names, no linked incident, no internal notes. The `/safety` page shows these above its general guidance and falls back to the general guidance when the service is unreachable.
 
+### 1.5 Relief Shelters
+* **Public path:** `GET /api/v1/public/shelters`. No authentication. Returns the shelters that are `OPERATIONAL` or `FULL` (closed ones are hidden), by name, at most 500. Fields: `id`, `name`, `type` (`SHELTER`, `RELIEF_CAMP` or `MEDICAL_POST`), `lat`, `lon` (rounded to 4 decimals), `address`, `district`, `total_capacity`, `current_occupancy`, `available_beds` (`null` unless both are known, never negative), `contact_number`, `status`, `notes`, `is_simulated`. An empty list means none are published; the citizen dashboard then says so. No internal ids, authors or timestamps are returned.
+* **Dispatcher paths:** `GET /api/v1/dm/shelters` (all shelters, closed included; `include_closed=false` hides them), `POST /api/v1/dm/shelters` (201) and `PUT /api/v1/dm/shelters/{id}` (replaces the whole record). They need the `DISPATCH` or `SUPERVISOR` permission (`403 PERMISSION_REQUIRED` otherwise).
+* **Body:** `name`, `type`, `address_text`, `district`, `latitude`, `longitude`, `total_capacity`, `current_occupancy`, `contact_number` (digits, spaces, `+ - ( )`), `status`, `notes` (max 500) and a required `reason` of 5 to 500 characters. `422` if `current_occupancy` exceeds `total_capacity`, a coordinate is out of range, or a value is not allowed; `404` for an unknown shelter on update.
+* **Audit:** `SHELTER_CREATED` and `SHELTER_UPDATED`, with the actor, the reason and, for updates, the before and after values. A shelter is never deleted: set it to `CLOSED` to hide it.
+* **Transparency:** `is_simulated` marks sample data; the dashboard labels it. No sample shelters are seeded, so a fresh database publishes none.
+
 ---
 
 ## 2. Citizen Authentication & Reporting API (Owner: Zalak)
@@ -251,6 +258,7 @@
 * **Notifications:** `POST /api/v1/me/notifications/read-all` marks all of your in-app notifications read and returns `{"marked_read": n}`.
 * **Email copy:** a citizen with email alerts on is also emailed each in-app notification (sent in the background, never blocks the action; simulated and logged when no SMTP is configured). SMS is only a stored preference; there is no SMS provider.
 * **Withdraw request:** `POST /api/v1/me/incidents/{id}/withdrawal-request` with optional `{reason}`. Allowed for your own report while `SUBMITTED`, `NEEDS_INFORMATION` or `VERIFIED`; it only records the request (history row and audit entry, `withdrawal_requested: true` on the report) and never changes the status, because a dispatcher decides. `409 NOT_WITHDRAWABLE` after dispatch or closure, `409 ALREADY_REQUESTED`, `404` for another citizen's report. Rate limited.
+* **Dispatcher visibility:** `GET /api/v1/dm/incidents` and `GET /api/v1/dm/incidents/{id}` return `withdrawal_requested` (true only while the report is still `SUBMITTED`, `NEEDS_INFORMATION` or `VERIFIED`, since the request is stale once help is sent or the report is closed). The list also accepts `withdrawal_requested=true` to show only those reports. Nothing is withdrawn automatically; the dispatcher rejects or carries on.
 * **Delete account:** `POST /api/v1/me/account/deletion` with `{password}`. Refused with `409 OPEN_REPORTS` while any report is not `RESOLVED`, `CLOSED` or `REJECTED`; a wrong password is `400 INVALID_CURRENT_PASSWORD` and audited; an account with no password gets `409 NO_PASSWORD_SET`, as above. On success the name, email, phone and address are erased, photos and notifications deleted, the account disabled and every session ended (`{"deleted": true, "sign_in_required": true}`). Reports stay on record for the audit trail without a link to an identity. Rate limited.
 
 ---
@@ -988,6 +996,68 @@ Staff accounts (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`) are never created wit
 | `GOOGLE_SERVICE_UNAVAILABLE` | 502 | Google could not be reached |
 | `GOOGLE_STAFF_NOT_ALLOWED` | 403 | Google sign-in attempted for a staff account |
 | `RATE_LIMITED` | 429 | Too many requests from this IP |
+
+### 9.5 Administrator: Staff Account Directory
+* **Path:** `GET /api/v1/admin/accounts`
+* **Auth:** Bearer token of an `APP_MGMT` administrator with verified MFA. Dispatch supervisors, dispatchers, field teams and citizens get `403`; no token or no MFA gets `401`.
+* **Query:** `q` (part of a name or email, case-insensitive, `%` and `_` are literal; up to 100 characters), `role` (`DISASTER_MGMT`, `FIELD_TEAM` or `APP_MGMT`), `status` (`ACTIVE`, `PENDING_SETUP`, `DISABLED`, `LOCKED` or `PENDING_VERIFICATION`), `page`, `limit` (1–100, default 25). Anything else is `422`.
+* **Response (200):** `{"items": [...], "page", "limit", "total", "pages", "summary": {"total", "by_role", "by_status"}}`, newest account first. Each item has `user_id`, `email`, `full_name`, `role`, `designation`, `status`, `mfa_enabled`, `last_login_at`, `is_locked` (temporary lockout after failed sign-ins), `permissions` (sorted names), `team_name` (field responders), `active_sessions` (devices currently signed in: sessions whose refresh token is unrevoked, unexpired and matches the account's current token version), `created_at` and `is_you`. `summary` counts all staff accounts and ignores the filters.
+* **Privacy:** only staff accounts are listed; citizens never appear. No phone number, password hash, MFA secret or session detail is returned.
+
+#### Export the directory
+* **Path:** `GET /api/v1/admin/accounts/export`, with the directory's `q`, `role` and `status` filters. Same authentication as the directory; rate limited (10 per hour per client).
+* **Response (200):** a UTF-8 CSV download (`Content-Disposition: attachment`, `Cache-Control: no-store`, byte-order mark for Excel), newest first, at most 5000 rows. Columns: Name, Email, Role, Designation, Status, Authenticator set up, Last sign-in, Created, Permissions (space separated), Team. Cells that a spreadsheet could run as a formula (starting with `=`, `+`, `-`, `@`, tab or carriage return) are prefixed with a quote.
+* **Privacy:** staff only, never citizens, and no phone number, password hash or MFA secret. Because it copies staff email addresses out of the system, every export is recorded as `ACCOUNTS_EXPORTED` with the actor, the row count and the filters used.
+* **Errors:** `422` for an invalid filter value.
+
+#### Disable and enable an account
+* **Paths:** `POST /api/v1/admin/accounts/{user_id}/disable` and `POST /api/v1/admin/accounts/{user_id}/enable`. Same authentication as the directory (`APP_MGMT` with verified MFA); rate limited (30 per hour per client).
+* **Body:** `{"reason": "..."}`, 5 to 500 characters, required and recorded in the audit log (`422` otherwise).
+* **Disable:** sets the account to `DISABLED` and bumps its session version. The person cannot sign in, and their current session ends on their next request. Nothing is deleted. Returns `{"user_id", "status": "DISABLED"}`. Audit action `ACCOUNT_DISABLED` with the actor, the reason and the before and after state.
+* **Enable:** an account that had finished setup becomes `ACTIVE` and any lockout is cleared; one that never finished setup goes back to `PENDING_SETUP` and needs a new invitation link (resend it from the pending list). Old sessions stay ended. Returns `{"user_id", "status"}`. Audit action `ACCOUNT_ENABLED`.
+* **Errors:** `409 CANNOT_DISABLE_SELF`, `409 LAST_ADMIN` (the last active administrator cannot be disabled), `409 ALREADY_DISABLED`, `409 NOT_DISABLED`, `404` for a citizen or unknown account.
+
+#### Disable or sign out several accounts
+* **Path:** `POST /api/v1/admin/accounts/bulk`. Authentication as disable; rate limited to 10 calls per hour. Body `{"action": "disable" | "sign-out", "user_ids": ["..."], "reason": "..."}`: 1 to 25 distinct ids, reason 5 to 500 characters.
+* **Effect:** Each account is handled on its own, in its own transaction, with exactly the rules and audit entry (`ACCOUNT_DISABLED` or `ACCOUNT_SIGNED_OUT`, with the shared reason) of the single action. An account that cannot be changed (yourself, the last active administrator, already disabled, not active, a citizen or unknown id) is reported and skipped; the others still go through.
+* **Response (200):** `{"action", "done", "skipped", "results": [{"user_id", "ok", "code", "message"}]}`, in the order requested. `code` and `message` are null when `ok` is true, otherwise the error the single action would have returned (for example `CANNOT_DISABLE_SELF`, `ALREADY_DISABLED`, `NOT_ACTIVE`, `NOT_FOUND`, `LAST_ADMIN`).
+* **Errors:** `422` for an empty or oversized list, a repeated id, an unknown action or a short reason. Re-enabling and resetting a sign-in are not bulk actions.
+
+#### Edit a person's details
+* **Path:** `PUT /api/v1/admin/accounts/{user_id}/profile`. Same authentication and rate limit as disable. Body `{"full_name": "...", "designation": "..." | null, "reason": "..."}`: name 2 to 120 characters, designation up to 120 (blank clears it), reason 5 to 500. Audited as `PROFILE_UPDATED` with the old and new values.
+* **Effect:** Changes the display name and designation of any staff account, including your own and accounts that have not finished setup. The email address is the sign-in identity and cannot be changed here.
+* **Response:** `{"user_id": "...", "full_name": "...", "designation": "..." | null}`.
+* **Errors:** `409 NO_CHANGE` (nothing differs), `422` for an invalid name, designation or reason, `404` for a citizen or unknown account.
+
+#### Sign a person out everywhere
+* **Path:** `POST /api/v1/admin/accounts/{user_id}/sign-out`. Same authentication and rate limit as disable. Body `{"reason": "..."}`, 5 to 500 characters, audited as `ACCOUNT_SIGNED_OUT`.
+* **Effect:** For an account that has finished setup and is not disabled: bumps `token_version` (access tokens stop working on the next request) and revokes every refresh token (`ADMIN_SIGN_OUT`), so no session can renew. The account stays usable; the person signs in again with their password and authenticator. Use it after a lost or shared device; use disable to block the person, or reset sign-in when the password or authenticator is lost.
+* **Response:** `{"user_id": "...", "status": "ACTIVE", "signed_out": true}` (`status` is the account's unchanged status).
+* **Errors:** `409 CANNOT_SIGN_OUT_SELF`, `409 NOT_ACTIVE` (disabled or awaiting setup: no sessions to end), `404` for a citizen or unknown account.
+
+#### Reset a person's sign-in
+* **Path:** `POST /api/v1/admin/accounts/{user_id}/reset-credentials`. Same authentication and rate limit as disable. Body `{"reason": "..."}`, 5 to 500 characters, audited.
+* **Effect:** for an `ACTIVE` staff account whose person lost their phone or password. The account goes back to `PENDING_SETUP`, the password stays but the authenticator is removed, sessions end, lockout and any pending password reset are cleared, and a single-use setup link (same expiry as invitations) is emailed to them. They choose a new password and enrol a new authenticator on `/setup-account`. The administrator never sees the link, a password or an authenticator secret. Returns `{"user_id", "status": "PENDING_SETUP", "invitation_expires_at", "email_configured"}`; `email_configured` is false when no SMTP host is set, so no email left the server. Audit action `ACCOUNT_CREDENTIALS_RESET`.
+* **Errors:** `409 CANNOT_RESET_SELF`, `409 ACCOUNT_DISABLED` (enable it first), `409 ALREADY_PENDING` (resend its invitation instead), `409 LAST_ADMIN` (the only active administrator cannot be reset), `404` for a citizen or unknown account.
+
+#### Edit a staff member's permissions
+* **Path:** `PUT /api/v1/admin/accounts/{user_id}/permissions`. Same authentication and rate limit as disable.
+* **Body:** `{"permissions": ["DISPATCH", ...], "reason": "..."}`. `permissions` is the full new set (any of `PUBLISHER`, `MODERATOR`, `CLOSURE`, `DISPATCH`, `SUPERVISOR`; an empty list removes them all; duplicates are ignored); `reason` is 5 to 500 characters and audited.
+* **Effect:** only Disaster Management accounts have permissions. The change applies on the person's very next request; they are not signed out. Returns `{"user_id", "permissions"}` (sorted). Audit action `PERMISSIONS_CHANGED` with the actor, the reason, and the before and after sets.
+* **Errors:** `422 UNKNOWN_PERMISSION` (or a short reason), `409 NO_CHANGE` (the set is identical), `409 NO_PERMISSIONS_FOR_ROLE` (field team and administrator accounts), `404` for a citizen or unknown account.
+
+#### System status
+* **Path:** `GET /api/v1/admin/system`. Same authentication as the directory (`APP_MGMT` with verified MFA).
+* **Response (200):** `{"database": {"status", "latency_ms"}, "version", "email": {"configured", "simulated"}, "mfa_key_valid", "accounts": {"invitations_open", "invitations_expired", "locked", "active_without_mfa"}, "audit": {"last_entry_at", "last_verified_at", "last_verification_ok"}, "checked_at"}`. Staff accounts only are counted. `email.simulated` is true when no SMTP host is set, so invitation and reset links are not delivered.
+* **Privacy:** booleans, counts and timestamps only. No setting value, address, key, password or personal data is returned.
+
+#### Audit log
+* **Path:** `GET /api/v1/admin/audit`. Same authentication as the directory (`APP_MGMT` with verified MFA).
+* **Scope:** account and security entries only: entity `user` (account changes, sign-ins, registrations), `route` (denied requests) and `audit` (chain checks). Operational entries (incidents, dispatches, donations, evidence and so on) are never returned, because administrators have no operational access.
+* **Query:** `q` (part of a staff name or email, or of an action; it never matches a citizen), `action` (exact), `result` (`SUCCESS`, `FAILURE` or `DENIED`), `user_id` (entries made by or about one account), `from` and `to` (dates, inclusive; a start after the end is `422`), `page`, `limit` (1–100, default 25). Newest first.
+* **Response (200):** `{"items", "page", "limit", "total", "pages", "facets": {"actions": [...]}}`. Each item has `audit_id`, `occurred_at`, `action`, `entity_type`, `entity_id`, `result`, `rationale`, `actor` and `target` (`{user_id, role, name, email}` or `null` for the system), `ip`, `before` and `after`.
+* **Privacy:** when the actor or target is a citizen only their role is returned (no name, email or id), and a citizen actor's `ip`, `before` and `after` are `null`.
+* **Verify the chain:** `POST /api/v1/admin/audit/verify` checks the SHA-256 hash chain (the same check as `python -m app.cli verify-audit`) and returns `{"valid", "records", "mismatches", "message", "verified_at"}`. The check is recorded as `AUDIT_CHAIN_VERIFIED` (result `FAILURE` when tampering is found). Rate limited to 6 per hour because it reads the whole table.
 
 ---
 

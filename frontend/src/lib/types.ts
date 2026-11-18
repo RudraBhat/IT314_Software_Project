@@ -23,6 +23,8 @@ export type IncidentRow = {
   version: number;
   evidence_count: number;
   active_dispatches: number;
+  /** The reporter asked for this report to be withdrawn and it is still withdrawable. */
+  withdrawal_requested: boolean;
 };
 
 export type Dispatch = {

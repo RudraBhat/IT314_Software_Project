@@ -114,7 +114,7 @@ jobs:
       # Production dependencies only: the open advisories are in lint tooling (eslint-config-next ->
       # picomatch, no patched release yet) and never ship in the application.
       - name: Dependency vulnerability audit (High+Critical)
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
 
   # ============================================================================
   # 2. Python Backend & AI Workers Quality Scan

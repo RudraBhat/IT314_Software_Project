@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { SiteHeader, NavLink } from "@/components/Brand";
+import { UnifiedSiteHeader } from "@/components/navigation/UnifiedSiteHeader";
 import Link from "next/link";
 import { latestInformationRequest, REPLY_MAX_LENGTH, REPLY_MIN_LENGTH } from "@/components/citizen/InformationRequestReply";
 import { fetchMyReports, replyToInformationRequest, requestWithdrawal, ReportData } from "@/services/citizenApi";
@@ -136,15 +136,12 @@ export default function MyReportsPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       {/* Header */}
-      <SiteHeader subtitle="My Incident Reports" maxWidth="max-w-5xl">
+      <UnifiedSiteHeader activeHref="/my-reports">
         <span aria-live="polite" className="hidden items-center gap-1.5 font-mono text-[11px] text-sky-200/80 xl:flex">
           <span aria-hidden="true" className="size-1.5 animate-ping rounded-full bg-emerald-400" />
           Auto-refresh 15s · {lastRefreshed ? lastRefreshed.toLocaleTimeString() : "…"}
         </span>
-        <NavLink href="/report" variant="primary">+ Report<span className="hidden sm:inline"> Incident</span></NavLink>
-        <NavLink href="/dashboard" hideBelow="sm">Dashboard</NavLink>
-        <NavLink href="/account" hideBelow="sm">Account</NavLink>
-      </SiteHeader>
+      </UnifiedSiteHeader>
 
       {/* Main Content */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 md:p-8">
