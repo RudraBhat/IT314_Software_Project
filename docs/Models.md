@@ -30,7 +30,7 @@ If a service has been idle, the first request may be slow while Render starts it
 We fine-tuned **MuRIL** (`google/muril-base-cased`), which is our best text model. It is too large to deploy on Render, so the live text API serves a **smaller IndicBERT-based model** instead.
 
 - **MuRIL** is used for training experiments, local evaluation and as the quality reference (results below). The trained checkpoint (`muril_disaster_classifier_best.zip`) is large and is not stored in the repository.
--**MuRIL** drive link - https://drive.google.com/drive/folders/104V_1fC0FthZ8jAX043E72WID2KDmEvL?usp=sharing
+- **MuRIL** drive link - https://drive.google.com/drive/folders/104V_1fC0FthZ8jAX043E72WID2KDmEvL?usp=sharing
 - **IndicBERT** is the deployed model, chosen because it fits Render's size and memory limits. A smaller model usually gives up some accuracy, so the live service should be expected to score at or below the MuRIL numbers in this README.
 
 ---
