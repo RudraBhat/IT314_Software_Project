@@ -39,7 +39,7 @@ We fine-tuned **MuRIL** (`google/muril-base-cased`), which is our best text mode
 
 ```
 Project/
-├── README.md                                   <- this file (the only README)
+|
 ├── text/
 │   ├── MuRIL/
 │   │   ├── fine_tune_muril_disaster_classifier.py   Colab notebook export: fine-tunes MuRIL
