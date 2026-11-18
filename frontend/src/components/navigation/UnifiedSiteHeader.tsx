@@ -83,8 +83,8 @@ export function UnifiedSiteHeader({
           Donate
         </NavLink>
 
-        {/* Standard Auth / Profile Controls */}
-        {session?.authenticated ? (
+        {/* Desktop Auth / Profile Controls with Return Redirect */}
+        {session?.authenticated? (
           <div className="hidden items-center gap-2 border-l border-sky-800 pl-2 sm:flex">
             <Link
               href="/dashboard"
@@ -101,14 +101,14 @@ export function UnifiedSiteHeader({
               Sign Out
             </button>
           </div>
-        ) : (
+        ) : session && !session.authenticated ? (
           <Link
-            href="/login"
+            href={activeHref && activeHref !== "/" ? `/login?next=${encodeURIComponent(activeHref)}` : "/login"}
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-bold text-slate-950 transition hover:bg-sky-400"
           >
             Sign In
           </Link>
-        )}
+        ) : null}
 
         {/* Unified Mobile Hamburger Toggle */}
         <button
