@@ -24,8 +24,8 @@ while while the service wakes up and downloads its model. Docs are at `/docs`, h
 ## Repository layout
 
 ```
-models/
-├── README.md                     # this file
+ai-workers/model/
+|
 ├── text_classifier/
 │   ├── README.md
 │   ├── data/                     # synthetic training CSV + test CSV
