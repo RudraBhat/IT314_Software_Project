@@ -18,7 +18,7 @@ Checked on 15 Nov 2026:
 - **Ingestion runs:** `REPLAY` recorded 57 runs, 57 SUCCESS (**100% completion rate**). `GNEWS` and `BLUESKY` recorded 57 runs skipped (disabled by default as per policy).
 - **SACHET Coordinate Handling:** Explicit `::double precision` and `::geography` casts added to `_store_alerts` and `_store_signals` to prevent `IndeterminateDatatype` on alerts with null coordinates. D-10 closed.
 
-A staging operator needs to set `SACHET_FEED_URL`, enable a chosen live source explicitly, and ensure `DISASTER_CLASSIFIER_URL` is configured. `render.yaml` declares the classifier key with `sync: false`, so the URL is set in the Render dashboard and never committed; live social/news source flags remain off by default. The existing `AI_TRIAGE_URL`/token is a separate fallback used only when `DISASTER_CLASSIFIER_URL` is unset. These values remain environment configuration only.
+A staging operator needs to set `SACHET_FEED_URL`, enable a chosen live source explicitly, and ensure `DISASTER_CLASSIFIER_URL` is configured. `render.yaml` supplies the classifier URL to staging only; live social/news source flags remain off by default. The existing `AI_TRIAGE_URL`/token is a separate fallback used only when `DISASTER_CLASSIFIER_URL` is unset. These values remain environment configuration only.
 
 ## Polling, CAP handling and source boundaries
 
