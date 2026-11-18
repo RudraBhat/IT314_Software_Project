@@ -49,20 +49,47 @@ const URGENCIES = [
 
 const DRAFT_STORAGE_KEY = "resq_incident_report_draft";
 
-/** Local preview of a photo picked for the report; the object URL is released when it is removed. */
+const THUMB_WIDTH = 160;
+const THUMB_HEIGHT = 120;
+
+/**
+ * Local preview of a photo picked for the report. The image is decoded and drawn on a canvas, so no
+ * URL or markup derived from the user's file is ever placed in the DOM.
+ */
 function PhotoThumbnail({ file }: { file: File }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    const objectUrl = URL.createObjectURL(file);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the preview URL exists only while the file is selected
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
+    let cancelled = false;
+    let bitmap: ImageBitmap | null = null;
+    createImageBitmap(file)
+      .then((decoded) => {
+        bitmap = decoded;
+        const ctx = canvasRef.current?.getContext("2d");
+        if (cancelled || !ctx) return;
+        // Cover-crop to the thumbnail, keeping the centre of the photo.
+        const scale = Math.max(THUMB_WIDTH / decoded.width, THUMB_HEIGHT / decoded.height);
+        const w = decoded.width * scale;
+        const h = decoded.height * scale;
+        ctx.clearRect(0, 0, THUMB_WIDTH, THUMB_HEIGHT);
+        ctx.drawImage(decoded, (THUMB_WIDTH - w) / 2, (THUMB_HEIGHT - h) / 2, w, h);
+      })
+      .catch(() => {
+        // Undecodable in this browser: the grey placeholder stays; the server still checks the file.
+      });
+    return () => {
+      cancelled = true;
+      bitmap?.close();
+    };
   }, [file]);
-  return url ? (
-    // eslint-disable-next-line @next/next/no-img-element -- local blob preview, not an optimisable asset
-    <img src={url} alt={`Preview of ${file.name}`} className="h-20 w-full rounded object-cover bg-slate-100" />
-  ) : (
-    <div className="h-20 w-full rounded bg-slate-100" aria-hidden="true" />
+  return (
+    <canvas
+      ref={canvasRef}
+      width={THUMB_WIDTH}
+      height={THUMB_HEIGHT}
+      role="img"
+      aria-label={`Preview of ${file.name}`}
+      className="h-20 w-full rounded bg-slate-100"
+    />
   );
 }
 
