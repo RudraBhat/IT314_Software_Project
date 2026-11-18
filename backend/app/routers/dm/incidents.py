@@ -152,14 +152,15 @@ def _actions(row: dict, principal: Principal) -> dict:
 def get_incident(incident_id: uuid.UUID, principal: DMUser):
     with db.transaction() as conn:
         incident = conn.execute(
-            """
+            sql.SQL(
+                """
             SELECT i.incident_id, i.incident_ref, lower(i.scenario::text) AS scenario, i.description,
                    i.reported_urgency, i.people_affected, i.status, i.verified_priority,
                    i.priority_rationale, i.verified_at, v.full_name AS verified_by_name,
                    i.canonical_incident_id, c.incident_ref AS canonical_incident_ref,
                    i.location_source, i.latitude, i.longitude, i.accuracy_m, i.address_text,
                    i.landmark, i.details, i.version, i.submitted_at, i.updated_at, i.closed_at,
-                   """ + _WITHDRAWAL_PENDING + """ AS withdrawal_requested,
+                   {pending} AS withdrawal_requested,
                    jsonb_build_object('user_id', r.user_id, 'full_name', r.full_name,
                                       'email', r.email, 'phone', r.phone) AS reporter
             FROM incidents i
@@ -167,7 +168,8 @@ def get_incident(incident_id: uuid.UUID, principal: DMUser):
             LEFT JOIN users v ON v.user_id = i.verified_by
             LEFT JOIN incidents c ON c.incident_id = i.canonical_incident_id
             WHERE i.incident_id = %s
-            """,
+            """
+            ).format(pending=sql.SQL(_WITHDRAWAL_PENDING)),
             (incident_id,),
         ).fetchone()
         if incident is None:
