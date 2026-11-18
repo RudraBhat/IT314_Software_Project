@@ -5,6 +5,7 @@ import { SiteHeader } from "../Brand";
 import { DisasterCategory } from "../../types/resq";
 import { InformationRequestReply } from "@/components/citizen/InformationRequestReply";
 import * as CitizenApi from "../../services/citizenApi";
+import { ReportPhotoPicker } from "../citizen/ReportPhotoPicker";
 import { LanguageCode, TRANSLATIONS } from "@/lib/citizenI18n";
 import { GUJARAT_CENTER, isInGujarat } from "@/lib/geo";
 
@@ -145,7 +146,8 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   const [formAffected, setFormAffected] = useState(1);
   const [formNeeds, setFormNeeds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [submitResult, setSubmitResult] = useState<{ success: boolean; reportId?: string; error?: string } | null>(null);
+  const [submitResult, setSubmitResult] = useState<{ success: boolean; reportId?: string; error?: string; photoNote?: string } | null>(null);
+  const [formPhotos, setFormPhotos] = useState<File[]>([]);
 
   // Expanded report detail
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
@@ -455,11 +457,14 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
 
     if (res.data) {
       reportKeyRef.current = crypto.randomUUID();
-      setSubmitResult({ success: true, reportId: res.data.incident_ref });
+      // The report is already filed; photos are added afterwards and a failure never undoes the report.
+      const photoNote = await CitizenApi.uploadReportPhotos(res.data.incident_id, formPhotos);
+      setSubmitResult({ success: true, reportId: res.data.incident_ref, photoNote });
       setFormDescription("");
       setFormLocation("");
       setFormAffected(1);
       setFormNeeds([]);
+      setFormPhotos([]);
       handleRefresh();
     } else {
       setSubmitResult({ success: false, error: res.error || "Failed to submit disaster report. Please try again." });
@@ -1054,6 +1059,11 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                   <div className="bg-white border border-emerald-300 rounded-xl p-3 max-w-xs mx-auto font-mono text-sm font-bold text-emerald-900 shadow-xs">
                     Reference ID: {submitResult.reportId}
                   </div>
+                  {submitResult.photoNote && (
+                    <p role="status" className="text-xs text-slate-600">
+                      {submitResult.photoNote}
+                    </p>
+                  )}
                   <p className="text-[11px] text-slate-500">
                     Keep this ID handy to monitor triage status and dispatch telemetry.
                   </p>
@@ -1270,6 +1280,15 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                       })}
                     </div>
                   </div>
+
+                  {/* Photos (optional, NU-FR-05): sent after the report is filed */}
+                  <ReportPhotoPicker
+                    inputId="dashboard-report-photos"
+                    label="Photos (optional)"
+                    photos={formPhotos}
+                    onChange={setFormPhotos}
+                    disabled={submitting}
+                  />
 
                   {/* Submit Button */}
                   <div className="pt-2">

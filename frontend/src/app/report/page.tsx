@@ -5,13 +5,13 @@ import { UnifiedSiteHeader, type SessionInfo } from "@/components/navigation/Uni
 import Link from "next/link";
 import { isInGujarat, GUJARAT_CENTER, GUJARAT_BOUNDS } from "@/lib/geo";
 import {
-  ATTACHMENT_LIMITS,
   createReport,
   fetchPublicIncidents,
-  uploadAttachment,
+  uploadReportPhotos,
   type PublicIncident,
   type Scenario,
 } from "@/services/citizenApi";
+import { ReportPhotoPicker } from "@/components/citizen/ReportPhotoPicker";
 import { findNearbyIncidents } from "@/services/duplicateDetection";
 import { URGENT_NEEDS, preTriage } from "@/services/preTriage";
 import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
@@ -48,50 +48,6 @@ const URGENCIES = [
 
 
 const DRAFT_STORAGE_KEY = "resq_incident_report_draft";
-
-const THUMB_WIDTH = 160;
-const THUMB_HEIGHT = 120;
-
-/**
- * Local preview of a photo picked for the report. The image is decoded and drawn on a canvas, so no
- * URL or markup derived from the user's file is ever placed in the DOM.
- */
-function PhotoThumbnail({ file }: { file: File }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    let cancelled = false;
-    let bitmap: ImageBitmap | null = null;
-    createImageBitmap(file)
-      .then((decoded) => {
-        bitmap = decoded;
-        const ctx = canvasRef.current?.getContext("2d");
-        if (cancelled || !ctx) return;
-        // Cover-crop to the thumbnail, keeping the centre of the photo.
-        const scale = Math.max(THUMB_WIDTH / decoded.width, THUMB_HEIGHT / decoded.height);
-        const w = decoded.width * scale;
-        const h = decoded.height * scale;
-        ctx.clearRect(0, 0, THUMB_WIDTH, THUMB_HEIGHT);
-        ctx.drawImage(decoded, (THUMB_WIDTH - w) / 2, (THUMB_HEIGHT - h) / 2, w, h);
-      })
-      .catch(() => {
-        // Undecodable in this browser: the grey placeholder stays; the server still checks the file.
-      });
-    return () => {
-      cancelled = true;
-      bitmap?.close();
-    };
-  }, [file]);
-  return (
-    <canvas
-      ref={canvasRef}
-      width={THUMB_WIDTH}
-      height={THUMB_HEIGHT}
-      role="img"
-      aria-label={`Preview of ${file.name}`}
-      className="h-20 w-full rounded bg-slate-100"
-    />
-  );
-}
 
 export default function ReportIncidentPage() {
   // Session State
@@ -136,19 +92,6 @@ export default function ReportIncidentPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<{ reference: string; status: string; photoNote?: string } | null>(null);
   const [photos, setPhotos] = useState<File[]>([]);
-  const [photoError, setPhotoError] = useState<string | null>(null);
-  const [photoDragOver, setPhotoDragOver] = useState(false);
-
-  /** Validate newly picked or dropped photos; a bad file is reported and nothing else in the form changes. */
-  function addPhotos(chosen: File[]) {
-    if (chosen.length === 0) return;
-    const wrongType = chosen.find((f) => !ATTACHMENT_LIMITS.types.includes(f.type));
-    if (wrongType) return setPhotoError(`${wrongType.name} is not a JPEG, PNG or WebP image.`);
-    const tooBig = chosen.find((f) => f.size > ATTACHMENT_LIMITS.maxBytes);
-    if (tooBig) return setPhotoError(`${tooBig.name} is larger than ${ATTACHMENT_LIMITS.maxBytes / (1024 * 1024)} MB.`);
-    setPhotoError(photos.length + chosen.length > ATTACHMENT_LIMITS.maxFiles ? `At most ${ATTACHMENT_LIMITS.maxFiles} photos.` : null);
-    setPhotos([...photos, ...chosen].slice(0, ATTACHMENT_LIMITS.maxFiles));
-  }
 
   // Validation
   const validLocation = isInGujarat(latitude, longitude);
@@ -513,18 +456,7 @@ export default function ReportIncidentPage() {
         return;
       }
       // The report is already filed; photos are added afterwards and a failure never undoes the report.
-      let photoNote: string | undefined;
-      if (photos.length > 0 && res.data?.incident_id) {
-        let sent = 0;
-        for (const photo of photos) {
-          const uploaded = await uploadAttachment(res.data.incident_id, photo);
-          if (!uploaded.error) sent += 1;
-        }
-        photoNote =
-          sent === photos.length
-            ? `${sent} photo${sent === 1 ? "" : "s"} attached. A moderator will review them.`
-            : `${sent} of ${photos.length} photos attached. You can add the rest later from My Reports.`;
-      }
+      const photoNote = res.data?.incident_id ? await uploadReportPhotos(res.data.incident_id, photos) : undefined;
       setSuccessResult({ reference: refNumber, status: res.data?.status || "SUBMITTED", photoNote });
       sessionStorage.removeItem(DRAFT_STORAGE_KEY);
     } catch (err) {
@@ -861,69 +793,7 @@ export default function ReportIncidentPage() {
               </div>
 
               {/* Photos (optional, NU-FR-05): sent after the report is filed */}
-              <div>
-                <label htmlFor="report-photos" className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                  Photos (optional)
-                </label>
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setPhotoDragOver(true);
-                  }}
-                  onDragLeave={() => setPhotoDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setPhotoDragOver(false);
-                    addPhotos(Array.from(e.dataTransfer.files));
-                  }}
-                  className={`rounded-xl border-2 border-dashed p-4 text-center transition ${
-                    photoDragOver ? "border-sky-500 bg-sky-50" : "border-slate-300 bg-slate-50"
-                  }`}
-                >
-                  <p className="text-xs text-slate-600 mb-2" aria-hidden="true">
-                    Drag photos here, or
-                  </p>
-                  <input
-                    id="report-photos"
-                    type="file"
-                    accept={ATTACHMENT_LIMITS.types.join(",")}
-                    multiple
-                    aria-describedby="report-photos-help"
-                    disabled={photos.length >= ATTACHMENT_LIMITS.maxFiles}
-                    onChange={(e) => {
-                      const chosen = Array.from(e.target.files ?? []);
-                      e.target.value = "";
-                      addPhotos(chosen);
-                    }}
-                    className="mx-auto block max-w-full text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-slate-700 file:shadow-xs hover:file:bg-slate-100 disabled:opacity-50"
-                  />
-                </div>
-                <p id="report-photos-help" className="text-xs text-slate-500 mt-1">
-                  Up to {ATTACHMENT_LIMITS.maxFiles} JPEG, PNG or WebP photos, {ATTACHMENT_LIMITS.maxBytes / (1024 * 1024)} MB each. On a phone you can take a photo with the camera. Location and camera details are removed from photos, and moderators review them before they are used.
-                </p>
-                {photoError && <p role="alert" className="text-xs text-red-600 mt-1">{photoError}</p>}
-                {photos.length > 0 && (
-                  <ul className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2" aria-label="Selected photos">
-                    {photos.map((photo, index) => (
-                      <li key={`${photo.name}-${photo.size}-${index}`} className="rounded-lg border border-slate-200 bg-white p-1.5 text-xs text-slate-800">
-                        <PhotoThumbnail file={photo} />
-                        <div className="mt-1 truncate" title={photo.name}>{photo.name}</div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPhotos(photos.filter((_, i) => i !== index));
-                            setPhotoError(null);
-                          }}
-                          className="mt-0.5 text-red-600 hover:text-red-800 cursor-pointer"
-                          aria-label={`Remove ${photo.name}`}
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <ReportPhotoPicker inputId="report-photos" label="Photos (optional)" photos={photos} onChange={setPhotos} disabled={isSubmitting} />
 
               {hint.level && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900" role="status" aria-live="polite">
