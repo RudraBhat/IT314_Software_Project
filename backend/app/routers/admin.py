@@ -245,13 +245,8 @@ def _ensure_another_active_admin(conn, target_id: uuid.UUID) -> None:
         raise conflict("LAST_ADMIN", "This is the last active administrator. Create or enable another one first.")
 
 
-@router.post("/accounts/{user_id}/disable", dependencies=[rate_limit("admin-account", 30, 3600)])
-def disable_account(user_id: uuid.UUID, body: StatusChange, principal: AdminUser):
-    """Switch a staff account off: it cannot sign in and every current session ends on its next request.
-
-    Needs a reason (audited). You cannot disable yourself, and the last active administrator cannot be
-    disabled. Nothing is deleted; the account can be enabled again.
-    """
+def _disable_one(user_id: uuid.UUID, reason: str, principal) -> dict:
+    """Disable one staff account in its own transaction. Shared by the single and bulk endpoints."""
     if user_id == principal.user_id:
         raise conflict("CANNOT_DISABLE_SELF", "You cannot disable your own account")
     with db.transaction() as conn:
@@ -268,12 +263,22 @@ def disable_account(user_id: uuid.UUID, body: StatusChange, principal: AdminUser
             action="ACCOUNT_DISABLED",
             entity_type="user",
             entity_id=user_id,
-            rationale=body.reason.strip(),
+            rationale=reason.strip(),
             before={"status": target["status"]},
             after={"status": "DISABLED", "role": target["role"]},
             ip=principal.ip,
         )
     return {"user_id": str(user_id), "status": "DISABLED"}
+
+
+@router.post("/accounts/{user_id}/disable", dependencies=[rate_limit("admin-account", 30, 3600)])
+def disable_account(user_id: uuid.UUID, body: StatusChange, principal: AdminUser):
+    """Switch a staff account off: it cannot sign in and every current session ends on its next request.
+
+    Needs a reason (audited). You cannot disable yourself, and the last active administrator cannot be
+    disabled. Nothing is deleted; the account can be enabled again.
+    """
+    return _disable_one(user_id, body.reason, principal)
 
 
 @router.post("/accounts/{user_id}/enable", dependencies=[rate_limit("admin-account", 30, 3600)])
@@ -311,14 +316,8 @@ def enable_account(user_id: uuid.UUID, body: StatusChange, principal: AdminUser)
 # --------------------------------------------------------------------------- sign a person out everywhere
 
 
-@router.post("/accounts/{user_id}/sign-out", dependencies=[rate_limit("admin-account", 30, 3600)])
-def sign_out_everywhere(user_id: uuid.UUID, body: StatusChange, principal: AdminUser):
-    """End every session of an active staff account, for example after a lost or shared device.
-
-    Unlike disabling, the account stays usable: the person just has to sign in again with their password
-    and authenticator. Access tokens stop working on the next request and refresh tokens are revoked, so a
-    session cannot quietly renew itself. Needs a reason (audited). You cannot do this to yourself.
-    """
+def _sign_out_one(user_id: uuid.UUID, reason: str, principal) -> dict:
+    """End every session of one staff account in its own transaction. Shared by the single and bulk endpoints."""
     if user_id == principal.user_id:
         raise conflict("CANNOT_SIGN_OUT_SELF", "Use Sign out to end your own session")
     with db.transaction() as conn:
@@ -333,11 +332,56 @@ def sign_out_everywhere(user_id: uuid.UUID, body: StatusChange, principal: Admin
             action="ACCOUNT_SIGNED_OUT",
             entity_type="user",
             entity_id=user_id,
-            rationale=body.reason.strip(),
+            rationale=reason.strip(),
             after={"role": target["role"]},
             ip=principal.ip,
         )
     return {"user_id": str(user_id), "status": target["status"], "signed_out": True}
+
+
+@router.post("/accounts/{user_id}/sign-out", dependencies=[rate_limit("admin-account", 30, 3600)])
+def sign_out_everywhere(user_id: uuid.UUID, body: StatusChange, principal: AdminUser):
+    """End every session of an active staff account, for example after a lost or shared device.
+
+    Unlike disabling, the account stays usable: the person just has to sign in again with their password
+    and authenticator. Access tokens stop working on the next request and refresh tokens are revoked, so a
+    session cannot quietly renew itself. Needs a reason (audited). You cannot do this to yourself.
+    """
+    return _sign_out_one(user_id, body.reason, principal)
+
+
+# --------------------------------------------------------------------------- several accounts at once
+
+BULK_LIMIT = 25
+
+
+class BulkChange(BaseModel):
+    action: Literal["disable", "sign-out"]
+    user_ids: list[uuid.UUID] = Field(min_length=1, max_length=BULK_LIMIT)
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.post("/accounts/bulk", dependencies=[rate_limit("admin-bulk", 10, 3600)])
+def bulk_change(body: BulkChange, principal: AdminUser):
+    """Disable or sign out up to 25 staff accounts in one go.
+
+    Each account is handled on its own, with exactly the rules and the audit entry of the single action, so
+    one that cannot be changed (yourself, the last active administrator, already disabled) is reported and
+    skipped without stopping the others. The response lists every account's outcome; the call itself
+    succeeds whenever the request was valid. Needs one shared reason, recorded against each account.
+    """
+    if len(set(body.user_ids)) != len(body.user_ids):
+        raise ApiError(422, "VALIDATION_FAILED", "The same account is listed more than once")
+    handle = _disable_one if body.action == "disable" else _sign_out_one
+    results = []
+    for user_id in body.user_ids:
+        try:
+            handle(user_id, body.reason, principal)
+            results.append({"user_id": str(user_id), "ok": True, "code": None, "message": None})
+        except ApiError as e:
+            results.append({"user_id": str(user_id), "ok": False, "code": e.code, "message": e.message})
+    done = sum(1 for r in results if r["ok"])
+    return {"action": body.action, "done": done, "skipped": len(results) - done, "results": results}
 
 
 # --------------------------------------------------------------------------- reset a person's sign-in

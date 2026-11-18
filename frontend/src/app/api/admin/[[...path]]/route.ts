@@ -7,6 +7,7 @@ import { API_URL, sessionToken } from "@/lib/session";
  *
  *   GET  /api/admin/accounts                     -> staff account directory (APP_MGMT with verified MFA)
  *   GET  /api/admin/accounts/export              -> the filtered directory as a CSV download (audited)
+ *   POST /api/admin/accounts/bulk                -> disable or sign out up to 25 accounts at once, with a reason
  *   POST /api/admin/accounts/{id}/disable|enable -> switch an account off or on, with a reason
  *   POST /api/admin/accounts/{id}/reset-credentials -> clear a person's password and authenticator, email a setup link
  *   POST /api/admin/accounts/{id}/sign-out       -> end every session of an account without disabling it
@@ -23,6 +24,7 @@ import { API_URL, sessionToken } from "@/lib/session";
 const ALLOWED = [
   { method: "GET", pattern: /^accounts$/ },
   { method: "GET", pattern: /^accounts\/export$/ },
+  { method: "POST", pattern: /^accounts\/bulk$/ },
   { method: "POST", pattern: /^accounts\/[0-9a-f-]{36}\/(disable|enable|reset-credentials|sign-out)$/i },
   { method: "PUT", pattern: /^accounts\/[0-9a-f-]{36}\/(permissions|profile)$/i },
   { method: "GET", pattern: /^system$/ },

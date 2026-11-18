@@ -457,6 +457,82 @@ def test_only_an_mfa_verified_administrator_can_sign_someone_out(make, client):
     assert client.get("/api/v1/dm/dashboard", headers=target["headers"]).status_code == 200  # nothing changed
 
 
+# --------------------------------------------------------------------------- several accounts at once
+
+BULK_REASON = "Contract ended for this whole shift roster"
+
+
+def _bulk(client, headers, action, ids, reason=BULK_REASON):
+    return client.post(f"{URL}/bulk", headers=headers, json={"action": action, "user_ids": [str(i) for i in ids], "reason": reason})
+
+
+def test_bulk_disable_handles_each_account_and_reports_every_outcome(make, client, sql):
+    admin, headers = _admin(make)
+    first, second = make.staff("DISPATCH"), make.staff("SUPERVISOR")
+    already = make.staff("DISPATCH")
+    assert _disable(client, headers, already["user_id"]).status_code == 200
+    citizen = make.citizen()
+
+    r = _bulk(client, headers, "disable", [first["user_id"], admin["user_id"], already["user_id"], citizen["user_id"], second["user_id"]])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["action"] == "disable" and body["done"] == 2 and body["skipped"] == 3
+    outcome = {x["user_id"]: x for x in body["results"]}
+    assert [x["user_id"] for x in body["results"]] == [str(i) for i in (first["user_id"], admin["user_id"], already["user_id"], citizen["user_id"], second["user_id"])]
+    assert outcome[str(first["user_id"])]["ok"] and outcome[str(second["user_id"])]["ok"]
+    assert outcome[str(admin["user_id"])]["code"] == "CANNOT_DISABLE_SELF"
+    assert outcome[str(already["user_id"])]["code"] == "ALREADY_DISABLED"
+    assert outcome[str(citizen["user_id"])]["code"] == "NOT_FOUND"
+
+    for person in (first, second):  # the ones that worked are really disabled, and their sessions ended
+        assert client.get("/api/v1/dm/dashboard", headers=person["headers"]).status_code == 401
+        entry = sql.execute(
+            "SELECT actor_id, rationale FROM audit_logs WHERE entity_id = %s AND action = 'ACCOUNT_DISABLED'",
+            (person["user_id"],),
+        ).fetchone()
+        assert entry["actor_id"] == admin["user_id"] and entry["rationale"] == BULK_REASON
+    assert client.get("/api/v1/dm/dashboard", headers=make.staff("DISPATCH")["headers"]).status_code == 200  # others untouched
+
+
+def test_bulk_sign_out_ends_sessions_but_skips_accounts_without_any(make, client):
+    _, headers = _admin(make)
+    active = make.user("DISASTER_MGMT", ["DISPATCH"])
+    session = _staff_session(client, active)
+    pending = make.staff("DISPATCH")
+    assert _reset(client, headers, pending["user_id"]).status_code == 200
+
+    body = _bulk(client, headers, "sign-out", [active["user_id"], pending["user_id"]]).json()
+    assert body["done"] == 1 and body["skipped"] == 1
+    assert body["results"][1]["code"] == "NOT_ACTIVE"
+    bearer = {"Authorization": f"Bearer {session['access_token']}"}
+    assert client.get("/api/v1/dm/dashboard", headers=bearer).status_code == 401
+    assert client.post("/api/v1/auth/refresh", json={"refresh_token": session["refresh_token"]}).status_code == 401
+
+
+def test_bulk_validation(make, client):
+    _, headers = _admin(make)
+    one = make.staff("DISPATCH")["user_id"]
+    assert _bulk(client, headers, "disable", []).status_code == 422
+    assert _bulk(client, headers, "disable", [uuid.uuid4() for _ in range(26)]).status_code == 422
+    assert _bulk(client, headers, "disable", [one, one]).status_code == 422  # the same person twice
+    assert _bulk(client, headers, "delete", [one]).status_code == 422  # only disable and sign-out are bulk
+    assert _bulk(client, headers, "disable", [one], reason="no").status_code == 422
+    assert client.post(f"{URL}/bulk", headers=headers, json={"action": "disable", "user_ids": ["nope"], "reason": BULK_REASON}).status_code == 422
+    assert client.get("/api/v1/dm/dashboard", headers=make.staff("DISPATCH")["headers"]).status_code == 200  # nothing happened
+
+
+def test_only_an_mfa_verified_administrator_can_use_bulk_actions(make, client):
+    target = make.staff("DISPATCH")
+    admin = make.user("APP_MGMT")
+    for action in ("disable", "sign-out"):
+        assert _bulk(client, {}, action, [target["user_id"]]).status_code == 401
+        assert _bulk(client, make.token(admin, mfa=False), action, [target["user_id"]]).status_code == 401
+        assert _bulk(client, make.citizen()["headers"], action, [target["user_id"]]).status_code == 403
+        assert _bulk(client, make.field_team_user()["headers"], action, [target["user_id"]]).status_code == 403
+        assert _bulk(client, make.staff("SUPERVISOR")["headers"], action, [target["user_id"]]).status_code == 403
+    assert client.get("/api/v1/dm/dashboard", headers=target["headers"]).status_code == 200  # nothing changed
+
+
 # --------------------------------------------------------------------------- edit a person's details
 
 DETAILS = {"full_name": "Meera Shah", "designation": "Duty Officer", "reason": "Name was misspelled at invitation"}

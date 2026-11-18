@@ -9,6 +9,8 @@ import { formatDateTime, timeAgo } from "@/lib/format";
 import { disableAccount, enableAccount, exportAccounts, listAccounts, resetCredentials, setPermissions, signOutAccount, updateProfile, type AccountStatus, type AccountsPage, type StaffAccount } from "@/services/adminApi";
 import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
 
+import { BulkActionBar } from "./BulkActionBar";
+
 import type { Tone } from "@/components/ui";
 
 const STATUS_LABEL: Record<AccountStatus, string> = {
@@ -62,6 +64,7 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
   const [granted, setGranted] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [designation, setDesignation] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -150,6 +153,9 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
   }
 
   const data = result?.data;
+  // Only accounts on the page being shown count, so a hidden selection is never acted on by surprise.
+  const selectedHere = data?.items.filter((a) => selected.includes(a.user_id)) ?? [];
+  const selectable = data?.items.filter((a) => !a.is_you) ?? [];
   const summary = data?.summary;
   const filtered = Boolean(debouncedSearch.trim() || role || status);
 
@@ -205,6 +211,7 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
         </Button>
       </div>
 
+      <BulkActionBar accounts={selectedHere} onClear={() => setSelected([])} onDone={() => setRetry((n) => n + 1)} />
       {note && <div className="border-b border-border p-4"><Notice tone="high">{note}</Notice></div>}
       {result?.error && !loading && (
         <div className="p-4"><ErrorState message={result.error} onRetry={() => setRetry((n) => n + 1)} /></div>
@@ -216,11 +223,29 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
         </div>
       )}
       {data && data.items.length > 0 && (
-        <ul className={`divide-y divide-border ${loading ? "opacity-60" : ""}`} aria-busy={loading}>
-          {data.items.map((account) => (
-            <AccountRow key={account.user_id} account={account} onAction={ask} />
-          ))}
-        </ul>
+        <>
+          {selectable.length > 1 && (
+            <label className="flex items-center gap-2 border-b border-border px-5 py-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={selectedHere.length === selectable.length}
+                onChange={(e) => setSelected(e.target.checked ? selectable.map((a) => a.user_id) : [])}
+              />
+              Select everyone on this page
+            </label>
+          )}
+          <ul className={`divide-y divide-border ${loading ? "opacity-60" : ""}`} aria-busy={loading}>
+            {data.items.map((account) => (
+              <AccountRow
+                key={account.user_id}
+                account={account}
+                onAction={ask}
+                selected={selected.includes(account.user_id)}
+                onSelect={(on) => setSelected((s) => (on ? [...s, account.user_id] : s.filter((id) => id !== account.user_id)))}
+              />
+            ))}
+          </ul>
+        </>
       )}
       {data && (
         <div className="border-t border-border px-5 py-3">
@@ -307,11 +332,19 @@ export function AccountsDirectory({ refreshKey = 0 }: { refreshKey?: number }) {
   );
 }
 
-function AccountRow({ account, onAction }: { account: StaffAccount; onAction: (account: StaffAccount, action: Action) => void }) {
+function AccountRow({ account, onAction, selected, onSelect }: {
+  account: StaffAccount;
+  onAction: (account: StaffAccount, action: Action) => void;
+  selected: boolean;
+  onSelect: (on: boolean) => void;
+}) {
   const never = !account.last_login_at;
   return (
     <li className="flex flex-col gap-2 px-5 py-4">
       <div className="flex flex-wrap items-center gap-2">
+        {!account.is_you && (
+          <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} aria-label={`Select ${account.full_name}`} />
+        )}
         <span className="text-sm font-semibold">{account.full_name}</span>
         {account.is_you && <Badge tone="info">You</Badge>}
         <Badge tone="neutral">{ROLE_LABEL[account.role] ?? account.role}</Badge>

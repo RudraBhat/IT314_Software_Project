@@ -992,6 +992,12 @@ Staff accounts (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`) are never created wit
 * **Enable:** an account that had finished setup becomes `ACTIVE` and any lockout is cleared; one that never finished setup goes back to `PENDING_SETUP` and needs a new invitation link (resend it from the pending list). Old sessions stay ended. Returns `{"user_id", "status"}`. Audit action `ACCOUNT_ENABLED`.
 * **Errors:** `409 CANNOT_DISABLE_SELF`, `409 LAST_ADMIN` (the last active administrator cannot be disabled), `409 ALREADY_DISABLED`, `409 NOT_DISABLED`, `404` for a citizen or unknown account.
 
+#### Disable or sign out several accounts
+* **Path:** `POST /api/v1/admin/accounts/bulk`. Authentication as disable; rate limited to 10 calls per hour. Body `{"action": "disable" | "sign-out", "user_ids": ["..."], "reason": "..."}`: 1 to 25 distinct ids, reason 5 to 500 characters.
+* **Effect:** Each account is handled on its own, in its own transaction, with exactly the rules and audit entry (`ACCOUNT_DISABLED` or `ACCOUNT_SIGNED_OUT`, with the shared reason) of the single action. An account that cannot be changed (yourself, the last active administrator, already disabled, not active, a citizen or unknown id) is reported and skipped; the others still go through.
+* **Response (200):** `{"action", "done", "skipped", "results": [{"user_id", "ok", "code", "message"}]}`, in the order requested. `code` and `message` are null when `ok` is true, otherwise the error the single action would have returned (for example `CANNOT_DISABLE_SELF`, `ALREADY_DISABLED`, `NOT_ACTIVE`, `NOT_FOUND`, `LAST_ADMIN`).
+* **Errors:** `422` for an empty or oversized list, a repeated id, an unknown action or a short reason. Re-enabling and resetting a sign-in are not bulk actions.
+
 #### Edit a person's details
 * **Path:** `PUT /api/v1/admin/accounts/{user_id}/profile`. Same authentication and rate limit as disable. Body `{"full_name": "...", "designation": "..." | null, "reason": "..."}`: name 2 to 120 characters, designation up to 120 (blank clears it), reason 5 to 500. Audited as `PROFILE_UPDATED` with the old and new values.
 * **Effect:** Changes the display name and designation of any staff account, including your own and accounts that have not finished setup. The email address is the sign-in identity and cannot be changed here.

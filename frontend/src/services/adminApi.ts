@@ -186,6 +186,14 @@ export const getSystemStatus = () => request<SystemStatus>("system");
 /** Check the audit log's hash chain. The check is itself recorded in the log. */
 export const verifyAudit = () => request<AuditVerification>("audit/verify", { method: "POST", body: {} });
 
+export type BulkAction = "disable" | "sign-out";
+export type BulkOutcome = { user_id: string; ok: boolean; code: string | null; message: string | null };
+export type BulkResult = { action: BulkAction; done: number; skipped: number; results: BulkOutcome[] };
+
+/** Disable or sign out several accounts. Each is handled on its own; the result lists every outcome. */
+export const bulkChange = (action: BulkAction, userIds: string[], reason: string) =>
+  request<BulkResult>("accounts/bulk", { method: "POST", body: { action, user_ids: userIds, reason } });
+
 export type ProfileResult = { user_id: string; full_name: string; designation: string | null };
 
 /** Correct a staff member's name or designation. The email address cannot be changed. Reason is audited. */
