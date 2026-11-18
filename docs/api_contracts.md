@@ -299,7 +299,7 @@
 }
 ```
 
-The configured scheduler targets a 15-minute cadence. Local development uses the backend poller; staging uses the GitHub Actions trigger with the backend poller disabled. `POST /api/v1/dm/ingestion/poll` starts an immediate poll for staff with `DISPATCH` or `SUPERVISOR`; `GET /api/v1/dm/ingestion/health` returns each source's latest run, 24-hour counts and latest error. Both require an MFA-verified staff session. `REPLAY` rows are always marked simulated; `GNEWS` and `BLUESKY` are live text sources, off unless `NEWS_RSS_ENABLED` / `BLUESKY_SEARCH_ENABLED` is set, and their rows are marked not simulated. Bluesky is the selected free English-language pilot; it uses `/triage` once for each new or changed signal. `/triage` is the rules baseline unless a trained scenario model is configured (section 8.1); it is not the English relevance model of section 8.2. The public alerts API returns only unexpired SACHET, GDACS or IMD alerts and includes the source and fallback flag.
+The configured scheduler targets a 15-minute cadence. Local development uses the backend poller; staging uses the GitHub Actions trigger with the backend poller disabled. `POST /api/v1/dm/ingestion/poll` starts an immediate poll for staff with `DISPATCH` or `SUPERVISOR`; `GET /api/v1/dm/ingestion/health` returns each source's latest run, 24-hour counts and latest error. Both require an MFA-verified staff session. `REPLAY` rows are always marked simulated; `GNEWS` and `BLUESKY` are live text sources, off unless `NEWS_RSS_ENABLED` / `BLUESKY_SEARCH_ENABLED` is set, and their rows are marked not simulated. New GNEWS/BLUESKY rows use `DISASTER_CLASSIFIER_URL` when configured (section 8.2.1); otherwise they retain the legacy `/triage` prelabel path (section 8.1). The public alerts API returns only unexpired SACHET, GDACS or IMD alerts and includes the source and fallback flag.
 
 ### 4.2 Raw Signals Queue (DM Workspace)
 * **Path:** `GET /api/v1/dm/signals`
@@ -310,11 +310,26 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 [
   {
     "signal_id": "4b684531-ec7b-40eb-bdff-6e94f1be9eb6",
-    "source": "MASTODON",
+    "source": "BLUESKY",
     "content_text": "Water rising rapidly near Ashram Road underpass. Cars floating!",
     "language": "en",
     "ai_label": "URBAN_FLOODING",
-    "ai_confidence": 0.88,
+    "ai_confidence": 0.91,
+    "ai_details": {
+      "model": "indicbert-disaster-api",
+      "classification": {
+        "prediction": "Flood",
+        "is_disaster": true,
+        "confidence": 0.91,
+        "probabilities": {
+          "Fire": 0.01,
+          "Earthquake": 0.01,
+          "Cyclone": 0.02,
+          "Flood": 0.91,
+          "Non-Disaster": 0.05
+        }
+      }
+    },
     "status": "PENDING",
     "latitude": 23.0450,
     "longitude": 72.5680,
@@ -325,6 +340,7 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
   }
 ]
 ```
+`ai_details.classification` contains the raw result from `DISASTER_CLASSIFIER_URL`; `is_disaster` is false only for `Non-Disaster`. The classification probabilities are the model output, while `ai_label` is only a compatible DRCH scenario suggestion.
 
 ### 4.3 Signal Promotion to Incident
 * **Path:** `POST /api/v1/dm/signals/{id}/promote`
@@ -914,6 +930,33 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 ```
 * **Response (200 OK):** Includes advisory disaster relevance and probabilities for learned help intent, direct-report, and humanitarian information categories. Low-confidence relevance is returned as `REVIEW` with a candidate label. Text not confidently detected as English returns `LANGUAGE_UNCERTAIN` or `UNSUPPORTED_LANGUAGE` without classification. `source_metadata` is copied from the caller; it is not extracted from the text. The model explicitly returns `NOT_TRAINED` for the project's exact operational scenario and priority, location mentions, and event-time extraction.
 * **Availability:** Returns `503` when `TEXT_MODEL_DIR` does not point to a trained model artifact. Human review is required; this response must not trigger incident verification or dispatch.
+
+### 8.2.1 Multilingual Disaster Classifier for Ingested Text
+When `DISASTER_CLASSIFIER_URL` is configured, the ingestion worker sends each new GNEWS/BLUESKY signal's sanitized text to the deployed IndicBERT disaster classifier. Source, timestamps, language hint, location, and verification link remain in the local signal record; the model API accepts text only. The worker sends PII-scrubbed original wording and does not translate it.
+
+* **Method:** `POST https://indicbert-disaster-api.onrender.com/predict` (configurable with `DISASTER_CLASSIFIER_URL`).
+* **Request headers:** `Content-Type: application/json`, `Accept: application/json`; no authentication is currently required by this deployed endpoint.
+* **Request body:**
+```json
+{"text": "Sanitized original signal text"}
+```
+* **Response body:**
+```json
+{
+  "prediction": "Flood",
+  "confidence": 0.91,
+  "probabilities": {
+    "Fire": 0.01,
+    "Earthquake": 0.01,
+    "Cyclone": 0.02,
+    "Flood": 0.91,
+    "Non-Disaster": 0.05
+  }
+}
+```
+* **Stored classifier result:** The signal API includes `ai_details.classification` with `prediction`, `is_disaster`, `confidence`, and `probabilities`. `is_disaster` is false only for `Non-Disaster`; all four disaster classes are retained as positive classifier results. The raw prediction is preserved even where it does not map exactly to a DRCH operational scenario. A compatible, confident `Flood` or `Cyclone` may also populate the existing `ai_label`; the `Fire` class remains generic and is not silently relabeled as industrial fire.
+* **Processing bounds:** At most 50 new or changed GNEWS/BLUESKY signals are sent per ingestion run. A failed request leaves the signal stored and available for review; the attempted signal is not automatically retried. The existing `/triage` service remains separate and is used only when `DISASTER_CLASSIFIER_URL` is unset.
+* **Scope:** This classifier stage determines the broad disaster class only. It does not assign priority, verify an incident, cluster signals, or dispatch resources. `Non-Disaster` remains stored with `is_disaster: false`; the field lets a later pipeline stage distinguish it from disaster candidates. All predictions are advisory.
 
 ### 8.3 AI Service Health
 * **Path:** `GET /health`

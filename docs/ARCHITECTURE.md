@@ -52,6 +52,7 @@ flowchart TD
     subgraph AIService["AI & Triage Services"]
         InProcessAI["Backend AI boundary<br/>ai_provider.py guardrails"]
         TriageAI["drch-ai-triage /triage<br/>rules baseline, optional trained model"]
+        DisasterClassifier["IndicBERT /predict<br/>multilingual disaster class"]
         TextAI["Optional English Text Classifier<br/>/analyze-text (advisory; event-held-out baseline)"]
         VisionAI["PyTorch Vision Microservice<br/>ai-workers/model (timm backbone)"]
     end
@@ -72,6 +73,7 @@ flowchart TD
     DMRouters --> AuditService
     DMRouters --> InProcessAI
     InProcessAI -->|HTTP, AI_TRIAGE_URL| TriageAI
+    InternalRouter -->|HTTP, DISASTER_CLASSIFIER_URL| DisasterClassifier
 
     DispatchService --> NeonDB
     GeoService --> NeonDB
@@ -240,6 +242,7 @@ IT314_Software_Project/
 - **Triage service ([`ai-workers/triage_service.py`](../ai-workers/triage_service.py)):**
   - `POST /triage` answers with the keyword and points rules ([docs/ai/triage-rules.md](ai/triage-rules.md)); when `TRIAGE_MODEL_DIR` holds a checked trained scenario model (`service/scenario_model.py`) its scenario and confidence are used instead, and priority still follows the rules. `GET /health` reports which engine is active.
   - The optional LLM second opinion (`service/llm.py`) is off by default. Model card and evaluation: [docs/ai/model-card.md](ai/model-card.md), [docs/ai/evaluation-report.md](ai/evaluation-report.md).
+- **Ingested-text disaster classifier:** The ingestion worker sends PII-scrubbed text from new GNEWS/BLUESKY signals to `DISASTER_CLASSIFIER_URL` (`POST /predict`). It stores the raw class, disaster flag, confidence, and probabilities in the signal's `ai_details`; `Non-Disaster` is marked false. This stage does not assign priority or make incident/dispatch decisions. The configured endpoint is staging-only in `render.yaml`; live signal sources remain disabled unless explicitly enabled.
 - **English Text Analysis ([`ai-workers/text_model/`](../ai-workers/text_model/)):**
   - Optional `/analyze-text` endpoint trained on an openly licensed, event-held-out English crisis-message corpus.
   - Predicts disaster relevance, help request/offer, direct reports, and available humanitarian information categories.
@@ -328,7 +331,7 @@ To maintain factual engineering clarity, capabilities in the repository are cata
 | **Image Disaster Classifier** | **Prototype / Isolated** | PyTorch service in `ai-workers/model/app.py`, evaluated offline on split data; not deployed for this release, so photo analysis answers `503 AI_PHOTO_UNAVAILABLE` |
 | **Citizen Photo Storage** | **Implemented (Real), database** | Bytes in PostgreSQL `evidence_blobs` (migration 11), metadata and moderation in `evidence_files`; Cloudinary is planned later (see "Photo storage" in section 8) |
 | **Payment Gateway Integration** | **Simulated (Sandbox)** | Sandbox `MockGateway` only; live Razorpay/Stripe integration is planned |
-| **External Alert & Signal Ingestion** | **Implemented (Real feeds) + Replay** |  SACHET CAP adapters (`app/services/ingest/`) run on the scheduler and the `ingest-cron.yml` workflow; an English-only Bluesky social pilot is implemented but opt-in (`BLUESKY_SEARCH_ENABLED`); GNEWS remains off (`NEWS_RSS_ENABLED`); live social triage is bounded to 50 new signals per run; fallback alerts stay labelled `is_fallback = TRUE` |
+| **External Alert & Signal Ingestion** | **Implemented (Real feeds) + Replay** | SACHET CAP adapters (`app/services/ingest/`) run on the scheduler and the `ingest-cron.yml` workflow; the Bluesky and GNEWS text sources remain opt-in (`BLUESKY_SEARCH_ENABLED`, `NEWS_RSS_ENABLED`); new social/news text is sent to the configured multilingual disaster classifier, bounded to 50 signals per run; fallback alerts stay labelled `is_fallback = TRUE` |
 | **Simulated Demo Incidents** | **Simulated** | 4 seeded Gujarat demo incidents flagged with `is_simulated = TRUE` |
 
 ---
