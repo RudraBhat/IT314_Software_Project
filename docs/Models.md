@@ -27,14 +27,12 @@ while while the service wakes up and downloads its model. Docs are at `/docs`, h
 ai-workers/model/
 |
 ├── text_classifier/
-│   ├── README.md
 │   ├── data/                     # synthetic training CSV + test CSV
 │   ├── train/                    # IndicBERT fine-tuning + ONNX INT8 export
 │   ├── MuRIL/                    # larger, more accurate model (not deployed)
 │   ├── deployment/               # FastAPI app for Render
 │   └── testing/                  # live-API test script + saved results
 └── image_classifier/
-    ├── README.md
     ├── train/                    # training + evaluation scripts
     ├── deployment/               # FastAPI app for Render
     └── testing/                  # API test script + saved results
