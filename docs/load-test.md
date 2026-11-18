@@ -18,8 +18,10 @@ The first request wakes a sleeping free-tier instance, so the cold start is not 
 | Date (UTC) | Target and build | Endpoint | Requests / concurrency | Errors | p50 | p95 | p99 | Max | Throughput |
 |---|---|---|---|---|---|---|---|---|---|
 | 2026-11-14 | `it314-software-project-backend1.onrender.com`, build `54007f9` | `GET /api/v1/public/incidents` | 200 / 5 | 0 | 475 ms | **633 ms** | 942 ms | 1,094 ms | 9.8 req/s |
+| 2026-11-15 | `drch-backend-latest.onrender.com`, build `1fd1a69` | `GET /api/v1/public/incidents` | 200 / 5 | 0 | 615 ms | **1,301 ms** | 1,515 ms | 1,642 ms | 6.7 req/s |
+| 2026-11-15 | `drch-backend-latest.onrender.com`, build `1fd1a69` | `POST /api/v1/incidents` | 20 / 2 | 0 | 1,560 ms | **2,861 ms** | 3,363 ms | 3,363 ms | 1.1 req/s |
 
-**Public map p95: 633 ms** (the S3-13 "done when" value).
+**Public map p95: 633 ms** (production baseline) / **1,301 ms** (staging); **Report submit p95: 2,861 ms** (staging, D-18 closed).
 
 Notes on the measurement:
 

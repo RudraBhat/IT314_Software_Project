@@ -31,7 +31,8 @@ MAX_TEXT_CHARS = 1500
 MAX_SUMMARY_CHARS = 400
 TIMEOUT_SECONDS = 15
 
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# Unicode-aware, linear-time pattern with no nested quantifiers; input is capped before substitution.
+_EMAIL = re.compile(r"\b[\w.%+-]+@[\w.-]+\.[^\W\d_]{2,}\b")
 _PHONE = re.compile(r"(?<!\w)\+?\d[\d\s\-]{7,}\d(?!\w)")
 
 # A completer takes a prompt and returns the model's raw text. Tests pass a stub; production uses a provider.
@@ -62,7 +63,13 @@ def is_enabled() -> bool:
 
 def redact(text: str) -> str:
     """Mask contact details and cap the length before anything leaves the service."""
-    return _PHONE.sub("[phone]", _EMAIL.sub("[email]", text or "")).strip()[:MAX_TEXT_CHARS]
+    if not text:
+        return ""
+    if len(text) > MAX_TEXT_CHARS:
+        text = text[:MAX_TEXT_CHARS]
+    # codeql[py/polynomial-redos] - text is bounded to MAX_TEXT_CHARS and regex contains no nested quantifiers
+    cleaned = _EMAIL.sub("[email]", text)
+    return _PHONE.sub("[phone]", cleaned).strip()
 
 
 def _post_json(url: str, payload: dict, headers: dict[str, str]) -> dict:

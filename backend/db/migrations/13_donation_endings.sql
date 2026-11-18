@@ -1,5 +1,5 @@
 -- =====================================================================
--- DRCH - Migration 12: server-side donation endings (S3-11)
+-- DRCH - Migration 13: server-side donation endings (S3-11)
 --
 -- A donation that never completes now ends on the server instead of only
 -- in the browser: the donor cancels it (ABANDONED), the gateway reports the

@@ -2,6 +2,7 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { SiteHeader } from "@/components/Brand";
+import { AuthenticatorQr } from "@/components/auth/AuthenticatorQr";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -215,9 +216,24 @@ function SetupAccountContent() {
                 </div>
               )}
 
+              {mfaData.mfa_uri?.startsWith("otpauth://") && (
+                <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-3">
+                  <span className="block text-xs font-semibold text-slate-300">
+                    1. Scan this QR code with your authenticator app
+                  </span>
+                  <AuthenticatorQr uri={mfaData.mfa_uri} />
+                  <p className="text-center text-[11px] leading-normal text-slate-400">
+                    In the app tap <strong>+</strong> then <strong>Scan a QR code</strong>. The account is added
+                    for you. Cannot scan? Enter the key below by hand.
+                  </p>
+                </div>
+              )}
+
               <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-300">1. Authenticator Secret Key:</span>
+                  <span className="text-xs font-semibold text-slate-300">
+                    {mfaData.mfa_uri?.startsWith("otpauth://") ? "Or enter the key by hand:" : "1. Authenticator Secret Key:"}
+                  </span>
                   <button
                     type="button"
                     onClick={copySecret}
@@ -229,9 +245,33 @@ function SetupAccountContent() {
                 <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-center font-mono text-sm tracking-widest text-sky-300 select-all">
                   {mfaData.mfa_secret || "••••••••••••••••"}
                 </div>
-                <p className="text-[11px] text-slate-400 leading-normal">
-                  Open <strong>Google Authenticator</strong>, <strong>Microsoft Authenticator</strong>, or any TOTP app, tap &quot;Add Account&quot; → &quot;Enter a setup key&quot;, and enter the key above.
-                </p>
+                <div className="space-y-2 text-[11px] leading-normal text-slate-400">
+                  <p>
+                    Open <strong>Google Authenticator</strong>, <strong>Microsoft Authenticator</strong> or any
+                    authenticator app, tap <strong>+</strong> (Add account), then <strong>Enter a setup key</strong>
+                    (or &quot;Enter key manually&quot;), and fill in:
+                  </p>
+                  <dl className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950 p-2.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="shrink-0 text-slate-400">Account / code name</dt>
+                      <dd className="select-all break-all text-right font-mono text-slate-200">
+                        {`ResQ: ${inviteInfo.email ?? "your email"}`}
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="shrink-0 text-slate-400">Your key</dt>
+                      <dd className="text-right text-slate-200">the key shown above</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="shrink-0 text-slate-400">Type of key</dt>
+                      <dd className="text-right text-slate-200">Time based</dd>
+                    </div>
+                  </dl>
+                  <p>
+                    The account name is only a label, so any name works. Tap <strong>Add</strong>, then enter the
+                    6-digit number the app shows in step 2. Keep this entry in the app: you need it at every sign-in.
+                  </p>
+                </div>
               </div>
 
               <div>

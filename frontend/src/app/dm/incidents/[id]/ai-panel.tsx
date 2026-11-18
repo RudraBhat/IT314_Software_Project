@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import { AiBadge, PriorityBadge } from "@/components/badges";
@@ -255,6 +256,9 @@ function PhotoAnalyseSection({ incidentId }: { incidentId: string }) {
   // Release the preview object URL when the panel goes away.
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
+  // Safe preview URL strictly validated against the blob: scheme to prevent DOM XSS
+  const safePreview = typeof preview === "string" && preview.startsWith("blob:") ? preview : null;
+
   const onSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     e.target.value = ""; // allow choosing the same file again after a rejection
@@ -323,11 +327,17 @@ function PhotoAnalyseSection({ incidentId }: { incidentId: string }) {
         </div>
       )}
 
-      {preview && !result && (
+      {safePreview && !result && (
         <div className="mt-3 space-y-2">
           <div className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={preview} alt="Selected photo" className="h-16 w-16 rounded object-cover border border-border" />
+            <Image
+              src={safePreview}
+              alt="Selected photo"
+              width={64}
+              height={64}
+              unoptimized
+              className="h-16 w-16 rounded object-cover border border-border"
+            />
             <div className="min-w-0 flex-1 text-xs">
               <p className="truncate font-medium">{file?.name}</p>
               <p className="text-muted">{file ? Math.round(file.size / 1024) : 0} KB</p>

@@ -70,6 +70,12 @@ def _db_available() -> bool:
 
 DB_AVAILABLE = _db_available()
 
+if not DB_AVAILABLE:
+    # No reachable test database (defect D-14). Leaving DATABASE_URL pointed at it made every non-DB
+    # test that touched the app wait on connection-pool retries, and the pool's thread kept the run
+    # alive at exit. With no URL the app reports the database as not configured straight away.
+    os.environ["DATABASE_URL"] = ""
+
 
 def _ensure_schema() -> None:
     with psycopg.connect(TEST_DB_URL, autocommit=True) as conn:
@@ -167,6 +173,14 @@ def evaluate_ci_guard(require_db: bool, db_tests_ran: bool) -> bool:
 
 
 def pytest_sessionfinish(session, exitstatus):
+    # Close the app's connection pool so its background thread cannot hold the process open (D-14).
+    try:
+        from app import db
+
+        db.close_pool()
+    except Exception as exc:  # noqa: BLE001 - never let clean-up hide the real test result
+        print(f"\n[conftest] could not close the connection pool: {type(exc).__name__}")
+
     require_db = os.getenv("REQUIRE_DB_TESTS") == "1"
     if require_db:
         reporter = session.config.pluginmanager.get_plugin("terminalreporter")

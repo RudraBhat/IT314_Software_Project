@@ -46,7 +46,7 @@ Proposed from each member's rehearsal role in the sprint plan; Siddh confirms be
   - the citizen registers live in step 1 (or use a prepared account if time is short).
 - [ ] TOTP apps for the dispatcher and both responders are on the presenters' phones.
 - [ ] Teams are `AVAILABLE` on `/dm/resources` (a team left reserved by the last rehearsal will not be recommended).
-- [ ] Frontend has `NEXT_PUBLIC_PAYMENT_SANDBOX=true`; backend has `PAYMENT_GATEWAY=mock` and `MOCK_GATEWAY_SECRET`.
+- [ ] Frontend has `NEXT_PUBLIC_PAYMENT_SANDBOX=true`; the backend the demo points at runs with `APP_ENV=staging`, `PAYMENT_GATEWAY=mock` and `MOCK_GATEWAY_SECRET` (`APP_ENV=production` refuses the sandbox payment step).
 - [ ] AI: `AI_TRIAGE_URL` points at the `drch-ai-triage` service (`/triage`) and `AI_TRIAGE_TOKEN` matches on both services. `AI_IMAGE_SERVICE_URL` is set only if the image service is deployed (step 7c otherwise shows the "unavailable" path).
 - [ ] Browser tabs: `/` (public map), `/report`, `/my-reports`, `/dm`, `/field` (phone width, second browser profile for team 2), `/donate`.
 
@@ -75,7 +75,7 @@ Proposed from each member's rehearsal role in the sprint plan; Siddh confirms be
 
 ### Step 5 — Signals from outside sources (Rudra)
 * **Screen:** `/dm/ingestion` (source health, "Poll now" = `POST /api/v1/dm/ingestion/poll`), then `/dm/signals`
-* Show the USGS / SACHET alerts and replayed social posts in the queue, each with its source and AI pre-label marked as a suggestion. Say out loud that the social posts are a replay fixture (section 6).
+* Show the SACHET alerts and replayed social posts in the queue, each with its source and AI pre-label marked as a suggestion. Say out loud that the social posts are a replay fixture (section 6).
 * Promote one signal (`POST /api/v1/dm/signals/{id}/promote`) and dismiss another with a rationale.
 * **Expect:** the promoted signal becomes a **SUBMITTED** incident (still not public); dismissal needs a reason.
 
@@ -133,7 +133,7 @@ Proposed from each member's rehearsal role in the sprint plan; Siddh confirms be
 ### Step 16 — Sandbox donation (Shlok)
 * **Screen:** `/donate` (SANDBOX banner visible) · **API:** `POST /api/v1/donations` (`Idempotency-Key`) → `POST /api/v1/donations/{id}/sandbox-payment` → `POST /api/v1/donations/{id}/verify`
 * **Expect:** a receipt `REC-YYYY-NNNNNN` only after the server checks the signature; repeating the verification returns the same receipt.
-* Show the ending screens with the sandbox preview buttons: **Preview Decline**, **Preview Timeout** and **Cancel & Abandon Order**. They are labelled "SANDBOX PREVIEW — nothing was sent to the gateway"; the server is not told about these endings yet (see section 5).
+* Show the ending screens. **Cancel & Abandon Order** is real: the server records the donation as `FAILED` (`ABANDONED`) and issues no receipt. **Preview Decline** and **Preview Timeout** are labelled "SANDBOX PREVIEW — nothing was sent to the gateway". Say that an unpaid order also ends on the server after 30 minutes, and that a payment the gateway still captures later confirms the donation.
 
 ### Closing (Siddh)
 * Run `python -m app.cli verify-audit` (or show its last CI result): the hash chain is intact.
@@ -154,14 +154,17 @@ Proposed from each member's rehearsal role in the sprint plan; Siddh confirms be
 
 ---
 
-## 5. Known gaps on 11 Nov 2026 (do not click into these)
+## 5. Known gaps on 14 Nov 2026 (do not click into these)
+
+Built and on `main` since the 11 Nov version of this list: the payment webhook (`POST /api/v1/payments/webhook/{gateway}`), `GET /api/v1/me/donations`, receipts, Razorpay Checkout, advisory photo analysis, confidence bands in `/dm/analytics`, related-signal suggestions and the LLM adapter library. Built in the 14 Nov member packages: server-side donation cancel and expiry, duplicate scoring with wording similarity, and the LLM adapter wired into `/triage` (off by default).
 
 | Gap | Owner | Demo workaround |
 |---|---|---|
-| Gateway webhook (`POST /api/v1/payments/webhook/{gateway}`), `GET /api/v1/me/donations` and server-side cancel/expiry are in Shlok's open S2-12 / S3-11 work, not on `main` | Shlok | Show the receipt on the confirmation screen; use the preview buttons for the endings. |
 | `/triage` uses the rules baseline; the trained text model (S2-05) and `InProcessProvider` (S2-06) are pending the frozen dataset (S1-10) | Neeti, Dhruvil | Present triage as the rules baseline with guardrails. |
-| LLM adapter (S2-08) not built; `LLM_ENABLED` stays off | Zalak | Do not mention an LLM step. |
-| Duplicate grouping uses the rules method (`"method": "rules"`) until S2-07 | Dhruvil, Zalak | Show the candidate list and the human link/merge/dismiss decision only. |
+| The LLM adapter is wired into `/triage` but stays off (`LLM_ENABLED`) until the S3-07 evaluation, and the backend does not show its fields | Zalak, Neeti | Do not mention an LLM step. |
+| The image classifier service is not deployed (no entry in `render.yaml`, weights are not in the repo), so photo analysis answers `503 AI_PHOTO_UNAVAILABLE` | Dhruvil, Siddh | Show step 7c as the "unavailable" path. |
+| Duplicate scoring (`"method": "rules+text"`) uses default weights that are not yet tuned on labelled pairs | Dhruvil, Zalak | Show the score and explanation as a hint; the human link/merge/dismiss decision is what counts. |
+| Live Google News and Bluesky signals are off unless `NEWS_RSS_ENABLED` / `BLUESKY_SEARCH_ENABLED` are set, and the team has not yet approved live collection | Rudra, Siddh | Use the replay fixture and say so (section 6). |
 
 ---
 
@@ -170,11 +173,12 @@ Proposed from each member's rehearsal role in the sprint plan; Siddh confirms be
 | Part | Status |
 |---|---|
 | Accounts, MFA, RBAC, audit chain, geofence, dispatch locking, field isolation | Real |
-| USGS and SACHET alerts | Real feeds; fallback alerts are labelled `is_fallback` |
+| SACHET alerts | Real feed; fallback alerts are labelled `is_fallback` |
 | Social posts | Replayed fixture (`social_replay.jsonl`), labelled as replay |
 | Demo incidents from the seed | `is_simulated = TRUE`, hidden from the public map outside development |
 | AI triage | Rules baseline, advisory only |
-| Payments | Sandbox mock gateway; no real money |
+| Photo analysis | Advisory only; the image classifier is not deployed for this release, so step 7c shows the labelled "unavailable" path. Citizen photos themselves are stored in the database and work |
+| Payments | Sandbox mock gateway on staging (Razorpay test mode only if its keys are set); no real money |
 
 ---
 
