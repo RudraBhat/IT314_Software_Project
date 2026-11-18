@@ -49,6 +49,23 @@ const URGENCIES = [
 
 const DRAFT_STORAGE_KEY = "resq_incident_report_draft";
 
+/** Local preview of a photo picked for the report; the object URL is released when it is removed. */
+function PhotoThumbnail({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(file);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the preview URL exists only while the file is selected
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+  return url ? (
+    // eslint-disable-next-line @next/next/no-img-element -- local blob preview, not an optimisable asset
+    <img src={url} alt={`Preview of ${file.name}`} className="h-20 w-full rounded object-cover bg-slate-100" />
+  ) : (
+    <div className="h-20 w-full rounded bg-slate-100" aria-hidden="true" />
+  );
+}
+
 export default function ReportIncidentPage() {
   // Session State
   const [session, setSession] = useState<SessionInfo | null>(null);
@@ -93,6 +110,18 @@ export default function ReportIncidentPage() {
   const [successResult, setSuccessResult] = useState<{ reference: string; status: string; photoNote?: string } | null>(null);
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoDragOver, setPhotoDragOver] = useState(false);
+
+  /** Validate newly picked or dropped photos; a bad file is reported and nothing else in the form changes. */
+  function addPhotos(chosen: File[]) {
+    if (chosen.length === 0) return;
+    const wrongType = chosen.find((f) => !ATTACHMENT_LIMITS.types.includes(f.type));
+    if (wrongType) return setPhotoError(`${wrongType.name} is not a JPEG, PNG or WebP image.`);
+    const tooBig = chosen.find((f) => f.size > ATTACHMENT_LIMITS.maxBytes);
+    if (tooBig) return setPhotoError(`${tooBig.name} is larger than ${ATTACHMENT_LIMITS.maxBytes / (1024 * 1024)} MB.`);
+    setPhotoError(photos.length + chosen.length > ATTACHMENT_LIMITS.maxFiles ? `At most ${ATTACHMENT_LIMITS.maxFiles} photos.` : null);
+    setPhotos([...photos, ...chosen].slice(0, ATTACHMENT_LIMITS.maxFiles));
+  }
 
   // Validation
   const validLocation = isInGujarat(latitude, longitude);
@@ -809,37 +838,56 @@ export default function ReportIncidentPage() {
                 <label htmlFor="report-photos" className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   Photos (optional)
                 </label>
-                <input
-                  id="report-photos"
-                  type="file"
-                  accept={ATTACHMENT_LIMITS.types.join(",")}
-                  multiple
-                  onChange={(e) => {
-                    const chosen = Array.from(e.target.files ?? []);
-                    e.target.value = "";
-                    const tooBig = chosen.find((f) => f.size > ATTACHMENT_LIMITS.maxBytes);
-                    const wrongType = chosen.find((f) => !ATTACHMENT_LIMITS.types.includes(f.type));
-                    if (wrongType) return setPhotoError(`${wrongType.name} is not a JPEG, PNG or WebP image.`);
-                    if (tooBig) return setPhotoError(`${tooBig.name} is larger than ${ATTACHMENT_LIMITS.maxBytes / (1024 * 1024)} MB.`);
-                    const next = [...photos, ...chosen].slice(0, ATTACHMENT_LIMITS.maxFiles);
-                    setPhotoError(photos.length + chosen.length > ATTACHMENT_LIMITS.maxFiles ? `At most ${ATTACHMENT_LIMITS.maxFiles} photos.` : null);
-                    setPhotos(next);
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setPhotoDragOver(true);
                   }}
-                  className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-slate-700 hover:file:bg-slate-200"
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Up to {ATTACHMENT_LIMITS.maxFiles} JPEG, PNG or WebP photos, {ATTACHMENT_LIMITS.maxBytes / (1024 * 1024)} MB each. Moderators review photos before they are used.
+                  onDragLeave={() => setPhotoDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setPhotoDragOver(false);
+                    addPhotos(Array.from(e.dataTransfer.files));
+                  }}
+                  className={`rounded-xl border-2 border-dashed p-4 text-center transition ${
+                    photoDragOver ? "border-sky-500 bg-sky-50" : "border-slate-300 bg-slate-50"
+                  }`}
+                >
+                  <p className="text-xs text-slate-600 mb-2" aria-hidden="true">
+                    Drag photos here, or
+                  </p>
+                  <input
+                    id="report-photos"
+                    type="file"
+                    accept={ATTACHMENT_LIMITS.types.join(",")}
+                    multiple
+                    aria-describedby="report-photos-help"
+                    disabled={photos.length >= ATTACHMENT_LIMITS.maxFiles}
+                    onChange={(e) => {
+                      const chosen = Array.from(e.target.files ?? []);
+                      e.target.value = "";
+                      addPhotos(chosen);
+                    }}
+                    className="mx-auto block max-w-full text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-slate-700 file:shadow-xs hover:file:bg-slate-100 disabled:opacity-50"
+                  />
+                </div>
+                <p id="report-photos-help" className="text-xs text-slate-500 mt-1">
+                  Up to {ATTACHMENT_LIMITS.maxFiles} JPEG, PNG or WebP photos, {ATTACHMENT_LIMITS.maxBytes / (1024 * 1024)} MB each. On a phone you can take a photo with the camera. Location and camera details are removed from photos, and moderators review them before they are used.
                 </p>
                 {photoError && <p role="alert" className="text-xs text-red-600 mt-1">{photoError}</p>}
                 {photos.length > 0 && (
-                  <ul className="mt-2 space-y-1">
+                  <ul className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2" aria-label="Selected photos">
                     {photos.map((photo, index) => (
-                      <li key={`${photo.name}-${index}`} className="flex items-center justify-between gap-2 text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800">
-                        <span className="truncate">{photo.name}</span>
+                      <li key={`${photo.name}-${photo.size}-${index}`} className="rounded-lg border border-slate-200 bg-white p-1.5 text-xs text-slate-800">
+                        <PhotoThumbnail file={photo} />
+                        <div className="mt-1 truncate" title={photo.name}>{photo.name}</div>
                         <button
                           type="button"
-                          onClick={() => setPhotos(photos.filter((_, i) => i !== index))}
-                          className="text-slate-500 hover:text-slate-800 cursor-pointer"
+                          onClick={() => {
+                            setPhotos(photos.filter((_, i) => i !== index));
+                            setPhotoError(null);
+                          }}
+                          className="mt-0.5 text-red-600 hover:text-red-800 cursor-pointer"
                           aria-label={`Remove ${photo.name}`}
                         >
                           Remove

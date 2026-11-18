@@ -25,7 +25,7 @@ from app.geo import district_for, is_in_gujarat
 from app.ratelimit import rate_limit
 from app.routers.auth import _PHONE_RE
 from app.routers.auth import _check_password_policy as check_password_policy
-from app.uploads import read_capped_body, safe_filename, sniff_image_type
+from app.uploads import read_capped_body, safe_filename, sniff_image_type, strip_image_metadata
 
 router = APIRouter(prefix="/api/v1", tags=["citizen"])
 
@@ -434,6 +434,8 @@ async def upload_attachment(incident_id: uuid.UUID, request: Request, principal:
     mime = sniff_image_type(content)
     if mime is None:
         raise ApiError(415, "INVALID_IMAGE", "The file is not a JPEG, PNG or WebP image.")
+    # Strip GPS, camera and text metadata before anything is stored or hashed (#180).
+    content = strip_image_metadata(content, mime)
     filename = safe_filename(request.headers.get("x-filename"))
     body, created = await run_in_threadpool(_store_attachment, principal, incident_id, filename, mime, content)
     return JSONResponse(status_code=201 if created else 200, content=jsonable_encoder(body))

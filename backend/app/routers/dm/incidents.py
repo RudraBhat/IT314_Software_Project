@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from psycopg import sql
 from pydantic import BaseModel, Field, model_validator
 
@@ -293,6 +293,44 @@ _REPORTER_MESSAGES = {
     "REJECTED": ("INCIDENT_REJECTED", "Your report could not be verified"),
     "NEEDS_INFORMATION": ("INCIDENT_INFORMATION_REQUESTED", "More information is needed for your report"),
 }
+
+
+@router.get("/incidents/{incident_id}/evidence/{evidence_id}/content")
+def incident_evidence_content(incident_id: uuid.UUID, evidence_id: uuid.UUID, principal: DMUser):
+    """Return an approved photo on this incident for triage (#180).
+
+    Only photos a moderator has approved are served here; pending, quarantined and removed ones are a
+    404 (moderators review those through the moderation queue). Each view is audited.
+    """
+    with db.transaction() as conn:
+        row = conn.execute(
+            """
+            SELECT e.mime_type, b.content
+            FROM evidence_files e JOIN evidence_blobs b ON b.evidence_id = e.evidence_id
+            WHERE e.evidence_id = %s AND e.incident_id = %s AND e.scan_state = 'CLEAN'
+            """,
+            (evidence_id, incident_id),
+        ).fetchone()
+        if row is None:
+            raise not_found("Evidence")
+        audit.record(
+            conn,
+            actor=principal,
+            action="EVIDENCE_VIEWED",
+            entity_type="evidence",
+            entity_id=evidence_id,
+            after={"incident_id": str(incident_id)},
+            ip=principal.ip,
+        )
+    return Response(
+        content=bytes(row["content"]),
+        media_type=row["mime_type"],
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+            "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'",
+        },
+    )
 
 
 @router.post("/incidents/{incident_id}/verification")
