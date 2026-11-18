@@ -31,6 +31,7 @@ from app.services.incidents import (
     ensure_open,
     lock_incident,
     open_dependencies,
+    reopen_target,
     require_status,
     update_incident,
 )
@@ -489,9 +490,7 @@ def reopen_incident(
             """,
             (incident_id,),
         ).fetchone()
-        target = (previous and previous["from_status"]) or "SUBMITTED"
-        if target in ("VERIFIED", "DISPATCHED", "RESOLVED") and row["verified_priority"] is None:
-            target = "SUBMITTED"
+        target = reopen_target(previous["from_status"] if previous else None, row["verified_priority"])
         updated = update_incident(
             conn,
             principal,

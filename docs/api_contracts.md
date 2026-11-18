@@ -373,6 +373,11 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 * **Audit:** each export writes `INCIDENTS_EXPORTED` or `DISPATCHES_EXPORTED` with the actor, row count, whether it was truncated and the filters used.
 * **Errors:** `401`/`403` for anyone who is not signed-in Disaster Management staff with a verified second factor, `422` for invalid filters.
 
+### 4.8 Reopening a Closed Incident
+* **Path:** `POST /api/v1/dm/incidents/{id}/reopen`. Body `{"reason": "...", "version": n}`. Requires the `CLOSURE` permission. Only a `CLOSED` incident can be reopened; the reason is audited.
+* **Where it goes:** back to where work can continue, based on the status it was closed from. `RESOLVED` returns as `VERIFIED` (it can be dispatched or resolved again) and `REJECTED` returns as `SUBMITTED` (it needs a fresh decision), because neither of those two statuses has a way forward. `SUBMITTED`, `NEEDS_INFORMATION`, `VERIFIED` and `DISPATCHED` return as they were. An incident with no priority never returns as `VERIFIED` or `DISPATCHED`; it returns as `SUBMITTED`, because verification requires a priority.
+* **Citizen view:** a report that was rejected, or closed without ever being resolved, is shown with a plain explanation instead of the four-stage progress bar (Submitted, Verified, Dispatched, Resolved). A closed report that was resolved still shows the finished path.
+
 ---
 
 ## 5. Field Operations API
