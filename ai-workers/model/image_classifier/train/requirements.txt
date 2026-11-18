@@ -1,0 +1,10 @@
+# Training + evaluation (image classifier)
+torch
+torchvision
+timm
+numpy
+pandas
+scikit-learn
+pillow
+tqdm
+matplotlib
