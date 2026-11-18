@@ -242,8 +242,14 @@ def main():
 
     # ------------------------------------------------------------ tokenizer
     print("\nLoading tokenizer:", args.model_name)
+    MODEL_REVISION = "4d6f311e9ad72e1e09f0111f1877eadb29a04b29"
     tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name, use_fast=False, keep_accents=True, token=hf_token)  # keep Indic marks
+        args.model_name,
+        revision=MODEL_REVISION,
+        use_fast=False,
+        keep_accents=True,
+        token=hf_token,
+    )
 
     texts = df["text"].astype(str).tolist()
     lengths = []
@@ -263,9 +269,16 @@ def main():
         pad_to_multiple_of=8 if torch.cuda.is_available() else None)
 
     # ---------------------------------------------------------------- model
+    MODEL_REVISION = "4d6f311e9ad72e1e09f0111f1877eadb29a04b29"
     model = AutoModelForSequenceClassification.from_pretrained(
-        args.model_name, num_labels=len(LABELS), id2label=ID2LABEL, label2id=LABEL2ID,
-        problem_type="single_label_classification", token=hf_token)
+        args.model_name,
+        revision=MODEL_REVISION,
+        num_labels=len(LABELS),
+        id2label=ID2LABEL,
+        label2id=LABEL2ID,
+        problem_type="single_label_classification",
+        token=hf_token,
+    )
     total = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total:,} (five-class head is newly initialized)")
 
