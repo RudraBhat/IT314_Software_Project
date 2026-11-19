@@ -25,6 +25,21 @@ TRANSITIONS: dict[str, set[str]] = {
     "CLOSED": set(),
 }
 
+# A reopened incident must land where work can continue. RESOLVED and REJECTED have no way forward, so
+# restoring them as they were would strand the incident (nothing could be dispatched or verified again).
+# Resolved work resumes as VERIFIED, where it can be dispatched or resolved again; a rejected report goes
+# back to SUBMITTED for a fresh decision. Every other state is restored as it was.
+_REOPEN_AS = {"RESOLVED": "VERIFIED", "REJECTED": "SUBMITTED"}
+
+
+def reopen_target(previous: str | None, verified_priority) -> str:
+    """The status a closed incident returns to, given the status it was closed from."""
+    target = _REOPEN_AS.get(previous or "", previous) or "SUBMITTED"
+    if target in ("VERIFIED", "DISPATCHED") and verified_priority is None:
+        return "SUBMITTED"  # never resume as verified without the priority that verification requires
+    return target
+
+
 ACTIVE_DISPATCH = ("REQUESTED", "ACKNOWLEDGED", "DISPATCHED")
 ACTIVE_ALLOCATION = ("ALLOCATED", "IN_TRANSIT")
 

@@ -106,7 +106,7 @@ function AuthFrame({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <SiteHeader subtitle="Gujarat Emergency Portal" maxWidth="max-w-3xl">
+      <SiteHeader subtitle="Gujarat Emergency Portal" maxWidth="max-w-7xl">
         <NavLink href="/">{copy.liveMap}</NavLink>
       </SiteHeader>
 

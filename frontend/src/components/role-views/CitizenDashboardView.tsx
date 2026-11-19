@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { SiteHeader } from "../Brand";
+import { UnifiedSiteHeader } from "../navigation/UnifiedSiteHeader";
 import { DisasterCategory } from "../../types/resq";
 import { InformationRequestReply } from "@/components/citizen/InformationRequestReply";
 import * as CitizenApi from "../../services/citizenApi";
+import { ReportPhotoPicker } from "../citizen/ReportPhotoPicker";
 import { LanguageCode, TRANSLATIONS } from "@/lib/citizenI18n";
 import { GUJARAT_CENTER, isInGujarat } from "@/lib/geo";
 
@@ -85,11 +86,9 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   currentUser: propUser,
   onOpenCitizenReport,
   onViewPublicMap,
-  onSignOut,
   onClose,
 }) => {
   const currentUser = useMemo(() => propUser ?? { id: "GUEST", name: "Citizen" }, [propUser]);
-  const logout = onSignOut || (() => {});
 
   // Language state (persisted)
   const [lang, setLang] = useState<LanguageCode>("en");
@@ -145,7 +144,8 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   const [formAffected, setFormAffected] = useState(1);
   const [formNeeds, setFormNeeds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [submitResult, setSubmitResult] = useState<{ success: boolean; reportId?: string; error?: string } | null>(null);
+  const [submitResult, setSubmitResult] = useState<{ success: boolean; reportId?: string; error?: string; photoNote?: string } | null>(null);
+  const [formPhotos, setFormPhotos] = useState<File[]>([]);
 
   // Expanded report detail
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
@@ -377,7 +377,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
           // Preserve red for critical, orange for high, amber for moderate
           const color =
             inc.severity === "CRITICAL" ? "#dc2626" : inc.severity === "HIGH" ? "#ea580c" : "#d97706";
-          const iconSymbol = inc.category.includes("Flood") ? "🌊" : inc.category.includes("Fire") ? "🔥" : "🌀";
+          const iconSymbol = inc.category === "Cyclone / Coastal Flooding" ? "🌀" : inc.category.includes("Fire") ? "🔥" : "🌊";
 
           const icon = L.divIcon({
             className: "",
@@ -455,11 +455,14 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
 
     if (res.data) {
       reportKeyRef.current = crypto.randomUUID();
-      setSubmitResult({ success: true, reportId: res.data.incident_ref });
+      // The report is already filed; photos are added afterwards and a failure never undoes the report.
+      const photoNote = await CitizenApi.uploadReportPhotos(res.data.incident_id, formPhotos);
+      setSubmitResult({ success: true, reportId: res.data.incident_ref, photoNote });
       setFormDescription("");
       setFormLocation("");
       setFormAffected(1);
       setFormNeeds([]);
+      setFormPhotos([]);
       handleRefresh();
     } else {
       setSubmitResult({ success: false, error: res.error || "Failed to submit disaster report. Please try again." });
@@ -527,7 +530,11 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
       `}</style>
 
       {/* ─── Blue Header (ResQ AI Bhuvan-inspired Identity) ─── */}
-      <SiteHeader subtitle="Citizen Safety Portal" brandHref="/" maxWidth="max-w-none">
+      {/* Shared navigation (issue #172); the dashboard adds its own language, SOS and notification controls. */}
+      <UnifiedSiteHeader
+        activeHref="/citizen/dashboard"
+        session={{ authenticated: true, citizen: true, role: "NORMAL_USER", name: currentUser.name }}
+      >
         <div className="flex items-center gap-2.5">
           {/* Trilingual Language Selector */}
           <div className="flex items-center rounded-full bg-sky-950/70 p-0.5 border border-sky-600/50 text-[11px] font-bold">
@@ -567,14 +574,6 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
               {t.backendUnreachable}
             </span>
           )}
-
-          {/* Citizen Profile Pill */}
-          <div className="flex items-center gap-2 bg-white/10 border border-white/15 px-2.5 sm:px-3 py-1 rounded-full text-xs">
-            <span className="w-5 h-5 rounded-full bg-sky-400 text-slate-950 flex items-center justify-center text-[10.5px] font-bold">
-              {currentUser.name.charAt(0)}
-            </span>
-            <span className="font-medium text-white max-w-[90px] sm:max-w-[120px] truncate">{currentUser.name}</span>
-          </div>
 
           {/* Optional View Public Map Button */}
           {onViewPublicMap && (
@@ -680,15 +679,8 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
             )}
           </div>
 
-          {/* Sign Out Button */}
-          <button
-            onClick={onSignOut || logout}
-            className="bg-red-700/80 hover:bg-red-600 text-white text-xs px-3 py-1 rounded-full font-medium transition cursor-pointer shadow-xs"
-          >
-            {t.signOut}
-          </button>
         </div>
-      </SiteHeader>
+      </UnifiedSiteHeader>
 
       {/* ─── Active Critical Advisory Top Banner ─── */}
       {publicAlerts.length > 0 && (
@@ -1054,6 +1046,11 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                   <div className="bg-white border border-emerald-300 rounded-xl p-3 max-w-xs mx-auto font-mono text-sm font-bold text-emerald-900 shadow-xs">
                     Reference ID: {submitResult.reportId}
                   </div>
+                  {submitResult.photoNote && (
+                    <p role="status" className="text-xs text-slate-600">
+                      {submitResult.photoNote}
+                    </p>
+                  )}
                   <p className="text-[11px] text-slate-500">
                     Keep this ID handy to monitor triage status and dispatch telemetry.
                   </p>
@@ -1103,9 +1100,9 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                           <span className="text-2xl">{dt.icon}</span>
                           <div>
                             <div className="text-xs font-bold text-slate-900 leading-tight">
-                              {dt.type.includes("Flood")
+                              {dt.type === "Flood / Urban Flood"
                                 ? t.catFlood
-                                : dt.type.includes("Cyclone")
+                                : dt.type === "Cyclone / Coastal Flooding"
                                 ? t.catCyclone
                                 : t.catFire}
                             </div>
@@ -1271,6 +1268,15 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                     </div>
                   </div>
 
+                  {/* Photos (optional, NU-FR-05): sent after the report is filed */}
+                  <ReportPhotoPicker
+                    inputId="dashboard-report-photos"
+                    label="Photos (optional)"
+                    photos={formPhotos}
+                    onChange={setFormPhotos}
+                    disabled={submitting}
+                  />
+
                   {/* Submit Button */}
                   <div className="pt-2">
                     <button
@@ -1349,7 +1355,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                         >
                           <div className="flex items-center gap-3">
                             <span className="text-2xl">
-                              {report.category.includes("Flood") ? "🌊" : report.category.includes("Fire") ? "🔥" : "🌀"}
+                              {report.category === "Cyclone / Coastal Flooding" ? "🌀" : report.category.includes("Fire") ? "🔥" : "🌊"}
                             </span>
                             <div>
                               <div className="flex items-center gap-2">
@@ -1579,7 +1585,10 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                     {shelters.map((shelter) => (
                       <div key={shelter.id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-xs">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-slate-800">{shelter.name}</span>
+                          <span className="font-bold text-slate-800">
+                            {shelter.name}
+                            {shelter.is_simulated && <span className="ml-1.5 text-[9.5px] font-semibold text-slate-400">(sample data)</span>}
+                          </span>
                           <span
                             className={`text-[9.5px] px-2 py-0.5 rounded-full font-bold border ${
                               shelter.status === "OPERATIONAL"

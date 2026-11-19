@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from psycopg import sql
 from pydantic import BaseModel, Field, model_validator
 
@@ -31,6 +31,7 @@ from app.services.incidents import (
     ensure_open,
     lock_incident,
     open_dependencies,
+    reopen_target,
     require_status,
     update_incident,
 )
@@ -40,6 +41,12 @@ router = APIRouter()
 DUPLICATE_RADIUS_M = 1000
 DUPLICATE_WINDOW_HOURS = 6
 
+# A citizen's "please withdraw my report" is stored as a status-history row (see routers/citizen.py).
+# It only matters while the report can still be withdrawn; after dispatch or closure it is stale.
+_WITHDRAWAL_PENDING = """(i.status IN ('SUBMITTED','NEEDS_INFORMATION','VERIFIED') AND EXISTS (
+        SELECT 1 FROM incident_status_history w
+        WHERE w.incident_id = i.incident_id AND w.reason LIKE 'Reporter asked to withdraw%%'))"""
+
 _LIST_COLUMNS = """
     i.incident_id, i.incident_ref, lower(i.scenario::text) AS scenario, i.status,
     i.verified_priority, i.reported_urgency, i.people_affected, i.address_text, i.landmark,
@@ -47,7 +54,8 @@ _LIST_COLUMNS = """
     i.submitted_at, i.updated_at, i.closed_at, i.version,
     (SELECT COUNT(*) FROM evidence_files e WHERE e.incident_id = i.incident_id) AS evidence_count,
     (SELECT COUNT(*) FROM dispatch_orders d WHERE d.incident_id = i.incident_id
-        AND d.status IN ('REQUESTED','ACKNOWLEDGED','DISPATCHED')) AS active_dispatches
+        AND d.status IN ('REQUESTED','ACKNOWLEDGED','DISPATCHED')) AS active_dispatches,
+    """ + _WITHDRAWAL_PENDING + """ AS withdrawal_requested
 """
 
 _SORTS = {
@@ -58,22 +66,19 @@ _SORTS = {
 }
 
 
-@router.get("/incidents")
-def list_incidents(
+def incident_filters(
     *,
-    page: Page,
     scenario: Scenario | None = None,
-    status: Annotated[list[IncidentStatus] | None, Query()] = None,
-    priority: Annotated[list[Priority | Literal["UNASSIGNED"]] | None, Query()] = None,
-    from_: Annotated[date | None, Query(alias="from")] = None,
+    status: list[IncidentStatus] | None = None,
+    priority: list[Priority | Literal["UNASSIGNED"]] | None = None,
+    from_: date | None = None,
     to: date | None = None,
-    q: Annotated[str | None, Query(max_length=100)] = None,
-    near_lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
-    near_lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
-    radius_km: Annotated[float, Query(gt=0, le=500)] = 10,
-    sort: Literal["newest", "oldest", "priority", "updated"] = "newest",
-    principal: DMUser,
-):
+    q: str | None = None,
+    withdrawal_requested: bool | None = None,
+    near_lat: float | None = None,
+    near_lon: float | None = None,
+    radius_km: float = 10,
+) -> Filters:
     f = Filters()
     if scenario:
         f.add("i.scenario = %(scenario)s::scenario_type", scenario=scenario_db(scenario))
@@ -97,6 +102,8 @@ def list_incidents(
             "(i.incident_ref ILIKE %(q)s OR i.address_text ILIKE %(q)s OR i.landmark ILIKE %(q)s)",
             q=f"%{q.strip()}%",
         )
+    if withdrawal_requested:
+        f.add(_WITHDRAWAL_PENDING)
     if near_lat is not None and near_lon is not None:
         f.add(
             "ST_DWithin(i.geom, ST_SetSRID(ST_MakePoint(%(lon)s, %(lat)s), 4326)::geography, %(radius)s)",
@@ -106,7 +113,41 @@ def list_incidents(
         )
     elif (near_lat is None) != (near_lon is None):
         raise ApiError(422, "VALIDATION_FAILED", "near_lat and near_lon must be given together")
+    return f
 
+
+@router.get("/incidents")
+def list_incidents(
+    *,
+    page: Page,
+    scenario: Scenario | None = None,
+    status: Annotated[list[IncidentStatus] | None, Query()] = None,
+    priority: Annotated[list[Priority | Literal["UNASSIGNED"]] | None, Query()] = None,
+    from_: Annotated[date | None, Query(alias="from")] = None,
+    to: date | None = None,
+    q: Annotated[str | None, Query(max_length=100)] = None,
+    withdrawal_requested: Annotated[
+        bool | None,
+        Query(description="true: only reports whose reporter asked to withdraw them"),
+    ] = None,
+    near_lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
+    near_lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    radius_km: Annotated[float, Query(gt=0, le=500)] = 10,
+    sort: Literal["newest", "oldest", "priority", "updated"] = "newest",
+    principal: DMUser,
+):
+    f = incident_filters(
+        scenario=scenario,
+        status=status,
+        priority=priority,
+        from_=from_,
+        to=to,
+        q=q,
+        withdrawal_requested=withdrawal_requested,
+        near_lat=near_lat,
+        near_lon=near_lon,
+        radius_km=radius_km,
+    )
     where = f.where()
     with db.read_only() as conn:
         total = conn.execute(
@@ -142,13 +183,15 @@ def _actions(row: dict, principal: Principal) -> dict:
 def get_incident(incident_id: uuid.UUID, principal: DMUser):
     with db.read_only() as conn:
         incident = conn.execute(
-            """
+            sql.SQL(
+                """
             SELECT i.incident_id, i.incident_ref, lower(i.scenario::text) AS scenario, i.description,
                    i.reported_urgency, i.people_affected, i.status, i.verified_priority,
                    i.priority_rationale, i.verified_at, v.full_name AS verified_by_name,
                    i.canonical_incident_id, c.incident_ref AS canonical_incident_ref,
                    i.location_source, i.latitude, i.longitude, i.accuracy_m, i.address_text,
                    i.landmark, i.details, i.version, i.submitted_at, i.updated_at, i.closed_at,
+                   {pending} AS withdrawal_requested,
                    jsonb_build_object('user_id', r.user_id, 'full_name', r.full_name,
                                       'email', r.email, 'phone', r.phone) AS reporter
             FROM incidents i
@@ -156,7 +199,8 @@ def get_incident(incident_id: uuid.UUID, principal: DMUser):
             LEFT JOIN users v ON v.user_id = i.verified_by
             LEFT JOIN incidents c ON c.incident_id = i.canonical_incident_id
             WHERE i.incident_id = %s
-            """,
+            """
+            ).format(pending=sql.SQL(_WITHDRAWAL_PENDING)),
             (incident_id,),
         ).fetchone()
         if incident is None:
@@ -249,6 +293,44 @@ _REPORTER_MESSAGES = {
     "REJECTED": ("INCIDENT_REJECTED", "Your report could not be verified"),
     "NEEDS_INFORMATION": ("INCIDENT_INFORMATION_REQUESTED", "More information is needed for your report"),
 }
+
+
+@router.get("/incidents/{incident_id}/evidence/{evidence_id}/content")
+def incident_evidence_content(incident_id: uuid.UUID, evidence_id: uuid.UUID, principal: DMUser):
+    """Return an approved photo on this incident for triage (#180).
+
+    Only photos a moderator has approved are served here; pending, quarantined and removed ones are a
+    404 (moderators review those through the moderation queue). Each view is audited.
+    """
+    with db.transaction() as conn:
+        row = conn.execute(
+            """
+            SELECT e.mime_type, b.content
+            FROM evidence_files e JOIN evidence_blobs b ON b.evidence_id = e.evidence_id
+            WHERE e.evidence_id = %s AND e.incident_id = %s AND e.scan_state = 'CLEAN'
+            """,
+            (evidence_id, incident_id),
+        ).fetchone()
+        if row is None:
+            raise not_found("Evidence")
+        audit.record(
+            conn,
+            actor=principal,
+            action="EVIDENCE_VIEWED",
+            entity_type="evidence",
+            entity_id=evidence_id,
+            after={"incident_id": str(incident_id)},
+            ip=principal.ip,
+        )
+    return Response(
+        content=bytes(row["content"]),
+        media_type=row["mime_type"],
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+            "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'",
+        },
+    )
 
 
 @router.post("/incidents/{incident_id}/verification")
@@ -470,9 +552,7 @@ def reopen_incident(
             """,
             (incident_id,),
         ).fetchone()
-        target = (previous and previous["from_status"]) or "SUBMITTED"
-        if target in ("VERIFIED", "DISPATCHED", "RESOLVED") and row["verified_priority"] is None:
-            target = "SUBMITTED"
+        target = reopen_target(previous["from_status"] if previous else None, row["verified_priority"])
         updated = update_incident(
             conn,
             principal,

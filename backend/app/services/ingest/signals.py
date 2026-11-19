@@ -50,8 +50,8 @@ def sanitise_signal_text(value: str) -> str:
     return SPACE_RE.sub(" ", text).strip()[:MAX_SIGNAL_CHARS]
 
 
-def detect_language(value: str) -> str:
-    """Small dependency-free script detector for the supported Indian languages."""
+def detect_language(value: str, declared_language: str | None = None, *, latin_fallback: str = "en") -> str:
+    """Detect Indic scripts and use a source hint to distinguish Romanised Hindi/Gujarati."""
     counts = {"gu": 0, "hi": 0}
     for char in value:
         code = ord(char)
@@ -61,7 +61,12 @@ def detect_language(value: str) -> str:
             counts["hi"] += 1
     if counts["gu"] or counts["hi"]:
         return max(counts, key=counts.get)
-    return "en" if any(ch.isalpha() for ch in value) else "und"
+    base = (declared_language or "").strip().replace("_", "-").split("-", 1)[0].lower()
+    if base in {"gu", "hi"}:
+        return f"{base}-Latn"
+    if base == "en":
+        return "en"
+    return latin_fallback if any(ch.isalpha() for ch in value) else "und"
 
 
 # Words that make a live text worth a dispatcher's look, limited to the supported scenarios
@@ -72,6 +77,15 @@ HAZARD_TERMS = (
     "fire", "blaze", "blast", "explosion", "gas leak", "chemical leak", "toxic",
     "પૂર", "વરસાદ", "વાવાઝોડ", "ચક્રવાત", "આગ", "વિસ્ફોટ", "ગેસ લીક",
     "बाढ़", "बारिश", "चक्रवात", "तूफान", "आग", "विस्फोट", "गैस रिसाव",
+)
+ROMAN_HAZARD_TERMS = (
+    "baadh", "baad", "baarish", "barish", "toofan", "tufan", "chakravat",
+    "pur", "varsad", "varasad", "vavazodu", "vavajodu", "aag", "aag lagi",
+    "visfot", "visphot", "dhamaka", "dhamako", "gas risav",
+)
+_ROMAN_HAZARD_RE = re.compile(
+    r"(?<![a-z0-9])(?:" + "|".join(re.escape(term) for term in ROMAN_HAZARD_TERMS) + r")(?![a-z0-9])",
+    re.IGNORECASE,
 )
 
 # Place names (lower-case) mapped to the Gujarat district whose centroid stands in for the
@@ -100,6 +114,8 @@ _TOKEN_RE = re.compile(r"[^\s.,:;!?\"'()\[\]{}|/\\\-–—…]+")
 
 def mentions_hazard(text: str) -> bool:
     lowered = (text or "").lower()
+    if _ROMAN_HAZARD_RE.search(lowered):
+        return True
     loose = [term for term in HAZARD_TERMS if term not in _STRICT_INDIC_TERMS]
     if any(term in lowered for term in loose):
         return True

@@ -47,7 +47,8 @@ export function setSessionCookies(jar: CookieWriter, data: SessionTokens): void 
  * navigation and sections differ by role); field responders and citizens keep their own.
  */
 export function homeFor(role: string | null | undefined): string {
-  if (role === "DISASTER_MGMT" || role === "APP_MGMT") return "/dm";
+  if (role === "DISASTER_MGMT") return "/dm";
+  if (role === "APP_MGMT") return "/admin";
   if (role === "FIELD_TEAM") return "/field";
   if (role === "NORMAL_USER") return "/citizen/dashboard";
   return "/login";

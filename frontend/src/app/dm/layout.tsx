@@ -6,18 +6,13 @@ import { currentUser, homeFor } from "@/lib/session";
 
 import { DmShell } from "./shell";
 
-export const metadata: Metadata = { title: "Workspace · ResQ" };
+export const metadata: Metadata = { title: "Operations · ResQ" };
 
-/**
- * The one staff workspace, shared by Disaster Management (DISASTER_MGMT) and Application Management
- * (APP_MGMT). Nothing staff-specific is sent to anyone else: visitors without a session go to /login
- * and signed-in people of another role go to their own home. Which sections each role sees is decided
- * in the shell, and the backend enforces every route regardless.
- */
 export default async function DmLayout({ children }: LayoutProps<"/dm">) {
   const user = await currentUser();
   if (!user) redirect("/login?next=/dm");
-  if (user.role !== "DISASTER_MGMT" && user.role !== "APP_MGMT") redirect(homeFor(user.role));
+  // Other roles go to their own home (administrators to /admin); nothing operational is rendered for them.
+  if (user.role !== "DISASTER_MGMT") redirect(homeFor(user.role));
 
   if (!user.mfa_verified) {
     return (
@@ -35,10 +30,7 @@ export default async function DmLayout({ children }: LayoutProps<"/dm">) {
   }
 
   return (
-    <DmShell
-      user={{ name: user.full_name, email: user.email, role: user.role, permissions: user.permissions }}
-      signOut={signOut}
-    >
+    <DmShell user={{ name: user.full_name, email: user.email, permissions: user.permissions }} signOut={signOut}>
       {children}
     </DmShell>
   );

@@ -44,6 +44,8 @@ services:
         sync: false          # https://<drch-ai-triage>.onrender.com/triage; empty = triage unavailable
       - key: AI_TRIAGE_TOKEN
         sync: false
+      - key: DISASTER_CLASSIFIER_URL
+        sync: false          # https://<classifier-host>/predict; set in the Render dashboard, empty = AI_TRIAGE_URL prelabel path
       - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: GOOGLE_CLIENT_ID

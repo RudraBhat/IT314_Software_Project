@@ -28,6 +28,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `DISPATCH_ACK_TIMEOUT_MINUTES` | no | `15` | Minutes before an unacknowledged dispatch is escalated. |
 | `AI_TRIAGE_URL` | no | - | URL of the triage service (`.../triage`). Unset = triage returns `UNAVAILABLE`. |
 | `AI_TRIAGE_TOKEN` (S) | no | - | Bearer token sent to the triage service; set the same value on `ai-workers`. |
+| `DISASTER_CLASSIFIER_URL` | no | - | Optional multilingual classifier URL for newly ingested `GNEWS`/`BLUESKY` signals. Set the real URL only in the local `.env` and the deployed service's environment, never in committed files. The service exposes `POST /predict`, accepts `{"text":"..."}`, and requires no token. If unset, ingestion retains the existing `AI_TRIAGE_URL` prelabel path. |
 | `AI_LOW_CONFIDENCE_THRESHOLD` | no | `0.6` | Below this a suggestion is `LOW_CONFIDENCE`. |
 | `AI_IMAGE_SERVICE_URL` | no | - | Base URL of the disaster image classifier (`ai-workers/model`, `POST /predict`), for example `http://localhost:8002` when started with `uvicorn app:app --port 8002` (it must not point at the backend's own port 8000). Unset = photo analysis returns `AI_PHOTO_UNAVAILABLE` (503). |
 | `GOOGLE_MAPS_API_KEY` (S) | no | - | Optional geocoder; falls back to OpenStreetMap Nominatim. |
@@ -39,14 +40,14 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `MOCK_GATEWAY_SECRET` (S) | when donations are used | - | HMAC key for the sandbox gateway. |
 | `SACHET_FEED_URL` | no | empty | SACHET RSS feed URL (public Gujarat feed: `https://sachet.ndma.gov.in/cap_public_website/rss/rss_gujarat.xml`; the all-India `rss_india.xml` holds only the latest 100 alerts, mostly other states); the adapter fetches linked CAP XML and honors ETags. Empty = adapter disabled. |
 | `NEWS_RSS_ENABLED` | no | `false` | Turns on the `GNEWS` signal adapter: Google News RSS search for Gujarat hazard headlines in English, Gujarati and Hindi. Stores headline, publisher, time and link only. |
-| `BLUESKY_SEARCH_ENABLED` | no | `false` | Turns on the free English-only `BLUESKY` pilot for Gujarat hazard posts. The handle is not stored; the public source URL uses the post author's DID. |
+| `BLUESKY_SEARCH_ENABLED` | no | `false` | Turns on the free `BLUESKY` pilot for Gujarat hazard posts; supported original scripts and Romanised posts are retained when they pass the hazard/location filters. The handle is not stored; the public source URL uses the post author's DID. |
 | `BLUESKY_SEARCH_URL` | no | `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts` | Bluesky AppView search endpoint; only `api.bsky.app` and `public.api.bsky.app` over https are accepted. |
 | `SOCIAL_REPLAY_FILE` | no | packaged JSONL replay | Path to the team-authored, sanitised social replay fixture. Replay records are always marked simulated. |
 | `INGEST_INTERVAL_SECONDS` | no | `900` | Local in-process adapter polling interval (15 minutes). |
 | `INGESTION_WORKER_ENABLED` | no | `true` in development, `false` elsewhere | Runs the in-process poller. Keep it disabled in staging when GitHub Actions owns the schedule. |
 | `GIT_SHA` | no | `dev` | Commit id shown by `/api/v1/health` (CD smoke test). |
 | `RATE_LIMIT_ENABLED` | no | `true` | Set `false` only in automated tests. |
-| `RESQ_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff`. |
+| `RESQ_STAFF_PASSWORD` (S) | no | - | Non-interactive password for `python -m app.cli create-staff` and `create-admin`. |
 | `RESQ_FIELD_PASSWORD` (S) | no | - | Non-interactive password for the field-team provisioning command in `python -m app.cli`. |
 | `DRCH_STAFF_PASSWORD` (S) | no | - | Backward-compatible alias for `RESQ_STAFF_PASSWORD`. |
 | `DRCH_FIELD_PASSWORD` (S) | no | - | Backward-compatible alias for `RESQ_FIELD_PASSWORD`. |

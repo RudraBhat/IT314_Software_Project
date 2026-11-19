@@ -11,7 +11,7 @@ from app import db
 from app.config import ConfigError, get_settings, validate_for_environment
 from app.errors import install_error_handlers
 from app.payments import payment_config_problems
-from app.routers import auth, citizen, donations, field, internal
+from app.routers import admin, auth, citizen, donations, field, internal
 from app.routers.dm import router as dm_router
 from app.routers.public import router as public_router  # Nisarg S1-07: public incidents API
 from app.services.dispatch import escalate_overdue
@@ -210,6 +210,7 @@ app = FastAPI(
 )
 install_error_handlers(app)
 app.include_router(auth.router)
+app.include_router(admin.router)  # Application Management: staff account directory
 app.include_router(citizen.router)
 app.include_router(field.router)
 app.include_router(donations.router)

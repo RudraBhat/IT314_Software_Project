@@ -8,7 +8,11 @@ staff without any hardcoded credentials:
         --permissions DISPATCH,CLOSURE,PUBLISHER,MODERATOR,SUPERVISOR
     python -m app.cli set-permissions --email ops@example.org --permissions DISPATCH
     python -m app.cli reset-mfa --email ops@example.org
-    python -m app.cli create-admin --email admin@example.org --name "Asha Rao"
+    python -m app.cli create-admin --email admin@example.org --name "Meera Shah"
+
+create-admin makes an Application Management administrator (no operational access: it can invite and
+list accounts). reset-mfa also works for administrators, who have no other way back in after losing
+their authenticator. Create the first administrator with create-admin, then invite further ones from /admin.
 
 The password is read interactively (or from RESQ_STAFF_PASSWORD / DRCH_STAFF_PASSWORD for automation)
 and never printed. The TOTP secret is shown once for enrolment in an
@@ -19,6 +23,7 @@ enrollment refuses redirected or non-interactive output to avoid writing the sec
 import argparse
 import getpass
 import os
+import re
 import sys
 import uuid
 
@@ -26,6 +31,7 @@ from app import audit, db, security
 from app.auth import APP_MGMT_ROLE, DM_ROLE, FIELD_ROLE, PERMISSIONS
 
 MIN_PASSWORD_LENGTH = 12
+_EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}")
 
 
 def _parse_permissions(raw: str) -> list[str]:
@@ -84,9 +90,18 @@ def _enrol_mfa(conn, user_id, email: str) -> None:
         )
 
     totp_key = security.new_totp_secret()
+    try:
+        encrypted_key = security.encrypt_mfa_secret(totp_key)
+    except ValueError:
+        # Exiting here rolls the whole command back, so no half-created account is left behind.
+        sys.exit(
+            "MFA_ENCRYPTION_KEY is not a valid key: it must be 44 characters (a Fernet key). Generate one with:\n"
+            '  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"\n'
+            "and set it in .env. Use the same key everywhere the accounts must sign in."
+        )
     conn.execute(
         "UPDATE user_auth SET mfa_enabled = TRUE, mfa_secret = %s, token_version = token_version + 1 WHERE user_id = %s",
-        (security.encrypt_mfa_secret(totp_key), user_id),
+        (encrypted_key, user_id),
     )
     raw_uri = security.provisioning_uri(totp_key, email)
     display_key = "".join(chr(ord(c)) for c in totp_key)
@@ -112,15 +127,19 @@ def _set_permissions(conn, user_id, perms: list[str]) -> None:
         )
 
 
-def _find_staff(conn, email: str):
+def _find_staff(conn, email: str, roles: tuple[str, ...] = (DM_ROLE,)):
     row = conn.execute(
         "SELECT u.user_id, r.code AS role FROM users u JOIN roles r USING (role_id) WHERE u.email = %s",
         (email,),
     ).fetchone()
     if row is None:
         sys.exit(f"No account with email {email}")
-    if row["role"] != DM_ROLE:
-        sys.exit("This tool only manages Disaster Management staff accounts")
+    if row["role"] not in roles:
+        sys.exit(
+            "This tool only manages Disaster Management staff accounts"
+            if roles == (DM_ROLE,)
+            else "This command only manages Disaster Management and administrator accounts"
+        )
     return row["user_id"]
 
 
@@ -157,34 +176,40 @@ def create_staff(args) -> None:
 
 
 def create_admin(args) -> None:
-    """Provision an Application Management administrator (bootstrap for the first admin)."""
+    """Create an Application Management administrator with a password and an enrolled authenticator."""
+    email = args.email.strip()
+    if not _EMAIL.fullmatch(email):
+        sys.exit("Enter a valid email address")
+    if not args.name.strip():
+        sys.exit("Enter the administrator's full name")
     password_hash = security.hash_password(_read_password())
     with db.transaction() as conn:
-        if conn.execute("SELECT 1 FROM users WHERE email = %s", (args.email,)).fetchone():
-            sys.exit(f"An account with email {args.email} already exists")
+        if conn.execute("SELECT 1 FROM users WHERE email = %s", (email,)).fetchone():
+            sys.exit(f"An account with email {email} already exists")
         user_id = conn.execute(
             """
             INSERT INTO users (role_id, email, full_name, phone, designation, status)
             SELECT role_id, %s, %s, %s, %s, 'ACTIVE' FROM roles WHERE code = %s
             RETURNING user_id
             """,
-            (args.email, args.name, args.phone, args.designation, APP_MGMT_ROLE),
+            (email, args.name.strip(), args.phone, args.designation, APP_MGMT_ROLE),
         ).fetchone()["user_id"]
         conn.execute(
             "INSERT INTO user_auth (user_id, password_hash) VALUES (%s, %s)",
             (user_id, password_hash),
         )
-        _enrol_mfa(conn, user_id, args.email)
+        # Refuses (and rolls the account back) when stdout is not an interactive terminal.
+        _enrol_mfa(conn, user_id, email)
         audit.record(
             conn,
             actor=None,
             action="STAFF_PROVISIONED",
             entity_type="user",
             entity_id=user_id,
-            rationale="Provisioned with app.cli",
-            after={"role": APP_MGMT_ROLE},
+            rationale="Administrator provisioned with app.cli",
+            after={"role": APP_MGMT_ROLE, "permissions": []},
         )
-    print(f"Created Application Management administrator {args.email}")
+    print(f"Created administrator account {email}. It can invite and list accounts and has no operational access.")
 
 
 def set_permissions(args) -> None:
@@ -206,7 +231,7 @@ def set_permissions(args) -> None:
 
 def reset_mfa(args) -> None:
     with db.transaction() as conn:
-        user_id = _find_staff(conn, args.email)
+        user_id = _find_staff(conn, args.email, (DM_ROLE, APP_MGMT_ROLE))
         _enrol_mfa(conn, user_id, args.email)
         audit.record(
             conn,
@@ -418,7 +443,7 @@ def main(argv: list[str] | None = None) -> None:
     perms.add_argument("--permissions", required=True)
     perms.set_defaults(func=set_permissions)
 
-    mfa = sub.add_parser("reset-mfa", help="Issue a new TOTP secret and revoke sessions")
+    mfa = sub.add_parser("reset-mfa", help="Issue a new TOTP secret and revoke sessions (staff and administrators)")
     mfa.add_argument("--email", required=True)
     mfa.set_defaults(func=reset_mfa)
 

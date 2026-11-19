@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 
 import { PriorityBadge, StatusBadge } from "@/components/badges";
-import { Badge, Button, Card, EmptyState, ErrorState, LoadingRows, PageHeader, Pagination, cx } from "@/components/ui";
-import { useQuery } from "@/lib/api";
+import { Badge, Button, Card, EmptyState, ErrorState, LoadingRows, Notice, PageHeader, Pagination, cx } from "@/components/ui";
+import { useAction } from "@/components/use-action";
+import { downloadCsv, useQuery } from "@/lib/api";
 import { label, scenarioLabel, timeAgo } from "@/lib/format";
 import type { Dispatch, Paged } from "@/lib/types";
 
@@ -30,6 +31,8 @@ function Dispatches() {
   const pathname = usePathname();
   const view = params.get("overdue") ? "overdue" : (params.get("view") ?? "active");
   const page = Number(params.get("page") ?? 1);
+  const { run, busy } = useAction();
+  const [cut, setCut] = useState(false);
   const { data, error, loading, reload } = useQuery<Paged<Dispatch> & { ack_timeout_minutes: number }>("dispatches", {
     active: view === "active" || undefined,
     overdue: view === "overdue" || undefined,
@@ -46,8 +49,32 @@ function Dispatches() {
             ? `Unacknowledged orders escalate to supervisors after ${data.ack_timeout_minutes} minutes.`
             : "Dispatch orders and their recorded confirmations."
         }
-        actions={<Button onClick={reload} busy={loading && !!data}>Refresh</Button>}
+        actions={
+          <div className="flex gap-2">
+            <Button
+              onClick={async () => {
+                const done = await run(
+                  "export",
+                  () => downloadCsv("dispatches/export", { active: view === "active" || undefined, overdue: view === "overdue" || undefined }, "dispatches.csv"),
+                  "Export downloaded.",
+                );
+                if (done) setCut(done.truncated);
+              }}
+              busy={busy === "export"}
+              disabled={!data || data.total === 0}
+              title="Download the dispatches in this view as CSV. It is recorded in the audit log."
+            >
+              Export CSV
+            </Button>
+            <Button onClick={reload} busy={loading && !!data}>Refresh</Button>
+          </div>
+        }
       />
+      {cut && (
+        <div className="mb-4">
+          <Notice tone="high">The export stopped at 5,000 dispatches. Switch to a narrower view to get the rest.</Notice>
+        </div>
+      )}
       <div className="mb-4 flex gap-1 rounded-lg border border-border bg-surface p-1 text-sm" role="tablist" aria-label="Dispatch view">
         {VIEWS.map((v) => (
           <button

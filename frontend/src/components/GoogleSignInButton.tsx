@@ -20,7 +20,7 @@ interface GoogleSignInButtonProps {
 }
 
 // Pages only staff or admins use. A citizen who signs in with Google must not be sent there.
-const STAFF_AREAS = ["/dm", "/field"];
+const STAFF_AREAS = ["/dm", "/admin", "/field"];
 
 function safeDestination(next: string | undefined): string {
   if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";

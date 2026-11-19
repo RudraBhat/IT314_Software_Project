@@ -83,7 +83,7 @@ def parse_news_rss(xml_text: str, query_lang: str, now: datetime | None = None) 
             "source": "GNEWS",
             "source_uid": stable_uid("gnews", guid),
             "content_text": text,
-            "language": detect_language(text),
+            "language": detect_language(text, query_lang),
             "location_text": location["location_text"],
             "latitude": location["latitude"],
             "longitude": location["longitude"],

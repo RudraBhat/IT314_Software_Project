@@ -8,25 +8,15 @@ import { Brand } from "@/components/Brand";
 import { AlertsDrawer } from "@/components/dm/AlertsDrawer";
 import { ToastProvider, cx } from "@/components/ui";
 
-export type StaffUser = { name: string; email: string; role: string; permissions: string[] };
+export type StaffUser = { name: string; email: string; permissions: string[] };
 
-const UserContext = createContext<StaffUser>({ name: "", email: "", role: "", permissions: [] });
+const UserContext = createContext<StaffUser>({ name: "", email: "", permissions: [] });
 
 /** Permission hints for the UI only; the backend enforces every permission itself. */
 export function useStaff() {
   const user = useContext(UserContext);
-  return {
-    ...user,
-    isAdmin: user.role === ADMIN_ROLE,
-    can: (permission: string) => user.permissions.includes(permission),
-  };
+  return { ...user, can: (permission: string) => user.permissions.includes(permission) };
 }
-
-const ADMIN_ROLE = "APP_MGMT";
-
-// Administrators manage accounts only and have no operational access (the backend answers 403 on
-// every operational route), so they get a single section; dispatchers get the operational ones.
-const ADMIN_NAV = [{ href: "/dm", label: "Platform accounts", icon: "👥" }];
 
 const NAV: { href: string; label: string; icon: string; permission?: string | string[] }[] = [
   { href: "/dm", label: "Dashboard", icon: "▦" },
@@ -41,6 +31,7 @@ const NAV: { href: string; label: string; icon: string; permission?: string | st
   { href: "/dm/updates", label: "Public updates", icon: "✎" },
   { href: "/dm/content", label: "Safety content", icon: "☰" },
   { href: "/dm/aid", label: "Aid & needs", icon: "◆" },
+  { href: "/dm/shelters", label: "Shelters", icon: "⌂", permission: ["DISPATCH", "SUPERVISOR"] },
   { href: "/dm/campaigns", label: "Campaigns", icon: "₹" },
   { href: "/dm/analytics", label: "Analytics", icon: "▤" },
   { href: "/dm/staff", label: "Staff accounts", icon: "👥", permission: "SUPERVISOR" },
@@ -54,27 +45,12 @@ const PERMISSION_LABEL: Record<string, string> = {
   SUPERVISOR: "Supervisor",
 };
 
-/** An administrator opened an operational page: show the 403 instead of the page. */
-function AdminForbidden() {
-  return (
-    <div className="mx-auto max-w-md rounded-xl border border-border bg-surface p-6 text-center">
-      <p className="text-sm font-semibold text-critical">403 · Not authorised</p>
-      <h1 className="mt-2 text-lg font-semibold">Administrators have no operational access</h1>
-      <p className="mt-2 text-sm text-muted">Incidents, dispatch and field data are for Disaster Management staff.</p>
-      <Link href="/dm" className="mt-4 inline-block text-sm font-semibold text-sky-400 hover:underline">
-        Go to platform accounts →
-      </Link>
-    </div>
-  );
-}
-
 export function DmShell({ user, signOut, children }: { user: StaffUser; signOut: () => Promise<void>; children: ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const isActive = (href: string) => (href === "/dm" || href === "/" ? pathname === href : pathname.startsWith(href));
-  const isAdmin = user.role === ADMIN_ROLE;
-  const items = isAdmin ? ADMIN_NAV : NAV.filter((n) => !n.permission || (Array.isArray(n.permission)
+  const items = NAV.filter((n) => !n.permission || (Array.isArray(n.permission)
     ? n.permission.some((permission) => user.permissions.includes(permission))
     : user.permissions.includes(n.permission)));
 
@@ -109,9 +85,9 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
             <button className="rounded-md p-2 text-sky-100 hover:bg-white/10 lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">
               ☰
             </button>
-            <Brand href="/dm" subtitle={isAdmin ? "Administration" : "Disaster Management"} size="sm" />
+            <Brand href="/dm" subtitle="Disaster Management" size="sm" />
             <span className="hidden rounded-full border border-sky-300/40 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-100 md:inline">
-              {isAdmin ? "Application Management" : "Disaster Management"}
+              Disaster Management
             </span>
             <div className="ml-auto flex items-center gap-3">
               <Link href="/" className="hidden items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs transition hover:bg-white/20 md:flex">
@@ -120,11 +96,7 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-semibold leading-tight">{user.name}</p>
                 <p className="text-[10px] text-sky-200/80">
-                  {isAdmin
-                    ? user.email
-                    : user.permissions.length
-                      ? user.permissions.map((p) => PERMISSION_LABEL[p] ?? p).join(" · ")
-                      : "Disaster Management"}
+                  {user.permissions.length ? user.permissions.map((p) => PERMISSION_LABEL[p] ?? p).join(" · ") : "Disaster Management"}
                 </p>
               </div>
               <button onClick={() => setAlertsOpen(true)} className="rounded-full bg-white/10 px-3 py-1.5 text-xs transition hover:bg-white/20">
@@ -148,9 +120,7 @@ export function DmShell({ user, signOut, children }: { user: StaffUser; signOut:
 
             {/* The ResQ body is fixed-height, so only the workspace scrolls inside this pane. */}
             <div className="min-w-0 flex-1 overflow-y-auto overscroll-contain">
-              <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-                {isAdmin && pathname !== "/dm" ? <AdminForbidden /> : children}
-              </main>
+              <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
             </div>
           </div>
           <AlertsDrawer open={alertsOpen} onClose={() => setAlertsOpen(false)} />

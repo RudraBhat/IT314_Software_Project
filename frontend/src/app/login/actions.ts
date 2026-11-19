@@ -32,10 +32,10 @@ async function post(path: string, body: unknown, token?: string) {
 // Workspaces a role may be sent back to after signing in. Anything else would only bounce.
 const ROLE_AREAS: Record<string, string[]> = {
   DISASTER_MGMT: ["/dm"],
-  APP_MGMT: ["/dm"],
+  APP_MGMT: ["/admin"],
   FIELD_TEAM: ["/field"],
 };
-const STAFF_AREAS = ["/dm", "/field"];
+const STAFF_AREAS = ["/dm", "/admin", "/field"];
 
 function inArea(path: string, area: string): boolean {
   return path === area || path.startsWith(`${area}/`) || path.startsWith(`${area}?`);
@@ -45,7 +45,7 @@ function safeNext(value: FormDataEntryValue | null, role?: string): string {
   const next = typeof value === "string" ? value : "";
   // Only same-site paths; never an absolute or protocol-relative URL.
   if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return homeFor(role);
-  // Administrators manage accounts in the shared workspace; the shell hides everything else from them.
+  // Staff roles only return to their own workspace.
   const allowed = ROLE_AREAS[role ?? ""];
   if (allowed) return allowed.some((area) => inArea(next, area)) ? next : homeFor(role);
   // Citizens never land in a staff area.

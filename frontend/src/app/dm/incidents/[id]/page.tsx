@@ -12,6 +12,7 @@ import { AiPanel } from "./ai-panel";
 import { DecisionPanel } from "./decision-panel";
 import { DispatchPanel, MessagesPanel } from "./dispatch-panel";
 import { DuplicatesPanel } from "./duplicates-panel";
+import { NotesPanel } from "./notes-panel";
 import type { IncidentDetail } from "./types";
 
 const moderationLabel: Record<string, string> = {
@@ -57,11 +58,20 @@ export default function IncidentPage() {
             <StatusBadge status={i.status} />
             <PriorityBadge priority={i.verified_priority} />
             {i.canonical_incident_id && <Badge tone="medium">Linked duplicate</Badge>}
+            {i.withdrawal_requested && <Badge tone="high">Withdrawal requested</Badge>}
             <span className="text-xs text-muted">Version {i.version} · updated {formatDateTime(i.updated_at)}</span>
           </div>
         </div>
         <Button onClick={reload} busy={loading}>Refresh</Button>
       </header>
+
+      {i.withdrawal_requested && (
+        <div className="mb-6">
+          <Notice tone="high">
+            The reporter asked to withdraw this report (see the history below). Nothing has changed: reject it if it is a false alarm or duplicate, or carry on if it still needs a response.
+          </Notice>
+        </div>
+      )}
 
       {i.status === "CLOSED" && (
         <div className="mb-6">
@@ -124,15 +134,28 @@ export default function IncidentPage() {
                     <Badge tone={e.scan_state === "CLEAN" ? "low" : e.scan_state === "QUARANTINED" ? "critical" : "medium"}>
                       {moderationLabel[e.scan_state] ?? e.scan_state}
                     </Badge>
+                    {e.scan_state === "CLEAN" && (
+                      // Opened on request only, never loaded automatically: each view is audited.
+                      <a
+                        href={`/api/dm/incidents/${i.incident_id}/evidence/${e.evidence_id}/content`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-info hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                        aria-label={`View photo ${e.file_name}`}
+                      >
+                        View photo
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
-            <p className="mt-3 text-xs text-muted">File previews need the evidence storage service, which is not configured yet.</p>
+            <p className="mt-3 text-xs text-muted">Approved photos open in a new tab; each view is recorded in the audit log.</p>
           </Card>
 
           <DispatchPanel incident={i} reload={reload} />
           <MessagesPanel incident={i} reload={reload} />
+          <NotesPanel incidentId={i.incident_id} closed={i.status === "CLOSED"} />
 
           <Card title="Status history">
             <ol className="space-y-3">

@@ -249,6 +249,22 @@ export async function uploadAttachment(incidentId: string, file: File): Promise<
   );
 }
 
+/**
+ * Upload the photos picked on a report form once the report is filed, and describe the outcome for the
+ * reporter. A failed photo never undoes the report; the rest can be added later from My Reports.
+ */
+export async function uploadReportPhotos(incidentId: string, photos: File[]): Promise<string | undefined> {
+  if (photos.length === 0) return undefined;
+  let sent = 0;
+  for (const photo of photos) {
+    const uploaded = await uploadAttachment(incidentId, photo);
+    if (!uploaded.error) sent += 1;
+  }
+  return sent === photos.length
+    ? `${sent} photo${sent === 1 ? "" : "s"} attached. A moderator will review them.`
+    : `${sent} of ${photos.length} photos attached. You can add the rest later from My Reports.`;
+}
+
 export async function fetchAttachments(incidentId: string): Promise<ApiResult<{ items: AttachmentData[]; max_attachments: number }>> {
   return apiFetch(`/api/citizen/me/incidents/${encodeURIComponent(incidentId)}/attachments`);
 }
@@ -404,7 +420,7 @@ export async function fetchPublicAlerts(): Promise<ApiResult<PublicAlert[]>> {
   };
 }
 
-// ── Shelters: there is no shelter API in the approved scope yet ──
+// ── Shelters: relief shelters and medical posts kept up to date by dispatchers ──
 
 export interface ShelterData {
   id: string;
@@ -413,17 +429,19 @@ export interface ShelterData {
   lat: number;
   lon: number;
   address: string;
+  district: string | null;
   total_capacity: number | null;
   current_occupancy: number | null;
   available_beds: number | null;
-  contact_number: string;
+  contact_number: string | null;
   status: string;
   notes: string | null;
+  is_simulated: boolean;
 }
 
-/** No backend source exists, so this is honestly empty rather than filled with sample data. */
+/** Open and full shelters (closed ones are hidden by the server). An empty list means none are published. */
 export async function fetchShelters(): Promise<ApiResult<ShelterData[]>> {
-  return { data: [], error: null, isBackend: true };
+  return apiFetch<ShelterData[]>("/api/v1/public/shelters");
 }
 
 // ── Campaigns and Donations ─────────────────────────────────────

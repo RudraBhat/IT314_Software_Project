@@ -10,10 +10,6 @@ const nextConfig: NextConfig = {
     // Everything else goes through the BFF routes in src/app/api/*, which attach the session token.
     return [{ source: "/api/v1/public/:path*", destination: `${backendUrl}/api/v1/public/:path*` }];
   },
-  async redirects() {
-    // The administration area was merged into the single staff workspace.
-    return [{ source: "/admin/:path*", destination: "/dm", permanent: true }];
-  },
   async headers() {
     return [
       {
