@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { UnifiedSiteHeader, type SessionInfo } from "@/components/navigation/UnifiedSiteHeader";
+import { UnifiedSiteHeader } from "@/components/navigation/UnifiedSiteHeader";
+import { useSession } from "@/components/auth/SessionProvider";
 import Link from "next/link";
 import { isInGujarat, GUJARAT_CENTER, GUJARAT_BOUNDS } from "@/lib/geo";
 import {
@@ -50,8 +51,8 @@ const URGENCIES = [
 const DRAFT_STORAGE_KEY = "resq_incident_report_draft";
 
 export default function ReportForm() {
-  // Session State
-  const [session, setSession] = useState<SessionInfo | null>(null);
+  // Session State (shared with the header; no separate request)
+  const { session } = useSession();
 
   // Form State
   const [scenario, setScenario] = useState("urban_flooding");
@@ -96,25 +97,8 @@ export default function ReportForm() {
   // Validation
   const validLocation = isInGujarat(latitude, longitude);
 
-  // 1. Session check on mount & restore draft
+  // 1. Restore draft
   useEffect(() => {
-    fetch("/api/session", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) {
-          setSession({
-            authenticated: !!data.authenticated,
-            dm: !!data.dm,
-            citizen: !!data.citizen,
-            role: data.role || null,
-            name: data.name || null,
-          });
-        } else {
-          setSession({ authenticated: false, dm: false, citizen: false, role: null, name: null });
-        }
-      })
-      .catch(() => setSession({ authenticated: false, dm: false, citizen: false, role: null, name: null }));
-
     // Restore draft if saved (sessionStorage is client-only, so this has to run after mount)
     try {
       const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
@@ -485,7 +469,7 @@ export default function ReportForm() {
       </div>
 
       {/* Header */}
-      <UnifiedSiteHeader activeHref="/report" session={session} />
+      <UnifiedSiteHeader activeHref="/report" />
 
       {/* Main Container */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 md:p-8">

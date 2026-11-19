@@ -179,7 +179,7 @@ IT314_Software_Project/
 │   │   │   ├── role-views/     # Dedicated role views (Admin, Citizen, Responder)
 │   │   │   ├── ui.tsx          # Base UI design system primitives
 │   │   │   └── badges.tsx      # Severity, priority, and status indicators
-│   │   ├── context/            # React context providers (ResQContext.tsx)
+│   │   ├── components/auth/    # sign-in widgets and the shared SessionProvider
 │   │   ├── lib/                # Client utilities (api.ts, geo.ts, session.ts, format.ts)
 │   │   └── services/           # Frontend API service adapters (authApi.ts, citizenApi.ts)
 │   └── Dockerfile              # Next.js container build specification
@@ -234,8 +234,8 @@ IT314_Software_Project/
   - Each role has its own area: Disaster Management (`DISASTER_MGMT`) works in `/dm`, with navigation filtered by permission; Application Management (`APP_MGMT`) uses the administration console at `/admin` (account directory, invitations, audit log and system status); field responders use `/field`; citizens use `/citizen/dashboard`. A signed-in visitor of another role is redirected to their own area (`homeFor(role)` in `lib/session.ts`), and `/dashboard` sends each role there too. Administrators still have no operational access: the backend answers 403 on every `/api/v1/dm`, `/api/v1/field`, `/api/v1/me` and `/api/v1/incidents` route (`test_admin_has_no_operational_access`).
   - Route protection has three layers. `proxy.ts` sends visitors with no session cookie to `/login` before anything is rendered; each workspace layout (`/dm`, `/field`) asks the backend who the user is (`currentUser()`), redirects to `/login` when nobody is signed in and to the user's own home (`homeFor(role)`) when the role is wrong; the backend re-checks role, MFA and permission on every API call. The BFF proxies (`/api/dm`, `/api/field`, `/api/invitations`, `/api/citizen`) answer 401 JSON without a session and forward nothing else. Static JavaScript bundles of staff pages are public like any Next.js asset but contain no data; all data comes from guarded API calls.
   - Uses server-side API proxy routes (`/api/dm/[...path]` and `/api/citizen/[...path]`) to securely forward requests to the FastAPI backend while managing session cookies.
-- **State & Context Management ([`frontend/src/context/ResQContext.tsx`](file:///c:/Users/shahs/OneDrive/Desktop/My%20Folder/DAIICT/Sem5/Software/IT314_Software_Project/frontend/src/context/ResQContext.tsx)):**
-  - Holds active authenticated user identity, role, simulated mode state, active alert notifications, and local UI caches.
+- **Session state ([`frontend/src/components/auth/SessionProvider.tsx`](../frontend/src/components/auth/SessionProvider.tsx)):**
+  - The root layout mounts one `SessionProvider`. `useSession()` gives any component the signed-in state (`authenticated`, `role`, `name`) from `GET /api/session` without its own request; the provider stays mounted across client navigation, re-checks quietly after each route change and shows a placeholder only before the first answer, so the header does not flicker between pages.
 
 ### 4.3 AI Workers & Models Architecture
 

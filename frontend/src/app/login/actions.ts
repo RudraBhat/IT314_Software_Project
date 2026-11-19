@@ -43,8 +43,9 @@ function inArea(path: string, area: string): boolean {
 
 function safeNext(value: FormDataEntryValue | null, role?: string): string {
   const next = typeof value === "string" ? value : "";
-  // Only same-site paths; never an absolute or protocol-relative URL.
-  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return homeFor(role);
+  // Only same-site paths; never an absolute or protocol-relative URL. No path (or just the public map)
+  // means "take me to my own home", so a citizen lands on their dashboard after signing in.
+  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\") || next === "/") return homeFor(role);
   // Staff roles only return to their own workspace.
   const allowed = ROLE_AREAS[role ?? ""];
   if (allowed) return allowed.some((area) => inArea(next, area)) ? next : homeFor(role);

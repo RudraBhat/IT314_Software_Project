@@ -3,6 +3,8 @@ import localFont from "next/font/local";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
 
+import { SessionProvider } from "@/components/auth/SessionProvider";
+
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff2",
   variable: "--font-geist-sans",
@@ -44,7 +46,7 @@ export default function RootLayout({
         />
       </head>
       <body className="m-0 min-h-dvh w-full bg-slate-900 p-0 font-sans">
-        {children}
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );

@@ -22,9 +22,13 @@ interface GoogleSignInButtonProps {
 // Pages only staff or admins use. A citizen who signs in with Google must not be sent there.
 const STAFF_AREAS = ["/dm", "/admin", "/field"];
 
+// Google sign-in is for citizens only, so with no (or an unsafe) return path they land on their dashboard,
+// the same as an email sign-in, rather than back on the public map.
+const CITIZEN_HOME = "/citizen/dashboard";
+
 function safeDestination(next: string | undefined): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
-  return STAFF_AREAS.some((area) => next === area || next.startsWith(`${area}/`)) ? "/citizen/dashboard" : next;
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\") || next === "/") return CITIZEN_HOME;
+  return STAFF_AREAS.some((area) => next === area || next.startsWith(`${area}/`)) ? CITIZEN_HOME : next;
 }
 
 export function GoogleSignInButton({

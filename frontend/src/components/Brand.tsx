@@ -118,6 +118,14 @@ export function SiteHeader({
   );
 }
 
+/**
+ * Size shared by every header link and button, so labels and borders line up. 44px tall: the
+ * minimum touch target for header controls (see README, frontend checks). It sets no display value,
+ * so callers add inline-flex (or a responsive hidden/inline-flex pair) themselves.
+ */
+export const HEADER_CONTROL =
+  "h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300";
+
 /** Shared pill-style nav link for headers. */
 export function NavLink({
   href,
@@ -140,7 +148,7 @@ export function NavLink({
   return (
     <Link
       href={href}
-      className={`${hide} ${tone} font-semibold items-center gap-1.5 min-h-11 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300`}
+      className={`${HEADER_CONTROL} ${hide} ${tone} text-white`}
     >
       {children}
     </Link>
