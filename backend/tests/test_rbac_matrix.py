@@ -84,6 +84,8 @@ def test_citizen_routes_reject_staff_and_field(client, make, method, path):
     "method,path,permission",
     [
         ("POST", "/api/v1/dm/staff", "SUPERVISOR"),
+        ("POST", "/api/v1/dm/agencies", "SUPERVISOR"),
+        ("PUT", "/api/v1/dm/agencies/{agency_id}", "SUPERVISOR"),
         ("POST", "/api/v1/dm/incidents/{id}/dispatches", "DISPATCH"),
         ("POST", "/api/v1/dm/incidents/{id}/closure", "CLOSURE"),
         ("POST", "/api/v1/dm/public-updates/{id}/publish", "PUBLISHER"),

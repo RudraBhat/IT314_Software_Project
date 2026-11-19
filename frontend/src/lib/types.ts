@@ -50,6 +50,10 @@ export type Agency = {
   name: string;
   is_active: boolean;
   contact_phone: string | null;
+  // Returned by GET /agency-contacts; the dispatch screens only need the fields above.
+  agency_type?: string;
+  contact_email?: string | null;
+  updated_at?: string;
 };
 
 export type Resource = {
