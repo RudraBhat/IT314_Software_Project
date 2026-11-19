@@ -119,12 +119,12 @@ export function SiteHeader({
 }
 
 /**
- * Size shared by every header link and button, so labels and borders line up. 44px tall: the
- * minimum touch target for header controls (see README, frontend checks). It sets no display value,
- * so callers add inline-flex (or a responsive hidden/inline-flex pair) themselves.
+ * Size shared by every header link and button, so labels and borders line up. 36px tall inside the
+ * 56px bar (see README, frontend checks). It sets no display value, so callers add inline-flex (or a
+ * responsive hidden/inline-flex pair) themselves.
  */
 export const HEADER_CONTROL =
-  "h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300";
+  "h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300";
 
 /** Shared pill-style nav link for headers. */
 export function NavLink({

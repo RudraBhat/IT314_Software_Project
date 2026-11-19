@@ -88,7 +88,7 @@ export function UnifiedSiteHeader({
         {/* Desktop Auth / Profile Controls with Return Redirect */}
         {loading ? (
           <span
-            className="hidden h-11 w-40 animate-pulse rounded-lg bg-white/10 sm:inline-block"
+            className="hidden h-9 w-40 animate-pulse rounded-lg bg-white/10 sm:inline-block"
             role="status"
             aria-label="Checking sign-in"
           />
@@ -116,7 +116,7 @@ export function UnifiedSiteHeader({
         {/* Unified Mobile Hamburger Toggle */}
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className={`${HEADER_CONTROL} inline-flex w-11 cursor-pointer justify-center bg-white/10 text-sm text-white hover:bg-white/20 lg:hidden`}
+          className={`${HEADER_CONTROL} inline-flex w-9 cursor-pointer justify-center bg-white/10 text-sm text-white hover:bg-white/20 lg:hidden`}
           aria-label="Toggle menu"
           aria-expanded={menuOpen}
         >

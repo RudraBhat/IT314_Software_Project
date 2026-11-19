@@ -14,8 +14,6 @@ import { StaffSignIn } from "./staff-sign-in";
 function LoginCard() {
   const params = useSearchParams();
   const next = params.get("next") ?? undefined;
-  // After an explicit sign-out, Google must not sign the person straight back in.
-  const signedOut = params.get("signed_out") === "1";
   const { copy } = useAuthLanguage();
   return (
     <div className="space-y-6 rounded-2xl bg-white p-6 shadow-lg sm:p-8">
@@ -29,7 +27,7 @@ function LoginCard() {
 
       <StaffSignIn next={next} />
 
-      <GoogleSignInButton next={next} autoSelect={!signedOut} />
+      <GoogleSignInButton next={next} />
 
       <div className="space-y-3 border-t border-slate-200 pt-5 text-center">
         <div className="flex justify-center text-sm text-slate-600">
