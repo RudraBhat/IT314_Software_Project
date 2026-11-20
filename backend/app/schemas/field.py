@@ -49,6 +49,12 @@ class FieldAssignmentResponse(BaseModel):
     dispatched_at: datetime
     acknowledged_at: datetime | None = None
     overdue: bool = False
+    # Latest progress milestone recorded for the dispatch (EN_ROUTE, ON_SCENE, DELAYED, UPDATE, ...).
+    last_progress: str | None = None
+    last_progress_note: str | None = None
+    last_progress_at: datetime | None = None
+    # When the team first reported ON_SCENE (stays set after later updates or delays).
+    on_scene_at: datetime | None = None
 
 
 class FieldProgressRequest(BaseModel):
