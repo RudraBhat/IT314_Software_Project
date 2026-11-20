@@ -5,12 +5,13 @@ Render start command:
     uvicorn app:app --host 0.0.0.0 --port $PORT
 
 Required Render environment variable:
-    HF_MODEL_REPO_ID=Dhruvil-14/disaster-classifier
+    HF_MODEL_REPO_ID=<public Hugging Face model repository>
 
 Optional:
     HF_MODEL_FILENAME=best_model.pt
     HF_MODEL_REVISION=main
-    HF_TOKEN=...  # only needed for a private/gated Hugging Face repo
+
+The model repository is public, so no Hugging Face token is needed.
 """
 
 import gc
@@ -41,9 +42,7 @@ except RuntimeError:
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # ----------------------------- CONFIG ----------------------------------------
-HF_MODEL_REPO_ID = os.getenv(
-    "HF_MODEL_REPO_ID", "Dhruvil-14/disaster-classifier"
-).strip()
+HF_MODEL_REPO_ID = os.getenv("HF_MODEL_REPO_ID", "").strip()
 HF_MODEL_FILENAME = os.getenv("HF_MODEL_FILENAME", "best_model.pt").strip()
 HF_MODEL_REVISION = os.getenv("HF_MODEL_REVISION", "").strip() or None
 
@@ -92,8 +91,8 @@ class DisasterClassifier(nn.Module):
 async def lifespan(app: FastAPI):
     if not HF_MODEL_REPO_ID:
         raise RuntimeError(
-            "HF_MODEL_REPO_ID is missing. Set it to "
-            "'Dhruvil-14/disaster-classifier' in Render Environment."
+            "HF_MODEL_REPO_ID is not set. Add it in Render Environment Variables, "
+            "for example 'your-username/disaster-classifier'."
         )
 
     device = torch.device("cpu")
@@ -108,7 +107,6 @@ async def lifespan(app: FastAPI):
         repo_id=HF_MODEL_REPO_ID,
         filename=HF_MODEL_FILENAME,
         revision=HF_MODEL_REVISION,
-        token=os.getenv("HF_TOKEN") or None,
     )
 
     # mmap avoids eagerly copying the entire checkpoint into RAM.

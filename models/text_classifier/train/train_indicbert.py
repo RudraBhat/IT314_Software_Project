@@ -18,13 +18,12 @@ Example:
         --test-csv  ../data/tweets_multilingual.csv \
         --output-dir outputs
 
-A GPU is strongly recommended (Colab T4 / Kaggle). If the model repo needs
-access, export HF_TOKEN=<your read token> first.
+A GPU is strongly recommended (Colab T4 / Kaggle). The base model is public,
+so no Hugging Face token is needed.
 """
 
 import argparse
 import json
-import os
 import shutil
 from pathlib import Path
 
@@ -234,8 +233,6 @@ def main():
     else:
         print("WARNING: no GPU found. Training on CPU will be very slow.")
 
-    hf_token = os.environ.get("HF_TOKEN") or None
-
     # ---------------------------------------------------------- data + split
     df = load_training_data(args.train_csv)
     train_df, val_df = group_aware_split(df, args.val_group_fraction, args.seed)
@@ -248,7 +245,6 @@ def main():
         revision=MODEL_REVISION,
         use_fast=False,
         keep_accents=True,
-        token=hf_token,
     )
 
     texts = df["text"].astype(str).tolist()
@@ -277,7 +273,6 @@ def main():
         id2label=ID2LABEL,
         label2id=LABEL2ID,
         problem_type="single_label_classification",
-        token=hf_token,
     )
     total = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total:,} (five-class head is newly initialized)")

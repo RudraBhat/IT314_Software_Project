@@ -20,9 +20,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from transformers import AlbertTokenizer
 
+# Configuration comes from the environment. The model repository is public, so no Hugging Face token is needed.
 HF_MODEL_REPO = os.getenv("HF_MODEL_REPO", "").strip()
 HF_REVISION = os.getenv("HF_REVISION", "main")
-HF_TOKEN = os.getenv("HF_TOKEN") or None  # Required only for a private HF model repo.
 
 MODEL_DIR = Path(
     os.getenv(
@@ -32,7 +32,7 @@ MODEL_DIR = Path(
 )
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-MAX_LENGTH = int(os.getenv("MAX_LENGTH", "160"))
+MAX_LENGTH = int(os.getenv("MAX_LENGTH", "160"))  # Must match the training --max-length.
 LABELS = ["Fire", "Earthquake", "Cyclone", "Flood", "Non-Disaster"]
 
 MODEL_FILES = [
@@ -70,7 +70,6 @@ def download_model_files():
             repo_id=HF_MODEL_REPO,
             filename=filename,
             revision=HF_REVISION,
-            token=HF_TOKEN,
             local_dir=str(MODEL_DIR),
         )
 
