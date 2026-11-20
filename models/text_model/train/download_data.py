@@ -18,7 +18,7 @@ FILES = {
     "disaster_response_validation.csv": "2c6d4424e812b068ca2486a3c1b35bc0aea445643d922657e3023ae60387bc0b",
     "disaster_response_test.csv": "566402713139ad7c910737cf5f18f3fef9ba6cc711b6aa5054c65e3fa0ecfc48",
 }
-DEFAULT_DESTINATION = Path(__file__).resolve().parent / "data" / "external"
+DEFAULT_DESTINATION = Path(__file__).resolve().parents[1] / "data" / "external"  # models/text_model/data/external
 
 
 def fetch(destination: Path) -> None:

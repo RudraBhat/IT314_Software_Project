@@ -7,7 +7,7 @@ pytest.importorskip("langdetect")
 
 from sklearn.linear_model import LogisticRegression  # noqa: E402
 
-from text_model.train import _fit_binary_classifier, _report_binary, summarize_multilabel  # noqa: E402
+from train import _fit_binary_classifier, _report_binary, summarize_multilabel  # noqa: E402
 
 
 def imbalanced_data():

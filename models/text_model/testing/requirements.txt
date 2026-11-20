@@ -1,0 +1,3 @@
+# Tests for the training code (run from this folder: python -m pytest)
+-r ../train/requirements.txt
+pytest==9.1.1

@@ -1,0 +1,3 @@
+# Training the English text model. It reuses the triage service runtime pins, so the artifact records the
+# same scikit-learn version that ai-workers/service/text_analysis.py checks when it loads the model.
+-r ../../../ai-workers/requirements.txt

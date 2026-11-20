@@ -15,8 +15,8 @@ from urllib.request import Request, urlopen
 
 DATASET_ID = "QCRI/HumAID-events"
 DATASET_REVISION = "2e7ea23332006f075068b90d401b178d847b447a"
-FILES = Path(__file__).resolve().with_name("humaid_checksums.json")
-DEFAULT_DESTINATION = Path(__file__).resolve().parent / "data" / "external" / "humaid_events"
+FILES = Path(__file__).resolve().with_name("checksums.json")
+DEFAULT_DESTINATION = Path(__file__).resolve().parents[1] / "data" / "external" / "humaid_events"
 
 
 def fetch(destination: Path) -> None:

@@ -10,7 +10,7 @@ from typing import Any
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from text_model.train_humaid_transformer import preprocess_tweet
+from train_transformer import preprocess_tweet
 
 
 class HumAIDModelUnavailable(RuntimeError):

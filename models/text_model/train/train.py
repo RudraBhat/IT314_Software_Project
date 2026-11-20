@@ -23,8 +23,8 @@ from sklearn.model_selection import train_test_split
 from langdetect import DetectorFactory, detect_langs
 from langdetect.lang_detect_exception import LangDetectException
 
-from .download_data import DEFAULT_DESTINATION, FILES
-from .download_india_data import CSV_NAME, DATASET_ID, DATASET_VERSION
+from download_data import DEFAULT_DESTINATION, FILES
+from download_india_data import CSV_NAME, DATASET_ID, DATASET_VERSION
 
 
 MODEL_NAME = "resq-english-crisis-text-v1"
@@ -63,8 +63,8 @@ MIN_VALIDATION_NEGATIVE = 20
 ENGLISH_DETECTION_MIN_PROBABILITY = 0.80
 DetectorFactory.seed = 0
 
-DEFAULT_OUTPUT = Path(__file__).resolve().parent / "artifacts"
-DEFAULT_REPORT = Path(__file__).resolve().parent / "reports" / "evaluation.json"
+DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "artifacts"  # models/text_model/artifacts
+DEFAULT_REPORT = Path(__file__).resolve().parents[3] / "docs" / "ai" / "reports" / "text_model" / "evaluation.json"
 
 
 def _read_source_rows(data_dir: Path) -> list[dict[str, str]]:

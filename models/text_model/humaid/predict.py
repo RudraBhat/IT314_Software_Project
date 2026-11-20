@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from text_model.humaid_inference import predict_humaid_category
+from inference import predict_humaid_category
 
 
 def main() -> None:
@@ -15,7 +15,7 @@ def main() -> None:
     parser.add_argument(
         "--model-dir",
         type=Path,
-        default=Path(__file__).resolve().parent / "artifacts" / "humaid_bertweet",
+        default=Path(__file__).resolve().parents[1] / "artifacts" / "humaid_bertweet",
     )
     args = parser.parse_args()
     model_dir = args.model_dir.expanduser().resolve()

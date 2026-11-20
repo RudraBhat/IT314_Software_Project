@@ -68,10 +68,11 @@ LABELS = (
 LABEL_TO_ID = {label: index for index, label in enumerate(LABELS)}
 ID_TO_LABEL = {index: label for label, index in LABEL_TO_ID.items()}
 
-MODULE_DIR = Path(__file__).resolve().parent
+MODULE_DIR = Path(__file__).resolve().parents[1]  # models/text_model/: local data and artifacts stay there
+REPORTS_DIR = Path(__file__).resolve().parents[3] / "docs" / "ai" / "reports" / "text_model"  # tracked aggregate reports
 DEFAULT_DATA_DIR = MODULE_DIR / "data" / "external" / "humaid_events"
 DEFAULT_OUTPUT_DIR = MODULE_DIR / "artifacts" / "humaid_bertweet"
-DEFAULT_REPORT = MODULE_DIR / "reports" / "humaid_transformer_evaluation.json"
+DEFAULT_REPORT = REPORTS_DIR / "humaid_transformer_evaluation.json"
 
 
 def seed_everything(seed: int) -> None:

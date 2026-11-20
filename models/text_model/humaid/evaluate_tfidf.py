@@ -11,7 +11,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import FeatureUnion
 
-from text_model.train_humaid_transformer import (
+from train_transformer import (
+    REPORTS_DIR,
     DEFAULT_DATA_DIR,
     LABELS,
     LABEL_TO_ID,
@@ -129,7 +130,7 @@ def main() -> None:
         "event_held_out_test": test_metrics,
         "comparison_note": "Use this reference for the BERTweet result with the same revision, event split, and labels. Neither is an operational DRCH validation.",
     }
-    report_path = Path(__file__).resolve().parent / "reports" / "humaid_tfidf_evaluation.json"
+    report_path = REPORTS_DIR / "humaid_tfidf_evaluation.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(

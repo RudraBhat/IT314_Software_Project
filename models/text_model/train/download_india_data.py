@@ -16,7 +16,7 @@ DATASET_URL = f"https://data.mendeley.com/public-api/zip/{DATASET_ID}/download/{
 EXPECTED_ARCHIVE_SHA256 = "94b3b7341c6ea9c6f45c2cc2dd6d4063dfae476911284e393993e9fbb9b16d09"
 EXPECTED_CSV_SHA256 = "4d29070572760c2a52c5e0d72aa8d4ecdc7071417491abc1f50f863e57d564e8"
 CSV_NAME = "INDIANTWEETMASTER.csv"
-DEFAULT_DESTINATION = Path(__file__).resolve().parent / "data" / "external"
+DEFAULT_DESTINATION = Path(__file__).resolve().parents[1] / "data" / "external"  # models/text_model/data/external
 
 
 def fetch(destination: Path) -> None:
