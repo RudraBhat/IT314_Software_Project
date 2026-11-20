@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Generate the ER diagram of the final schema from the SQL migrations (S3-16). Owner: Zalak.
 
-Reads backend/db/migrations/*.sql in order, follows CREATE TABLE and ALTER TABLE ... ADD COLUMN, and writes
+Reads backend/db/migrations/*.sql in order, follows CREATE TABLE, ALTER TABLE ... ADD/DROP COLUMN and DROP TABLE,
+and writes
 a Mermaid erDiagram to docs/architecture/er-diagram.md (GitHub renders Mermaid in Markdown). Re-run it after adding a
 migration so the diagram in the final report matches the schema:
 
@@ -28,6 +29,11 @@ _CREATE = re.compile(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.]+)\s*\(",
 _ALTER_ADD = re.compile(
     r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?([\w.]+)\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?(.+?);",
     re.IGNORECASE | re.DOTALL,
+)
+_DROP_TABLE = re.compile(r"DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([\w.]+)", re.IGNORECASE)
+_ALTER_DROP = re.compile(
+    r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?([\w.]+)\s+DROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?\"?(\w+)\"?",
+    re.IGNORECASE,
 )
 _REFERENCES = re.compile(r"REFERENCES\s+([\w.]+)\s*\(\s*(\w+)", re.IGNORECASE)
 _TABLE_CONSTRAINT = re.compile(r"^(CONSTRAINT|PRIMARY\s+KEY|UNIQUE|CHECK|FOREIGN\s+KEY|EXCLUDE)\b", re.IGNORECASE)
@@ -139,6 +145,17 @@ def parse(sql_texts: list[str]) -> dict[str, Table]:
             name = _strip_schema(match.group(1))
             if name in tables:
                 _apply_column(tables[name], match.group(2).strip())
+        # Removals come last in a migration file: a later migration may drop what an earlier one created.
+        for match in _ALTER_DROP.finditer(sql):
+            name, column = _strip_schema(match.group(1)), match.group(2).lower()
+            if name in tables:
+                tables[name].columns.pop(column, None)
+                tables[name].references = [r for r in tables[name].references if r[0] != column]
+        for match in _DROP_TABLE.finditer(sql):
+            dropped = _strip_schema(match.group(1))
+            tables.pop(dropped, None)
+            for table in tables.values():
+                table.references = [r for r in table.references if r[1] != dropped]
     return tables
 
 

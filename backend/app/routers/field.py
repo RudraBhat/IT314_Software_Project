@@ -154,9 +154,20 @@ def get_field_assignments(
            i.district, i.address_text, i.landmark,
            ST_Y(i.geom::geometry) AS latitude, ST_X(i.geom::geometry) AS longitude,
            d.instructions, d.created_at AS dispatched_at, d.acknowledged_at,
-           (d.status = 'REQUESTED' AND d.created_at < now() - make_interval(mins => %(timeout)s)) AS overdue
+           (d.status = 'REQUESTED' AND d.created_at < now() - make_interval(mins => %(timeout)s)) AS overdue,
+           p.status AS last_progress, p.note AS last_progress_note, p.recorded_at AS last_progress_at,
+           (SELECT max(dp.recorded_at) FROM dispatch_progress dp
+             WHERE dp.dispatch_id = d.dispatch_id AND dp.status = 'ON_SCENE') AS on_scene_at
     FROM dispatch_orders d
     JOIN incidents i ON i.incident_id = d.incident_id
+    -- Latest field milestone (EN_ROUTE, ON_SCENE, DELAYED, UPDATE), so the responder sees where the mission stands.
+    LEFT JOIN LATERAL (
+        SELECT dp.status, dp.note, dp.recorded_at
+        FROM dispatch_progress dp
+        WHERE dp.dispatch_id = d.dispatch_id
+        ORDER BY dp.recorded_at DESC
+        LIMIT 1
+    ) p ON TRUE
     WHERE EXISTS (
         SELECT 1 FROM resource_assignments ra
         WHERE ra.dispatch_id = d.dispatch_id
@@ -192,6 +203,10 @@ def get_field_assignments(
             dispatched_at=r["dispatched_at"],
             acknowledged_at=r["acknowledged_at"],
             overdue=bool(r["overdue"]),
+            last_progress=r["last_progress"],
+            last_progress_note=r["last_progress_note"],
+            last_progress_at=r["last_progress_at"],
+            on_scene_at=r["on_scene_at"],
         )
         for r in rows
     ]

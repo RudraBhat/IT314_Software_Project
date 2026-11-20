@@ -38,6 +38,28 @@ def test_tables_columns_and_keys_are_parsed():
     assert orders.references == [("user_id", "users")]
 
 
+def test_later_migrations_can_drop_columns_and_tables():
+    later = """
+    ALTER TABLE orders DROP COLUMN IF EXISTS user_id;
+    ALTER TABLE orders DROP COLUMN note;
+    DROP TABLE IF EXISTS users;
+    """
+    tables = parse([SAMPLE, later])
+    assert set(tables) == {"orders"}
+    assert "user_id" not in tables["orders"].columns and "note" not in tables["orders"].columns
+    assert tables["orders"].references == []
+
+
+def test_the_real_migrations_no_longer_contain_dropped_objects():
+    files = sorted(MIGRATIONS.glob("*.sql"), key=lambda p: p.name)
+    tables = parse([f.read_text(encoding="utf-8") for f in files])
+    assert "system_configs" not in tables
+    assert "delivery_geom" not in tables["aid_needs"].columns
+    assert "pickup_geom" not in tables["aid_contributions"].columns
+    assert "affected_area" not in tables["public_updates"].columns
+    assert "sent_at" not in tables["notifications"].columns
+
+
 def test_render_produces_mermaid_entities_and_relationships():
     text = render(parse([SAMPLE]))
     assert text.startswith("erDiagram")

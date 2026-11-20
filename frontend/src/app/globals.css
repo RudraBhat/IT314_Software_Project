@@ -17,13 +17,6 @@
   --color-brand-alert: #dc2626;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
@@ -35,6 +28,41 @@ body {
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+}
+
+/* Everything clickable shows the hand cursor. In the base layer, so a utility such as cursor-wait still wins. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  summary,
+  select:not(:disabled),
+  label[for],
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  input[type="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  input:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* Scrollbars are hidden across the whole site; every area still scrolls with wheel, touch and keyboard. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* Full-viewport app screens (map, DM workspace) opt in to a fixed, self-scrolling layout. */
@@ -119,9 +147,10 @@ body:has(.app-screen) {
   background: rgba(255, 255, 255, 0.96);
 }
 
-/* ============ DISASTER MANAGEMENT WORKSPACE (scoped to .dm-theme) ============
-   Semantic tokens for the /dm workspace in the ResQ navy/sky palette. Scoped to the
-   workspace root so the portal, login and other modules keep their own styling. */
+/* ============ STAFF WORKSPACES (scoped to .dm-theme) ============
+   Light semantic tokens shared by the Disaster Management (/dm), administration (/admin) and
+   field (/field) workspaces, in the ResQ navy/sky palette. Scoped to the workspace root so the
+   portal, login and other modules keep their own styling. */
   @theme inline {
     --color-surface: var(--dm-surface);
     --color-surface-muted: var(--dm-surface-muted);
@@ -145,39 +174,39 @@ body:has(.app-screen) {
   }
 
   .dm-theme {
-    --background: #070d18;
-    --foreground: #f1f5f9;
-    --dm-surface: #0b1324;
-    --dm-surface-muted: #111c33;
-    --dm-muted: #94a3b8;
-    --dm-border: #1e293b;
+    --background: #f3f6fa;
+    --foreground: #0f172a;
+    --dm-surface: #ffffff;
+    --dm-surface-muted: #eef2f7;
+    --dm-muted: #64748b;
+    --dm-border: #e2e8f0;
     --dm-accent: #0284c7;
     --dm-accent-foreground: #ffffff;
-    --dm-critical: #f87171;
-    --dm-critical-soft: #3b1219;
-    --dm-high: #fb923c;
-    --dm-high-soft: #3a1f0e;
-    --dm-medium: #fbbf24;
-    --dm-medium-soft: #33270b;
-    --dm-low: #34d399;
-    --dm-low-soft: #0b2e22;
-    --dm-info: #38bdf8;
-    --dm-info-soft: #0c2a42;
-    --dm-ai: #c4b5fd;
-    --dm-ai-soft: #24193f;
-    --dm-neutral-soft: #172036;
+    --dm-critical: #dc2626;
+    --dm-critical-soft: #fee2e2;
+    --dm-high: #c2410c;
+    --dm-high-soft: #ffedd5;
+    --dm-medium: #b45309;
+    --dm-medium-soft: #fef3c7;
+    --dm-low: #047857;
+    --dm-low-soft: #d1fae5;
+    --dm-info: #0369a1;
+    --dm-info-soft: #e0f2fe;
+    --dm-ai: #6d28d9;
+    --dm-ai-soft: #ede9fe;
+    --dm-neutral-soft: #f1f5f9;
     background: var(--background);
     color: var(--foreground);
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   .dm-theme :focus-visible {
-    outline: 2px solid #38bdf8;
+    outline: 2px solid #0284c7;
     outline-offset: 2px;
   }
 
 .dm-theme dialog::backdrop {
-  background: rgb(2 6 23 / 0.7);
+  background: rgb(15 23 42 / 0.45);
 }
 
 /* ============ LEAFLET MARKERS & CONTROLS INTERACTION ============ */

@@ -78,6 +78,7 @@ class Settings:
     razorpay_webhook_secret: str | None = None
     sachet_feed_url: str = ""
     social_replay_file: str = ""
+    social_replay_enabled: bool = False
     news_rss_enabled: bool = False
     bluesky_search_enabled: bool = False
     bluesky_search_url: str = ""
@@ -142,6 +143,8 @@ def get_settings() -> Settings:
         razorpay_webhook_secret=os.getenv("RAZORPAY_WEBHOOK_SECRET") or None,
         sachet_feed_url=os.getenv("SACHET_FEED_URL", "").strip(),
         social_replay_file=os.getenv("SOCIAL_REPLAY_FILE", "").strip(),
+        # The team-authored replay fixture is simulated data, so it only runs when asked for.
+        social_replay_enabled=_bool("SOCIAL_REPLAY_ENABLED", False),
         news_rss_enabled=_bool("NEWS_RSS_ENABLED", False),
         bluesky_search_enabled=_bool("BLUESKY_SEARCH_ENABLED", False),
         bluesky_search_url=os.getenv("BLUESKY_SEARCH_URL", "").strip(),

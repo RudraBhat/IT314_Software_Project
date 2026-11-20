@@ -337,14 +337,14 @@ export default function DonatePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-12">
-      {/* Top Banner if Sandbox */}
+      <UnifiedSiteHeader activeHref="/donate" />
+
+      {/* Sandbox notice, directly under the navigation bar */}
       {isSandbox && (
         <div className="bg-amber-500 text-slate-950 px-4 py-2 text-center text-xs sm:text-sm font-bold tracking-wide shadow-xs">
           ⚠️ SANDBOX — no real money. All payments simulated for testing purposes.
         </div>
       )}
-
-      <UnifiedSiteHeader activeHref="/donate" />
 
       <main className="mx-auto max-w-5xl px-4 pt-8 sm:px-6">
         <div className="mb-8">

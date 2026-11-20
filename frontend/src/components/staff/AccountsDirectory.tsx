@@ -10,6 +10,7 @@ import { disableAccount, enableAccount, exportAccounts, listAccounts, resetCrede
 import { ROLE_LABEL, type InvitableRole } from "@/services/invitationsApi";
 
 import { BulkActionBar } from "./BulkActionBar";
+import { PermissionChips } from "./PermissionChips";
 
 import type { Tone } from "@/components/ui";
 
@@ -413,11 +414,7 @@ function AccountRow({ account, onAction, selected, onSelect }: {
         <span>Added {formatDateTime(account.created_at)}</span>
       </div>
       {account.permissions.length > 0 && (
-        <div className="flex flex-wrap gap-1.5" aria-label="Permissions">
-          {account.permissions.map((p) => (
-            <Badge key={p} tone="neutral">{p.toLowerCase()}</Badge>
-          ))}
-        </div>
+        <PermissionChips permissions={account.permissions} />
       )}
     </li>
   );

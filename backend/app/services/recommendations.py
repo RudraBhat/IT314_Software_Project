@@ -65,21 +65,6 @@ SCENARIO_CAPABILITY_RULES: dict[str, list[str]] = {
         "water_tender",
         "industrial_fire",
     ],
-    "EARTHQUAKE": [
-        "search_and_rescue",
-        "collapse_rescue",
-        "structural_shoring",
-        "canine_unit",
-        "trauma_care",
-        "heavy_extrication",
-        "medical",
-    ],
-    "LANDSLIDE": [
-        "debris_clearing",
-        "search_and_rescue",
-        "collapse_rescue",
-        "heavy_machinery",
-    ],
     "CHEMICAL_SPILL": [
         "hazmat",
         "chemical_foam",
@@ -100,7 +85,6 @@ SECONDARY_CAPABILITIES: dict[str, list[str]] = {
     "CYCLONE": ["boat", "heavy_extrication", "water_rescue", "heavy_machinery", "medical"],
     "INDUSTRIAL_FIRE": ["gas_leak", "smoke_extraction", "high_rise_rescue", "medical"],
     "FIRE": ["gas_leak", "smoke_extraction", "high_rise_rescue", "medical"],
-    "EARTHQUAKE": ["triage_support", "critical_care"],
 }
 
 # Primary capabilities grouped by the job they do (S3-14). Tags inside one group are
@@ -137,7 +121,12 @@ DISTANCE_PENALTY_PER_KM = 0.08
 
 
 def normalize_scenario(scenario: str) -> str:
-    """Normalize scenario string to standard uppercase key."""
+    """Normalize scenario string to standard uppercase key.
+
+    Only the three supported scenarios (cyclone, industrial fire, urban flooding) have capability
+    rules. Anything else, for example an earthquake, is returned unchanged and gets only the generic
+    search-and-rescue fallback in get_required_capabilities.
+    """
     s = scenario.strip().upper().replace(" ", "_")
     if s in ("FLOOD", "FLASH_FLOOD", "URBAN_FLOODING", "URBAN_FLOOD"):
         return "URBAN_FLOODING"
@@ -145,10 +134,6 @@ def normalize_scenario(scenario: str) -> str:
         return "INDUSTRIAL_FIRE"
     if s in ("CYCLONE", "STORM", "TROPICAL_CYCLONE"):
         return "CYCLONE"
-    if s in ("EARTHQUAKE", "QUAKE", "BUILDING_COLLAPSE"):
-        return "EARTHQUAKE"
-    if s in ("LANDSLIDE", "MUDSLIDE"):
-        return "LANDSLIDE"
     if s in ("CHEMICAL_SPILL", "HAZMAT", "GAS_LEAK"):
         return "INDUSTRIAL_FIRE"
     return s

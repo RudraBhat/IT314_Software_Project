@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+
+import { RESOURCE_ICON, SCENARIO_ICON } from "@/lib/format";
 
 /**
  * Disaster Management overlay for the existing ResQ map.
@@ -43,8 +44,6 @@ type MapData = {
 
 // Same palette and icons as the portal's own incident markers.
 const PRIORITY_COLOR: Record<string, string> = { CRITICAL: "#dc2626", HIGH: "#ea580c", MEDIUM: "#d97706", LOW: "#16a34a" };
-const SCENARIO_ICON: Record<string, string> = { industrial_fire: "🔥", cyclone: "🌀", urban_flooding: "🌊" };
-const RESOURCE_ICON: Record<string, string> = { TEAM: "👷", VEHICLE: "🚒", SUPPLY: "📦", SUPPORT: "🛠️" };
 const REFRESH_MS = 60_000;
 
 function esc(value: unknown): string {
@@ -58,9 +57,19 @@ function words(value: string) {
 // The portal loads Leaflet from its CDN as window.L, so there are no static types.
 type LeafletMap = any;
 
-export function LiveOperationsLayer({ mapRef }: { mapRef: RefObject<LeafletMap> }) {
+/**
+ * Round icon-only marker (details open on click, so the map stays readable). Leaflet centres it with
+ * iconAnchor; the box is a fixed square so the shape never stretches.
+ */
+function markerHtml(icon: string, border: string, shape: "round" | "square"): string {
+  return `<div style="box-sizing:border-box;width:30px;height:30px;border-radius:${shape === "round" ? "50%" : "8px"};
+    background:#ffffff;border:3px solid ${border};box-shadow:0 2px 6px rgba(15,23,42,.35);display:flex;
+    align-items:center;justify-content:center;font-size:15px;line-height:1;cursor:pointer">${icon}</div>`;
+}
+
+/** `visible` comes from the map's Public / Live operations switch. */
+export function LiveOperationsLayer({ mapRef, visible }: { mapRef: RefObject<LeafletMap>; visible: boolean }) {
   const [data, setData] = useState<MapData | null>(null);
-  const [visible, setVisible] = useState(true);
   const [error, setError] = useState(false);
   const layerRef = useRef<LeafletMap>(null);
   const focusedRef = useRef(false);
@@ -116,15 +125,9 @@ export function LiveOperationsLayer({ mapRef }: { mapRef: RefObject<LeafletMap> 
 
       for (const inc of data.incidents) {
         const color = inc.verified_priority ? PRIORITY_COLOR[inc.verified_priority] : "#475569";
-        const html = `
-          <div style="background:${color};color:#fff;font:700 11px system-ui,sans-serif;padding:3px 8px;border-radius:9999px;
-            border:2px solid #38bdf8;box-shadow:0 0 0 2px rgba(56,189,248,.35),0 4px 10px rgba(0,0,0,.5);display:flex;
-            align-items:center;gap:4px;white-space:nowrap;cursor:pointer;transform:translate(-50%,-50%)">
-            <span>${SCENARIO_ICON[inc.scenario] ?? "⚠️"}</span><span>${esc(inc.incident_ref)}</span>
-            <span style="font-size:9px;background:rgba(0,0,0,.25);padding:1px 4px;border-radius:4px">${esc(words(inc.status).toUpperCase())}</span>
-          </div>`;
+        const html = markerHtml(SCENARIO_ICON[inc.scenario] ?? "⚠️", color, "round");
         const marker = L.marker([Number(inc.latitude), Number(inc.longitude)], {
-          icon: L.divIcon({ html, className: "dm-live-incident-marker", iconSize: [0, 0] }),
+          icon: L.divIcon({ html, className: "dm-live-incident-marker", iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14] }),
           zIndexOffset: 500,
         }).bindPopup(`
           <div style="font:12px system-ui,sans-serif;padding:3px;min-width:180px">
@@ -133,20 +136,15 @@ export function LiveOperationsLayer({ mapRef }: { mapRef: RefObject<LeafletMap> 
             <span style="color:#475569">${esc(words(inc.scenario))} · ${esc(words(inc.status))}</span><br/>
             <span style="color:#475569">Priority: ${esc(inc.verified_priority ? words(inc.verified_priority) : "unassigned")}</span><br/>
             ${inc.address_text ? `<span style="font-size:11px;color:#64748b">${esc(inc.address_text)}</span><br/>` : ""}
-            <a href="/dm/incidents/${encodeURIComponent(inc.incident_id)}" style="color:#0284c7;font-weight:600">Open in DM workspace →</a>
+            <a href="/dm/incidents/${encodeURIComponent(inc.incident_id)}" style="color:#0284c7;font-weight:600">Open incident →</a>
           </div>`);
         marker.addTo(layer);
         if (focusId === inc.incident_id) focusMarker = marker;
       }
 
       for (const r of data.resources) {
-        const html = `
-          <div style="background:#0f172a;color:#f8fafc;font:700 10px monospace;padding:2px 6px;border-radius:6px;
-            border:1.5px solid ${r.status === "AVAILABLE" ? "#10b981" : "#f59e0b"};box-shadow:0 2px 8px rgba(0,0,0,.6);
-            display:flex;align-items:center;gap:3px;white-space:nowrap;transform:translate(-50%,-50%)">
-            <span>${RESOURCE_ICON[r.type] ?? "📍"}</span><span style="color:#38bdf8">${esc(r.name)}</span>
-          </div>`;
-        L.marker([r.latitude, r.longitude], { icon: L.divIcon({ html, className: "dm-live-resource-marker", iconSize: [0, 0] }) })
+        const html = markerHtml(RESOURCE_ICON[r.type] ?? "📍", r.status === "AVAILABLE" ? "#059669" : "#d97706", "square");
+        L.marker([r.latitude, r.longitude], { icon: L.divIcon({ html, className: "dm-live-resource-marker", iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14] }) })
           .bindPopup(`
             <div style="font:12px system-ui,sans-serif;padding:3px">
               <b style="color:#0f172a">${esc(r.name)}</b><br/>
@@ -176,36 +174,28 @@ export function LiveOperationsLayer({ mapRef }: { mapRef: RefObject<LeafletMap> 
   // Remove the layer when the portal unmounts.
   useEffect(() => () => layerRef.current?.remove(), []);
 
-  if (!data) return null;
+  if (!data || !visible) return null;
   const missing = data.incidents_without_coordinates.length;
 
   return (
-    <div className="fixed top-14 right-3 z-[900] w-64 rounded-xl border border-sky-500/40 bg-[#0b1222]/95 p-3 text-white shadow-2xl backdrop-blur-md font-sans">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-sky-300">
-          <span className="size-2 animate-pulse rounded-full bg-emerald-400" aria-hidden /> LIVE OPERATIONS
-        </span>
-        <label className="flex cursor-pointer items-center gap-1 text-[10px] text-slate-300">
-          <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} className="accent-sky-500" />
-          Show
-        </label>
+    <div className="absolute left-2 top-2 z-[500] w-64 rounded-xl border border-slate-200 bg-white/95 p-3 font-sans text-slate-800 shadow-lg backdrop-blur sm:left-3 sm:top-3">
+      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[#0c4a75]">
+        <span className="size-2 animate-pulse rounded-full bg-emerald-500" aria-hidden /> Live operations
       </div>
-      <p className="mt-1.5 text-[11px] text-slate-300">
-        {data.incidents.length} open incident{data.incidents.length === 1 ? "" : "s"} · {data.resources.length} located resource
-        {data.resources.length === 1 ? "" : "s"}
-        {missing > 0 && <span className="text-amber-300"> · {missing} without coordinates</span>}
+      <p className="mt-2 text-sm text-slate-700">
+        <span className="font-semibold text-slate-900">{data.incidents.length}</span> open incident{data.incidents.length === 1 ? "" : "s"} ·{" "}
+        <span className="font-semibold text-slate-900">{data.resources.length}</span> resource{data.resources.length === 1 ? "" : "s"} placed
       </p>
-      <p className="text-[10px] text-slate-500">
-        From the operations database · {new Date(data.generated_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-        {error && <span className="text-red-300"> · refresh failed</span>}
+      {missing > 0 && <p className="mt-0.5 text-xs font-medium text-amber-700">{missing} incident{missing === 1 ? "" : "s"} without coordinates</p>}
+      <ul className="mt-2 space-y-1 text-xs text-slate-600">
+        <li className="flex items-center gap-2"><span className="size-3 rounded-full border-[3px] border-slate-500 bg-white" aria-hidden /> Incident (ring = priority)</li>
+        <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] border-[3px] border-emerald-600 bg-white" aria-hidden /> Resource available</li>
+        <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] border-[3px] border-amber-600 bg-white" aria-hidden /> Resource committed</li>
+      </ul>
+      <p className="mt-2 text-xs text-slate-500">
+        Click a marker for details · updated {new Date(data.generated_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+        {error && <span className="font-medium text-red-600"> · refresh failed</span>}
       </p>
-      <p className="mt-1 text-[10px] text-slate-500">Outlined in blue on the map; other pins are the portal&apos;s demo data.</p>
-      <Link
-        href="/dm"
-        className="mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 py-1.5 text-xs font-bold transition hover:bg-sky-500"
-      >
-        Open DM Workspace →
-      </Link>
     </div>
   );
 }

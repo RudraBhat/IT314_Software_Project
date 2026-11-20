@@ -72,19 +72,7 @@ FROM users u WHERE u.email = 'ingest-system@drch.gov.in'
 ON CONFLICT (user_id) DO NOTHING;
 
 -- ---------------------------------------------------------------------
--- 4. SYSTEM CONFIGURATION
--- ---------------------------------------------------------------------
-INSERT INTO system_configs (config_key, value, version, is_active, changed_by)
-SELECT 'SCENARIOS_SUPPORTED',
-       '{"scenarios": ["CYCLONE", "INDUSTRIAL_FIRE", "URBAN_FLOODING"], "max_upload_size_mb": 25, "allowed_evidence_types": ["image/jpeg", "image/png", "video/mp4", "application/pdf"]}'::jsonb,
-       1, TRUE, u.user_id
-FROM users u WHERE u.email = 'admin@drch.gov.in'
-ON CONFLICT (config_key) DO UPDATE SET
-       value = EXCLUDED.value,
-       updated_at = now();
-
--- ---------------------------------------------------------------------
--- 5. SAFETY GUIDANCE & STANDARD OPERATING PROCEDURES (NU-FR-08)
+-- 4. SAFETY GUIDANCE & STANDARD OPERATING PROCEDURES (NU-FR-08)
 -- ---------------------------------------------------------------------
 INSERT INTO safety_content (scenario, title, body, status, version, published_at, source) VALUES
  ('CYCLONE', 'Cyclone Safety & Evacuation Advisory',

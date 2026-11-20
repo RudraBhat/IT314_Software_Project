@@ -25,31 +25,36 @@ function LoginCard() {
         </p>
       </div>
 
-      <StaffSignIn next={next} />
+      <StaffSignIn
+        next={next}
+        firstStepExtras={
+          <>
+            <GoogleSignInButton next={next} />
 
-      <GoogleSignInButton next={next} />
+            <div className="space-y-3 border-t border-slate-200 pt-5 text-center">
+              <div className="flex justify-center text-sm text-slate-600">
+                <Link href="/forgot-password" className="font-semibold text-sky-800 underline hover:text-sky-900">
+                  {copy.forgotPassword}
+                </Link>
+              </div>
+              <p className="text-base text-slate-700">{copy.newHere}</p>
+              <Link
+                href="/signup"
+                className="flex min-h-14 w-full items-center justify-center rounded-xl border-2 border-sky-700 px-2 text-center text-lg font-bold text-sky-800 hover:bg-sky-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-300"
+              >
+                {copy.createAccount}
+              </Link>
+            </div>
 
-      <div className="space-y-3 border-t border-slate-200 pt-5 text-center">
-        <div className="flex justify-center text-sm text-slate-600">
-          <Link href="/forgot-password" className="font-semibold text-sky-800 underline hover:text-sky-900">
-            {copy.forgotPassword}
-          </Link>
-        </div>
-        <p className="text-base text-slate-700">{copy.newHere}</p>
-        <Link
-          href="/signup"
-          className="flex min-h-14 w-full items-center justify-center rounded-xl border-2 border-sky-700 px-2 text-center text-lg font-bold text-sky-800 hover:bg-sky-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-300"
-        >
-          {copy.createAccount}
-        </Link>
-      </div>
-
-      <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-600">
-        {copy.publicMapNote}{" "}
-        <Link href="/" className="font-semibold text-sky-800 underline">{copy.publicMap}</Link>{" "}
-        {copy.andRead}{" "}
-        <Link href="/safety" className="font-semibold text-sky-800 underline">{copy.safetyGuidance}</Link>.
-      </p>
+            <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-600">
+              {copy.publicMapNote}{" "}
+              <Link href="/" className="font-semibold text-sky-800 underline">{copy.publicMap}</Link>{" "}
+              {copy.andRead}{" "}
+              <Link href="/safety" className="font-semibold text-sky-800 underline">{copy.safetyGuidance}</Link>.
+            </p>
+          </>
+        }
+      />
     </div>
   );
 }

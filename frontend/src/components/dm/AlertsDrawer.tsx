@@ -49,7 +49,7 @@ export function AlertsDrawer({ open, onClose }: { open: boolean; onClose: () => 
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Alerts">
-      <button className="absolute inset-0 bg-black/60" aria-label="Close alerts" onClick={onClose} />
+      <button className="absolute inset-0 bg-slate-900/40" aria-label="Close alerts" onClick={onClose} />
       <aside className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-border bg-surface shadow-xl">
         <header className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 className="text-base font-semibold">Alerts</h2>
@@ -57,7 +57,7 @@ export function AlertsDrawer({ open, onClose }: { open: boolean; onClose: () => 
         </header>
         <div className="flex items-center gap-2 border-b border-border px-5 py-2 text-xs">
           {(["all", "unread", "simulated"] as const).map((f) => (
-            <button key={f} onClick={() => setFilter(f)} className={cx("rounded-full px-3 py-1", filter === f ? "bg-sky-500/15 font-semibold text-sky-300" : "text-muted hover:bg-surface-muted")}>
+            <button key={f} onClick={() => setFilter(f)} className={cx("rounded-full px-3 py-1", filter === f ? "bg-sky-500/15 font-semibold text-sky-700" : "text-muted hover:bg-surface-muted")}>
               {f === "all" ? "All" : f === "unread" ? `Unread (${unread.length})` : "Simulated"}
             </button>
           ))}

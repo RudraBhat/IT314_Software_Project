@@ -79,7 +79,15 @@ def _disabled_reason(adapter: Adapter, settings) -> str | None:
         return "GNEWS is disabled (set NEWS_RSS_ENABLED=true)."
     if adapter.name == "BLUESKY" and not settings.bluesky_search_enabled:
         return "BLUESKY is disabled (set BLUESKY_SEARCH_ENABLED=true)."
+    if adapter.name == "REPLAY" and not settings.social_replay_enabled:
+        return "REPLAY is disabled (simulated fixture; set SOCIAL_REPLAY_ENABLED=true)."
     return None
+
+
+def enabled_adapters(settings=None) -> list[Adapter]:
+    """Registered adapters that are switched on (not skipped by configuration)."""
+    settings = settings or get_settings()
+    return [adapter for adapter in registered_adapters(settings) if _disabled_reason(adapter, settings) is None]
 
 
 def _prelabel(text: str, settings=None) -> tuple[str | None, float | None, dict[str, Any] | None]:

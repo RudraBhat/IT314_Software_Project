@@ -38,12 +38,16 @@ test.describe("Global Navigation Consistency (Issue #172)", () => {
     const header = page.locator("header");
     await expect(header.getByRole("link", { name: "Map" })).toBeVisible();
     await expect(header.getByRole("link", { name: "Report Incident" })).toBeVisible();
-    await expect(header.getByRole("link", { name: "My Reports" })).toBeVisible();
     await expect(header.getByRole("link", { name: "Safety" })).toBeVisible();
     await expect(header.getByRole("link", { name: "How to use" })).toBeVisible();
     await expect(header.getByRole("link", { name: "About" })).toBeVisible();
     await expect(header.getByRole("link", { name: "Donate" })).toBeVisible();
     await expect(header.getByRole("link", { name: "Sign In" })).toBeVisible();
+    // My Reports lives on the citizen dashboard (a tab), not in the shared bar.
+    await expect(header.getByRole("link", { name: "My Reports" })).toHaveCount(0);
+    // The page you are on stays in the bar and is marked as current.
+    await expect(header.getByRole("link", { name: "About" })).toHaveAttribute("aria-current", "page");
+    await expect(header.getByRole("link", { name: "Safety" })).not.toHaveAttribute("aria-current", "page");
   });
 
   test("mobile drawer toggles and exposes complete link set on small viewports", async ({ page }) => {
@@ -61,11 +65,11 @@ test.describe("Global Navigation Consistency (Issue #172)", () => {
     await expect(mobileNav).toBeVisible();
     await expect(mobileNav.getByRole("link", { name: "Live Map" })).toBeVisible();
     await expect(mobileNav.getByRole("link", { name: "Report Incident" })).toBeVisible();
-    await expect(mobileNav.getByRole("link", { name: "My Reports" })).toBeVisible();
+    await expect(mobileNav.getByRole("link", { name: "My Reports" })).toHaveCount(0);
     await expect(mobileNav.getByRole("link", { name: "Safety Guidelines" })).toBeVisible();
     await expect(mobileNav.getByRole("link", { name: "How to use" })).toBeVisible();
     await expect(mobileNav.getByRole("link", { name: "About ResQ" })).toBeVisible();
-    await expect(mobileNav.getByRole("link", { name: "Donate to Relief Fund" })).toBeVisible();
+    await expect(mobileNav.getByRole("link", { name: "Donate to Relief Fund" })).toHaveAttribute("aria-current", "page");
     await expect(mobileNav.getByRole("link", { name: "Sign In" })).toBeVisible();
 
     // Click toggle to close

@@ -115,11 +115,27 @@ jobs:
       - name: Run ESLint
         run: npm run lint -- --cache --cache-location .eslintcache
 
+      # Same API address as the e2e job, so e2e can run this exact build instead of building again.
       - name: Verify Next.js production build
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: 1
-          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+
+      # The standalone server, with its static files and public assets, is everything e2e needs to serve the app.
+      - name: Package the standalone build for the e2e job
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+
+      - name: Upload the standalone build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-standalone
+          path: frontend/.next/standalone
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
 
       # Production dependencies only: the open advisories are in lint tooling (eslint-config-next ->
       # picomatch, no patched release yet) and never ship in the application.
@@ -346,8 +362,15 @@ jobs:
     name: E2E / Playwright
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch' }}
+    # Waits for frontend-check so it can run that job's build. frontend-check is skipped when only the backend
+    # changed; e2e then builds the frontend itself.
+    needs: [detect-changes, frontend-check]
+    if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      needs.frontend-check.result != 'failure' &&
+      needs.frontend-check.result != 'cancelled' &&
+      (needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch')
     services:
       postgres:
         image: postgis/postgis:16-3.4
@@ -405,16 +428,29 @@ jobs:
           cache: 'npm'
           cache-dependency-path: './frontend/package-lock.json'
 
+      # Playwright itself still comes from the frontend's dev dependencies.
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: npm ci
 
-      - name: Build and start the frontend (standalone server, as in the container)
+      - name: Download the frontend build from frontend-check
+        if: needs.frontend-check.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-standalone
+          path: frontend/.next/standalone
+
+      - name: Build the frontend (only when frontend-check did not run)
+        if: needs.frontend-check.result != 'success'
         working-directory: ./frontend
         run: |
           npm run build
           cp -r .next/static .next/standalone/.next/static
           cp -r public .next/standalone/public
+
+      - name: Start the frontend (standalone server, as in the container)
+        working-directory: ./frontend
+        run: |
           PORT=3000 HOSTNAME=127.0.0.1 nohup node .next/standalone/server.js > "$RUNNER_TEMP/web.log" 2>&1 &
           for i in $(seq 1 30); do
             if curl -fsS --max-time 3 http://127.0.0.1:3000/ > /dev/null; then echo "Frontend is up."; exit 0; fi

@@ -79,24 +79,31 @@ function AuthFrame({ children }: { children: ReactNode }) {
       </a>
 
       <section aria-label={copy.emergencySection} className="bg-red-700 text-white">
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-center gap-x-3 gap-y-2 px-3 py-3">
-          <p className="w-full text-center text-sm font-semibold sm:w-auto">
+        {/*
+          The numbers never wrap onto a second row: from 640 px up they sit in one row beside the message, and only the
+          message's own text may wrap (Gujarati and Hindi are longer than English). Phones stack the message above a
+          four-column row of numbers. This does not depend on the language or on browser zoom.
+        */}
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-3 py-3 sm:flex-row sm:justify-center sm:gap-4">
+          <p className="min-w-0 text-center text-sm font-semibold sm:max-w-md sm:text-right">
             {copy.emergencyMessage}
           </p>
-          {EMERGENCY_NUMBERS.map(({ number, labelIndex }) => {
-            const label = copy.emergencyLabels[labelIndex];
-            return (
-              <a
-                key={number}
-                href={`tel:${number}`}
-                aria-label={copy.callNumber(number, label)}
-                className="flex min-h-12 min-w-[5.5rem] flex-col items-center justify-center rounded-lg bg-white px-3 text-red-800 shadow hover:bg-red-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-300"
-              >
-                <span className="text-xl font-extrabold leading-none">{number}</span>
-                <span className="text-[11px] font-semibold leading-tight">{label}</span>
-              </a>
-            );
-          })}
+          <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:gap-3">
+            {EMERGENCY_NUMBERS.map(({ number, labelIndex }) => {
+              const label = copy.emergencyLabels[labelIndex];
+              return (
+                <a
+                  key={number}
+                  href={`tel:${number}`}
+                  aria-label={copy.callNumber(number, label)}
+                  className="flex min-h-12 flex-col items-center justify-center rounded-lg bg-white px-1.5 py-1 text-center text-red-800 shadow hover:bg-red-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-300 sm:min-w-[5.5rem] sm:px-3"
+                >
+                  <span className="text-xl font-extrabold leading-none">{number}</span>
+                  <span className="text-[11px] font-semibold leading-tight sm:whitespace-nowrap">{label}</span>
+                </a>
+              );
+            })}
+          </div>
         </div>
       </section>
 

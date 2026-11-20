@@ -18,6 +18,71 @@ export const scenarioLabel: Record<string, string> = {
   urban_flooding: "Urban flooding",
 };
 
+/** Icon for each resource type (resources.type). */
+export const RESOURCE_ICON: Record<string, string> = { TEAM: "👷", VEHICLE: "🚒", SUPPLY: "📦", SUPPORT: "🛠️" };
+
+/** Agency types the backend accepts (agencies.agency_type), in the order dispatchers usually reach for them. */
+export const AGENCY_TYPES = ["FIRE", "MEDICAL", "NDRF", "POLICE", "MUNICIPAL", "NGO"] as const;
+
+export const AGENCY_TYPE_LABEL: Record<string, string> = {
+  FIRE: "Fire",
+  POLICE: "Police",
+  NDRF: "NDRF / SDRF",
+  MEDICAL: "Medical",
+  MUNICIPAL: "Municipal / state",
+  NGO: "NGO",
+};
+
+export const AGENCY_TYPE_ICON: Record<string, string> = {
+  FIRE: "🚒",
+  POLICE: "🚓",
+  NDRF: "🛟",
+  MEDICAL: "🚑",
+  MUNICIPAL: "🏛️",
+  NGO: "🤝",
+};
+
+/**
+ * Disaster Management permissions in plain words, most senior first, with what each one allows and a
+ * colour so the same permission looks the same everywhere.
+ */
+export const PERMISSION_INFO: Record<string, { label: string; description: string; tone: string; icon: string }> = {
+  SUPERVISOR: { label: "Supervisor", description: "Full oversight + staff management", tone: "bg-violet-100 text-violet-800 ring-violet-200", icon: "★" },
+  DISPATCH: { label: "Dispatch", description: "Assign & dispatch responder units", tone: "bg-sky-100 text-sky-800 ring-sky-200", icon: "➜" },
+  CLOSURE: { label: "Closure", description: "Close & archive incidents", tone: "bg-emerald-100 text-emerald-800 ring-emerald-200", icon: "✓" },
+  MODERATOR: { label: "Moderator", description: "Verify/reject evidence uploads", tone: "bg-amber-100 text-amber-800 ring-amber-200", icon: "◐" },
+  PUBLISHER: { label: "Publisher", description: "Publish incidents & public alerts", tone: "bg-rose-100 text-rose-800 ring-rose-200", icon: "✎" },
+};
+
+/** Permissions sorted most senior first (unknown ones last). */
+export function sortPermissions(permissions: readonly string[]): string[] {
+  const order = Object.keys(PERMISSION_INFO);
+  const rank = (p: string) => (order.includes(p) ? order.indexOf(p) : order.length);
+  return [...permissions].sort((a, b) => rank(a) - rank(b));
+}
+
+/** Disaster icon for each supported scenario, used on maps and assignment cards. */
+export const SCENARIO_ICON: Record<string, string> = {
+  cyclone: "🌀",
+  industrial_fire: "🔥",
+  urban_flooding: "🌊",
+};
+
+/**
+ * Disaster icon for an official alert, read from its event type (free text from the feed, for example
+ * "Very Severe Cyclonic Storm" or "Heavy Rainfall"). Unknown hazards get a plain warning sign.
+ */
+export function hazardIcon(eventType: string | null | undefined): string {
+  const t = (eventType ?? "").toLowerCase();
+  if (/cyclon|storm|depression|wind|gale/.test(t)) return "🌀";
+  if (/flood|rain|inundat|tsunami|surge|water/.test(t)) return "🌊";
+  if (/fire|chemical|industrial|explosion|gas|hazmat/.test(t)) return "🔥";
+  if (/thunder|lightning/.test(t)) return "⛈️";
+  if (/heat|hot/.test(t)) return "🌡️";
+  if (/landslide/.test(t)) return "⛰️";
+  return "⚠️";
+}
+
 export const statusTone: Record<string, Tone> = {
   SUBMITTED: "medium",
   NEEDS_INFORMATION: "medium",

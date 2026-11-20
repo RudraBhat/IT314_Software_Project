@@ -2,37 +2,19 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { UnifiedSiteHeader } from "../navigation/UnifiedSiteHeader";
-import { DisasterCategory } from "../../types/resq";
 import { InformationRequestReply } from "@/components/citizen/InformationRequestReply";
 import * as CitizenApi from "../../services/citizenApi";
-import { ReportPhotoPicker } from "../citizen/ReportPhotoPicker";
 import { LanguageCode, TRANSLATIONS } from "@/lib/citizenI18n";
-import { GUJARAT_CENTER, isInGujarat } from "@/lib/geo";
+import { isInGujarat } from "@/lib/geo";
 
 interface CitizenDashboardViewProps {
   currentUser?: { id: string; name: string; phone?: string; email?: string } | null;
   onOpenCitizenReport?: () => void;
-  onViewPublicMap?: () => void;
   onSignOut?: () => void;
   onClose?: () => void;
 }
 
-type CitizenTabId = "overview" | "report" | "reports" | "safety";
-
-const DISASTER_TYPES: { type: DisasterCategory; icon: string; title: string; color: string }[] = [
-  { type: "Flood / Urban Flood", icon: "🌊", title: "Flood / Urban Flood", color: "sky" },
-  { type: "Cyclone / Coastal Flooding", icon: "🌀", title: "Cyclone / Coastal Flooding", color: "violet" },
-  { type: "Major Urban / Building Fire", icon: "🔥", title: "Major Urban / Building Fire", color: "amber" },
-];
-
-const URGENT_NEEDS_OPTIONS = [
-  "Rescue Boats",
-  "Medical Evacuation",
-  "Drinking Water",
-  "Temporary Shelter",
-  "Water Tenders (Fire)",
-  "Power Grid Cutoff",
-];
+type CitizenTabId = "overview" | "reports" | "safety";
 
 function statusBadge(status: string) {
   switch (status) {
@@ -85,7 +67,6 @@ function formatRelativeTime(dateStr: string) {
 export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   currentUser: propUser,
   onOpenCitizenReport,
-  onViewPublicMap,
   onClose,
 }) => {
   const currentUser = useMemo(() => propUser ?? { id: "GUEST", name: "Citizen" }, [propUser]);
@@ -126,26 +107,14 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   const [publicIncidents, setPublicIncidents] = useState<CitizenApi.PublicIncident[]>([]);
   const [publicAlerts, setPublicAlerts] = useState<CitizenApi.PublicAlert[]>([]);
   const [shelters, setShelters] = useState<CitizenApi.ShelterData[]>([]);
-  const [notifications, setNotifications] = useState<CitizenApi.InAppNotification[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // SOS state
   const [sosLoading, setSosLoading] = useState(false);
   const [sosBanner, setSosBanner] = useState<{ message: string; ref?: string; isError?: boolean } | null>(null);
 
-  // Form state - Default to Gujarat Center (Ahmedabad/Gandhinagar)
-  const [formCategory, setFormCategory] = useState<DisasterCategory>("Flood / Urban Flood");
-  const [formDescription, setFormDescription] = useState("");
-  const [formLocation, setFormLocation] = useState("");
-  const [formLat, setFormLat] = useState(23.0225);
-  const [formLon, setFormLon] = useState(72.5714);
-  const [gpsError, setGpsError] = useState<string | null>(null);
-  const [formAffected, setFormAffected] = useState(1);
-  const [formNeeds, setFormNeeds] = useState<string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitResult, setSubmitResult] = useState<{ success: boolean; reportId?: string; error?: string; photoNote?: string } | null>(null);
-  const [formPhotos, setFormPhotos] = useState<File[]>([]);
+  // Last real device position inside Gujarat, used for SOS if a fresh fix is not available. Never a default.
+  const [lastFix, setLastFix] = useState<{ lat: number; lon: number } | null>(null);
 
   // Expanded report detail
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
@@ -171,15 +140,13 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
       CitizenApi.fetchPublicIncidents(),
       CitizenApi.fetchPublicAlerts(),
       CitizenApi.fetchShelters(),
-      CitizenApi.fetchMyNotifications(),
-    ]).then(([reportsRes, incidentsRes, alertsRes, sheltersRes, notifRes]) => {
+    ]).then(([reportsRes, incidentsRes, alertsRes, sheltersRes]) => {
       if (!isMounted) return;
       setBackendOnline(!reportsRes.error && !incidentsRes.error && !alertsRes.error);
       setMyReports(reportsRes.data ?? []);
       setPublicIncidents(incidentsRes.data ?? []);
       setPublicAlerts(alertsRes.data ?? []);
       setShelters(sheltersRes.data ?? []);
-      setNotifications(notifRes.data?.items ?? []);
       setIsLoading(false);
     });
 
@@ -188,13 +155,10 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
     };
   }, [currentUser, refreshKey]);
 
-  // Real-time polling for notifications and alerts every 20 seconds
+  // Real-time polling for public alerts every 20 seconds (notifications are polled by the header's bell)
   useEffect(() => {
     if (!currentUser || currentUser.id === "GUEST-000") return;
     const interval = setInterval(() => {
-      CitizenApi.fetchMyNotifications().then((res) => {
-        if (res.data?.items) setNotifications(res.data.items);
-      });
       CitizenApi.fetchPublicAlerts().then((res) => {
         if (res.data) setPublicAlerts(res.data);
       });
@@ -202,32 +166,6 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
 
     return () => clearInterval(interval);
   }, [currentUser]);
-
-  const unreadCount = notifications.filter((n) => !n.read_at).length;
-
-  const handleMarkAsRead = async (id: string) => {
-    try {
-      await CitizenApi.markNotificationRead(id);
-      setNotifications((prev) =>
-        prev.map((n) => (n.notification_id === id ? { ...n, read_at: new Date().toISOString() } : n))
-      );
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleMarkAllRead = async () => {
-    const unread = notifications.filter((n) => !n.read_at);
-    if (!unread.length) return;
-    try {
-      await Promise.all(unread.map((n) => CitizenApi.markNotificationRead(n.notification_id).catch(() => null)));
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() }))
-      );
-    } catch {
-      // ignore
-    }
-  };
 
   // SOS Emergency Broadcast Handler
   const handleBroadcastSos = async () => {
@@ -247,8 +185,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
     setSosLoading(true);
     setSosBanner(null);
 
-    let lat = formLat;
-    let lon = formLon;
+    let fix = lastFix;
 
     if (typeof navigator !== "undefined" && navigator.geolocation) {
       try {
@@ -258,15 +195,24 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
             timeout: 5000,
           });
         });
-        lat = pos.coords.latitude;
-        lon = pos.coords.longitude;
+        fix = { lat: pos.coords.latitude, lon: pos.coords.longitude };
       } catch {
-        if (!isInGujarat(lat, lon)) {
-          lat = GUJARAT_CENTER[0];
-          lon = GUJARAT_CENTER[1];
-        }
+        // keep the last real fix, if any
       }
     }
+
+    // An SOS must carry where the person really is: never send a made-up location.
+    if (!fix || !isInGujarat(fix.lat, fix.lon)) {
+      setSosBanner({
+        message: fix
+          ? "Your location is outside Gujarat, so the SOS was not sent. Please dial 112."
+          : "Turn on location access so the SOS can include where you are, or dial 112 now.",
+        isError: true,
+      });
+      setSosLoading(false);
+      return;
+    }
+    const { lat, lon } = fix;
 
     try {
       const payload: CitizenApi.IncidentReportPayload = {
@@ -276,8 +222,8 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
         location_source: "GPS",
         latitude: lat,
         longitude: lon,
-        address_text: "Emergency SOS Broadcast Location (Gujarat)",
-        details: { urgent_needs: ["Medical Evacuation", "Rescue Boats"] },
+        address_text: "Device location at SOS time",
+        details: { urgent_needs: [] },
       };
 
       const res = await CitizenApi.createReport(payload, { idempotencyKey: crypto.randomUUID() });
@@ -303,14 +249,13 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
     }
   };
 
-  // Geolocation for report form (respects Gujarat bounds)
+  // Remember a real position early (inside Gujarat only), so SOS still has one if a fresh fix is slow.
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           if (isInGujarat(pos.coords.latitude, pos.coords.longitude)) {
-            setFormLat(pos.coords.latitude);
-            setFormLon(pos.coords.longitude);
+            setLastFix({ lat: pos.coords.latitude, lon: pos.coords.longitude });
           }
         },
         () => {},
@@ -420,57 +365,6 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
     };
   }, [publicIncidents]);
 
-  // Report Submission Handler
-  // One Idempotency-Key per report draft: retries reuse it, a successful submit starts a new draft.
-  const reportKeyRef = useRef<string>(crypto.randomUUID());
-
-  const handleReportSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser) return;
-
-    if (formDescription.trim().length < 10) {
-      setSubmitResult({ success: false, error: "Please enter at least 10 characters describing the situation." });
-      return;
-    }
-    if (!formLocation.trim()) {
-      setSubmitResult({ success: false, error: "Please enter the location name or landmark." });
-      return;
-    }
-
-    setSubmitting(true);
-    setSubmitResult(null);
-
-    const payload: CitizenApi.IncidentReportPayload = {
-      scenario: CitizenApi.CATEGORY_TO_SCENARIO[formCategory],
-      description: formDescription.trim(),
-      people_affected: formAffected,
-      location_source: "MAP_PIN",
-      latitude: formLat,
-      longitude: formLon,
-      address_text: formLocation.trim(),
-      details: { urgent_needs: formNeeds },
-    };
-
-    const res = await CitizenApi.createReport(payload, { idempotencyKey: reportKeyRef.current });
-
-    if (res.data) {
-      reportKeyRef.current = crypto.randomUUID();
-      // The report is already filed; photos are added afterwards and a failure never undoes the report.
-      const photoNote = await CitizenApi.uploadReportPhotos(res.data.incident_id, formPhotos);
-      setSubmitResult({ success: true, reportId: res.data.incident_ref, photoNote });
-      setFormDescription("");
-      setFormLocation("");
-      setFormAffected(1);
-      setFormNeeds([]);
-      setFormPhotos([]);
-      handleRefresh();
-    } else {
-      setSubmitResult({ success: false, error: res.error || "Failed to submit disaster report. Please try again." });
-    }
-
-    setSubmitting(false);
-  };
-
   // Metrics (real data only)
   const pendingReportsCount = myReports.filter((r) => r.verification_status === "PENDING").length;
   const verifiedReportsCount = myReports.filter(
@@ -530,42 +424,12 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
       `}</style>
 
       {/* ─── Blue Header (ResQ AI Bhuvan-inspired Identity) ─── */}
-      {/* Shared navigation (issue #172); the dashboard adds its own language, SOS and notification controls. */}
+      {/* Shared navigation (issue #172); the header shows the citizen's notification bell on every page. */}
       <UnifiedSiteHeader
         activeHref="/citizen/dashboard"
-        session={{ authenticated: true, citizen: true, role: "NORMAL_USER", name: currentUser.name }}
+        session={{ authenticated: true, citizen: true, role: "NORMAL_USER", name: currentUser.name, email: currentUser.email || null }}
       >
         <div className="flex items-center gap-2.5">
-          {/* Trilingual Language Selector */}
-          <div className="flex items-center rounded-full bg-sky-950/70 p-0.5 border border-sky-600/50 text-[11px] font-bold">
-            {(["en", "hi", "gu"] as const).map((code) => (
-              <button
-                key={code}
-                onClick={() => changeLang(code)}
-                className={`px-2 py-0.5 rounded-full transition cursor-pointer text-[10.5px] ${
-                  lang === code
-                    ? "bg-white text-sky-950 shadow-xs font-black"
-                    : "text-sky-200 hover:text-white font-medium"
-                }`}
-                title={code === "en" ? "English" : code === "hi" ? "हिन्दी" : "ગુજરાતી"}
-              >
-                {code === "en" ? "EN" : code === "hi" ? "हिन्दी" : "ગુજરાતી"}
-              </button>
-            ))}
-          </div>
-
-          {/* Quick Emergency SOS Broadcast Button */}
-          <button
-            onClick={handleBroadcastSos}
-            disabled={sosLoading}
-            className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 active:scale-95 text-white px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold shadow-xs transition cursor-pointer shrink-0"
-            title={t.sosDisclaimer}
-          >
-            <span className="text-xs">🚨</span>
-            <span className="hidden sm:inline">{sosLoading ? t.sosBroadcasting : t.sosButton}</span>
-            <span className="sm:hidden">SOS</span>
-          </button>
-
           {backendOnline === false && (
             <span
               className="hidden xl:inline-flex items-center gap-1.5 text-[10.5px] px-2.5 py-0.5 rounded-full border font-medium bg-amber-950/40 text-amber-300 border-amber-600/40"
@@ -573,18 +437,6 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
               {t.backendUnreachable}
             </span>
-          )}
-
-          {/* Optional View Public Map Button */}
-          {onViewPublicMap && (
-            <button
-              onClick={onViewPublicMap}
-              className="hidden lg:flex items-center gap-1 bg-white/10 hover:bg-white/20 text-sky-100 px-3 py-1 rounded-full text-xs font-semibold border border-white/15 transition cursor-pointer"
-              title="Open Full National Bhuvan-Style Map"
-            >
-              <span>🗺️</span>
-              <span>{t.fullMapView}</span>
-            </button>
           )}
 
           {/* Optional Close Button */}
@@ -597,87 +449,6 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
               ✕ {t.close}
             </button>
           )}
-
-          {/* Notification Bell */}
-          <div className="relative">
-            <button
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-1.5 rounded-full hover:bg-sky-800/60 text-sky-100 transition cursor-pointer"
-              title={t.notifications}
-              aria-label="View notifications"
-            >
-              <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-xs">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </button>
-
-            {/* Notification Dropdown Drawer */}
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl border border-slate-200 bg-white p-3 shadow-xl z-50 text-slate-900">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                    {t.notifications} ({unreadCount} unread)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {unreadCount > 0 && (
-                      <button
-                        onClick={handleMarkAllRead}
-                        className="text-[10.5px] text-sky-700 hover:text-sky-900 font-semibold cursor-pointer"
-                      >
-                        {t.markAllRead}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setShowNotifications(false)}
-                      className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-                {notifications.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-slate-400">{t.noNotifications}</p>
-                ) : (
-                  <div className="max-h-72 overflow-y-auto space-y-2">
-                    {notifications.map((item) => {
-                      const isUnread = !item.read_at;
-                      return (
-                        <div
-                          key={item.notification_id}
-                          className={`p-2.5 rounded-lg border text-xs transition ${
-                            isUnread
-                              ? "bg-sky-50/60 border-sky-200"
-                              : "bg-slate-50 border-slate-100 opacity-80"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-1">
-                            <span className="font-semibold text-slate-900">{item.title}</span>
-                            {isUnread && (
-                              <button
-                                onClick={() => handleMarkAsRead(item.notification_id)}
-                                className="text-[10px] text-sky-600 hover:text-sky-800 font-medium shrink-0 cursor-pointer"
-                              >
-                                {t.markRead}
-                              </button>
-                            )}
-                          </div>
-                          <p className="mt-1 text-slate-600 text-[11px]">{item.body}</p>
-                          <span className="mt-1 block text-[10px] text-slate-400">
-                            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
 
         </div>
       </UnifiedSiteHeader>
@@ -747,17 +518,34 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            {/* Primary Action Button: Report Disaster */}
+            {/* Trilingual Language Selector */}
+            <div className="flex items-center rounded-full bg-slate-100 p-0.5 border border-slate-300 text-[11px] font-bold">
+              {(["en", "hi", "gu"] as const).map((code) => (
+                <button
+                  key={code}
+                  onClick={() => changeLang(code)}
+                  className={`px-2 py-0.5 rounded-full transition cursor-pointer text-[10.5px] ${
+                    lang === code
+                      ? "bg-[#0c4a75] text-white shadow-xs font-black"
+                      : "text-slate-600 hover:text-slate-900 font-medium"
+                  }`}
+                  title={code === "en" ? "English" : code === "hi" ? "हिन्दी" : "ગુજરાતી"}
+                >
+                  {code === "en" ? "EN" : code === "hi" ? "हिन्दी" : "ગુજરાતી"}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Emergency SOS Broadcast Button */}
             <button
-              onClick={() => {
-                setActiveTab("report");
-                setSubmitResult(null);
-                if (onOpenCitizenReport) onOpenCitizenReport();
-              }}
-              className="bg-red-600 hover:bg-red-500 text-white px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs md:text-sm shadow-md hover:shadow-lg shadow-red-600/25 transition cursor-pointer flex items-center gap-2 group"
+              onClick={handleBroadcastSos}
+              disabled={sosLoading}
+              className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 active:scale-95 text-white px-3 sm:px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer shrink-0"
+              title={t.sosDisclaimer}
             >
-              <span className="text-base group-hover:scale-110 transition-transform">🚨</span>
-              <span>{t.reportDisasterBtn}</span>
+              <span className="text-xs">🚨</span>
+              <span className="hidden sm:inline">{sosLoading ? t.sosBroadcasting : t.sosButton}</span>
+              <span className="sm:hidden">SOS</span>
             </button>
 
             <button
@@ -820,16 +608,12 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
         <div className="max-w-7xl mx-auto flex gap-2 overflow-x-auto">
           {[
             { id: "overview" as const, label: t.tabOverview, icon: "🏠" },
-            { id: "report" as const, label: t.tabReport, icon: "🚨" },
             { id: "reports" as const, label: `${t.tabMyReports} (${myReports.length})`, icon: "📋" },
             { id: "safety" as const, label: t.tabSafety, icon: "🛡️" },
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                setSubmitResult(null);
-              }}
+              onClick={() => setActiveTab(tab.id)}
               className={`py-3 px-3.5 text-xs font-bold whitespace-nowrap border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
                 activeTab === tab.id
                   ? "border-[#0c4a75] text-[#0c4a75] bg-sky-50/60"
@@ -944,7 +728,7 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                       When you submit a report for floods, cyclones, or fires, its verification and response telemetry will appear here.
                     </p>
                     <button
-                      onClick={() => setActiveTab("report")}
+                      onClick={() => onOpenCitizenReport?.()}
                       className="mt-2 text-xs font-bold text-sky-700 hover:text-sky-800 underline cursor-pointer"
                     >
                       {t.reportNow}
@@ -1022,286 +806,6 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
             </div>
           )}
 
-          {/* TAB 2: REPORT A DISASTER */}
-          {activeTab === "report" && (
-            <div className="bg-white border border-slate-200/90 rounded-2xl p-5 md:p-7 shadow-xs">
-              <div className="mb-5 pb-3 border-b border-slate-100">
-                <h2 className="text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <span>🚨</span> {t.formTitle}
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {t.formSubtitle}
-                </p>
-              </div>
-
-              {submitResult?.success ? (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center space-y-3">
-                  <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center text-2xl mx-auto shadow-md">
-                    ✓
-                  </div>
-                  <h3 className="text-base font-bold text-emerald-900">{t.reportSuccessMsg}</h3>
-                  <p className="text-xs text-emerald-700 max-w-md mx-auto">
-                    Your report has been confirmed and stored in the Disaster Response Hub database.
-                  </p>
-                  <div className="bg-white border border-emerald-300 rounded-xl p-3 max-w-xs mx-auto font-mono text-sm font-bold text-emerald-900 shadow-xs">
-                    Reference ID: {submitResult.reportId}
-                  </div>
-                  {submitResult.photoNote && (
-                    <p role="status" className="text-xs text-slate-600">
-                      {submitResult.photoNote}
-                    </p>
-                  )}
-                  <p className="text-[11px] text-slate-500">
-                    Keep this ID handy to monitor triage status and dispatch telemetry.
-                  </p>
-                  <div className="flex justify-center gap-2 pt-2">
-                    <button
-                      onClick={() => {
-                        setActiveTab("reports");
-                        setSubmitResult(null);
-                      }}
-                      className="bg-[#0c4a75] hover:bg-[#075985] text-white px-4 py-2 rounded-xl text-xs font-bold cursor-pointer"
-                    >
-                      {t.tabMyReports}
-                    </button>
-                    <button
-                      onClick={() => setSubmitResult(null)}
-                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer"
-                    >
-                      Submit Another Report
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <form onSubmit={handleReportSubmit} className="space-y-5">
-                  {submitResult?.error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-xs font-medium">
-                      ⚠️ {submitResult.error}
-                    </div>
-                  )}
-
-                  {/* 1. Category Selection */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                      {t.selectDisasterType} <span className="text-red-500">*</span>
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {DISASTER_TYPES.map((dt) => (
-                        <button
-                          key={dt.type}
-                          type="button"
-                          onClick={() => setFormCategory(dt.type)}
-                          className={`p-3.5 rounded-xl border text-left transition cursor-pointer flex items-center gap-3 ${
-                            formCategory === dt.type
-                              ? "bg-sky-50 border-sky-600 ring-2 ring-sky-500/20 text-slate-900 shadow-xs"
-                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                          }`}
-                        >
-                          <span className="text-2xl">{dt.icon}</span>
-                          <div>
-                            <div className="text-xs font-bold text-slate-900 leading-tight">
-                              {dt.type === "Flood / Urban Flood"
-                                ? t.catFlood
-                                : dt.type === "Cyclone / Coastal Flooding"
-                                ? t.catCyclone
-                                : t.catFire}
-                            </div>
-                            <div className="text-[10px] text-slate-400">Emergency Priority</div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 2. Description */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      {t.disasterDescription} <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={formDescription}
-                      onChange={(e) => setFormDescription(e.target.value)}
-                      placeholder={t.disasterDescPlaceholder}
-                      rows={3}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs focus:outline-none focus:border-sky-600 focus:bg-white text-slate-900 transition"
-                      required
-                    />
-                    <div className="text-[10px] text-slate-400 mt-1 flex justify-between">
-                      <span>Minimum 10 characters</span>
-                      <span>{formDescription.length} characters</span>
-                    </div>
-                  </div>
-
-                  {/* 3. Location and Coordinates */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                        {t.locationDetails} <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={formLocation}
-                        onChange={(e) => setFormLocation(e.target.value)}
-                        placeholder={t.locationPlaceholder}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs focus:outline-none focus:border-sky-600 focus:bg-white text-slate-900 transition"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          {t.gpsCoordinates}
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setGpsError(null);
-                            if (!navigator.geolocation) {
-                              setGpsError("This browser cannot share your location. Pick the spot on the map instead.");
-                              return;
-                            }
-                            navigator.geolocation.getCurrentPosition(
-                              (pos) => {
-                                if (isInGujarat(pos.coords.latitude, pos.coords.longitude)) {
-                                  setFormLat(pos.coords.latitude);
-                                  setFormLon(pos.coords.longitude);
-                                } else {
-                                  setGpsError("Your location is outside Gujarat State boundaries. Pick the spot on the map instead.");
-                                }
-                              },
-                              () => setGpsError("Could not access your location. Allow location access or pick the spot on the map."),
-                              { enableHighAccuracy: true, timeout: 5000 }
-                            );
-                          }}
-                          className="text-[10px] text-sky-700 hover:underline font-bold cursor-pointer"
-                        >
-                          📍 {t.getGpsBtn}
-                        </button>
-                      </div>
-                      {gpsError && (
-                        <p role="alert" className="mb-1.5 text-[11px] font-semibold text-red-600">
-                          {gpsError}
-                        </p>
-                      )}
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={formLat}
-                          onChange={(e) => setFormLat(parseFloat(e.target.value) || 0)}
-                          placeholder="Latitude"
-                          className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 font-mono"
-                        />
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={formLon}
-                          onChange={(e) => setFormLon(parseFloat(e.target.value) || 0)}
-                          placeholder="Longitude"
-                          className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 font-mono"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 4. Affected People & Urgent Needs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                        {t.peopleAffected}
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="10000"
-                        value={formAffected}
-                        onChange={(e) => setFormAffected(parseInt(e.target.value) || 1)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Urgent Needs Checkboxes */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                      {t.urgentNeeds}
-                    </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {URGENT_NEEDS_OPTIONS.map((need) => {
-                        const needLabel =
-                          need === "Rescue Boats"
-                            ? t.needBoats
-                            : need === "Medical Evacuation"
-                            ? t.needMedical
-                            : need === "Drinking Water"
-                            ? t.needWater
-                            : need === "Temporary Shelter"
-                            ? t.needShelter
-                            : need === "Water Tenders (Fire)"
-                            ? t.needFireTenders
-                            : need === "Power Grid Cutoff"
-                            ? t.needPowerCutoff
-                            : need;
-                        return (
-                          <label
-                            key={need}
-                            className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center gap-2 transition select-none ${
-                              formNeeds.includes(need)
-                                ? "bg-sky-50 border-sky-500 text-sky-900 font-bold"
-                                : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={formNeeds.includes(need)}
-                              onChange={(e) => {
-                                if (e.target.checked) setFormNeeds([...formNeeds, need]);
-                                else setFormNeeds(formNeeds.filter((n) => n !== need));
-                              }}
-                              className="rounded text-sky-600"
-                            />
-                            <span>{needLabel}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Photos (optional, NU-FR-05): sent after the report is filed */}
-                  <ReportPhotoPicker
-                    inputId="dashboard-report-photos"
-                    label="Photos (optional)"
-                    photos={formPhotos}
-                    onChange={setFormPhotos}
-                    disabled={submitting}
-                  />
-
-                  {/* Submit Button */}
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={submitting}
-                      className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl text-sm shadow-md hover:shadow-lg shadow-red-600/30 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {submitting ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>{t.submitting}</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>🚨</span>
-                          <span>{t.submitReportBtn}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          )}
-
           {/* TAB 3: MY REPORTS */}
           {activeTab === "reports" && (
             <div className="bg-white border border-slate-200/90 rounded-2xl p-5 md:p-7 shadow-xs space-y-4">
@@ -1329,10 +833,10 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
                   <div className="text-4xl">📭</div>
                   <h3 className="text-sm font-bold text-slate-700">No Disaster Reports Found</h3>
                   <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    You have not submitted any emergency reports. Use the &ldquo;Report a Disaster&rdquo; form when in distress.
+                    You have not submitted any emergency reports. Use &ldquo;Report Incident&rdquo; in the top bar when in distress.
                   </p>
                   <button
-                    onClick={() => setActiveTab("report")}
+                    onClick={() => onOpenCitizenReport?.()}
                     className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer shadow-xs"
                   >
                     Report Disaster Now

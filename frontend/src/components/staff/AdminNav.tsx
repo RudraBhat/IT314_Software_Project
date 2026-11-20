@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+import { NavLink } from "@/components/Brand";
 
 const LINKS = [
   { href: "/admin", label: "Accounts" },
@@ -9,26 +10,20 @@ const LINKS = [
   { href: "/admin/system", label: "System" },
 ];
 
-/** Section links for the administration area; the current page is marked for screen readers too. */
+/** Section links for the administration area, styled like every other header; the current page is highlighted. */
 export function AdminNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Administration" className="flex items-center gap-1">
-      {LINKS.map((link) => {
-        const current = link.href === "/admin" ? pathname === "/admin" : pathname.startsWith(link.href);
-        return (
-          <Link
-            key={link.href}
-            href={link.href}
-            aria-current={current ? "page" : undefined}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
-              current ? "bg-white/20 text-white" : "text-sky-100 hover:bg-white/10"
-            }`}
-          >
-            {link.label}
-          </Link>
-        );
-      })}
+    <nav aria-label="Administration" className="flex items-center gap-2">
+      {LINKS.map((link) => (
+        <NavLink
+          key={link.href}
+          href={link.href}
+          active={link.href === "/admin" ? pathname === "/admin" : pathname.startsWith(link.href)}
+        >
+          {link.label}
+        </NavLink>
+      ))}
     </nav>
   );
 }

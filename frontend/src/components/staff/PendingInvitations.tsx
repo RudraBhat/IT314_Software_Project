@@ -12,6 +12,8 @@ import {
   type PendingInvitation,
 } from "@/services/invitationsApi";
 
+import { PermissionChips } from "./PermissionChips";
+
 /**
  * Accounts invited but not yet set up, with resend and revoke (issue #100).
  * The backend only returns invitations for roles the caller may manage.
@@ -60,8 +62,12 @@ export function PendingInvitations({ refreshKey = 0 }: { refreshKey?: number }) 
                 <p className="mt-0.5 text-xs text-muted">
                   {invite.email}
                   {invite.team_name ? ` · Team: ${invite.team_name}` : ""}
-                  {invite.permissions.length ? ` · ${invite.permissions.join(", ")}` : ""}
                 </p>
+                {invite.permissions.length > 0 && (
+                  <div className="mt-1.5">
+                    <PermissionChips permissions={invite.permissions} />
+                  </div>
+                )}
                 <p className="mt-1 text-[11px] text-muted">
                   Invited {new Date(invite.created_at).toLocaleDateString()}
                   {invite.invited_by_name ? ` by ${invite.invited_by_name}` : ""}

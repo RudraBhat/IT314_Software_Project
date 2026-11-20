@@ -176,6 +176,10 @@ def test_get_field_assignments_active_and_all(
             "dispatched_at": datetime.now(UTC),
             "acknowledged_at": None,
             "overdue": False,
+            "last_progress": "DELAYED",
+            "last_progress_note": "Road blocked near the toll plaza",
+            "last_progress_at": datetime.now(UTC),
+            "on_scene_at": None,
         }
     ]
 
@@ -201,6 +205,10 @@ def test_get_field_assignments_active_and_all(
     assert assignments[0].status == "REQUESTED"
     assert assignments[0].scenario == "flood"
     assert assignments[0].latitude == 23.01
+    # The responder sees the team's latest milestone on the assignment card.
+    assert assignments[0].last_progress == "DELAYED"
+    assert assignments[0].last_progress_note == "Road blocked near the toll plaza"
+    assert assignments[0].on_scene_at is None
 
 
 # ── 3. Operational State Transitions ────────────────────────────────────
