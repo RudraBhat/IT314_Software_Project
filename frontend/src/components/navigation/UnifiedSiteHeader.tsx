@@ -6,6 +6,7 @@ import { SiteHeader, NavLink, NavDivider, HeaderAccount, HEADER_CONTROL } from "
 import { signOut } from "@/app/login/actions";
 import { useSession, type SessionInfo } from "@/components/auth/SessionProvider";
 import { homeFor } from "@/lib/roles";
+import { NotificationBell } from "@/components/citizen/NotificationBell";
 
 export type { SessionInfo };
 
@@ -100,8 +101,11 @@ export function UnifiedSiteHeader({
           )}
         </nav>
 
-        {/* Page-specific controls (for example the citizen notification bell) sit beside the account. */}
+        {/* Page-specific controls sit beside the account. */}
         {children}
+
+        {/* Citizens keep their notification bell on every page, not only on the dashboard. */}
+        {signedIn && session?.role === "NORMAL_USER" && <NotificationBell />}
 
         {loading ? (
           <span

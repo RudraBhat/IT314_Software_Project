@@ -79,8 +79,9 @@ function AuthFrame({ children }: { children: ReactNode }) {
       </a>
 
       <section aria-label={copy.emergencySection} className="bg-red-700 text-white">
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-center gap-x-3 gap-y-2 px-3 py-3">
-          <p className="w-full text-center text-sm font-semibold sm:w-auto">
+        {/* One line from tablet width up in every language (Gujarati and Hindi text is longer); phones may wrap. */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-3 gap-y-2 px-3 py-3 md:flex-nowrap">
+          <p className="w-full text-center text-sm font-semibold sm:w-auto md:whitespace-nowrap">
             {copy.emergencyMessage}
           </p>
           {EMERGENCY_NUMBERS.map(({ number, labelIndex }) => {
@@ -90,10 +91,10 @@ function AuthFrame({ children }: { children: ReactNode }) {
                 key={number}
                 href={`tel:${number}`}
                 aria-label={copy.callNumber(number, label)}
-                className="flex min-h-12 min-w-[5.5rem] flex-col items-center justify-center rounded-lg bg-white px-3 text-red-800 shadow hover:bg-red-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-300"
+                className="flex min-h-12 min-w-[5.5rem] shrink-0 flex-col items-center justify-center rounded-lg bg-white px-3 text-red-800 shadow hover:bg-red-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-300"
               >
                 <span className="text-xl font-extrabold leading-none">{number}</span>
-                <span className="text-[11px] font-semibold leading-tight">{label}</span>
+                <span className="whitespace-nowrap text-[11px] font-semibold leading-tight">{label}</span>
               </a>
             );
           })}
