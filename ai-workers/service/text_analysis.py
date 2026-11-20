@@ -17,7 +17,7 @@ from langdetect.lang_detect_exception import LangDetectException
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
 
-DEFAULT_MODEL_DIR = Path(__file__).resolve().parent / "artifacts"
+DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[1] / "artifacts" / "text_analysis"  # ai-workers/artifacts/text_analysis
 RELATED_LABELS = {"0": "NOT_RELATED", "1": "RELATED", "2": "UNCERTAIN"}
 ENGLISH_DETECTION_MIN_PROBABILITY = 0.80
 DetectorFactory.seed = 0

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
-from text_model import inference
+from service import text_analysis as inference
 from triage_service import app
 
 client = TestClient(app)

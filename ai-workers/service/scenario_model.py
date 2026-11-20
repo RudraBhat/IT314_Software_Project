@@ -84,7 +84,7 @@ def load_model(model_dir: str) -> SklearnScenarioModel | None:
         import joblib
         import sklearn
 
-        from text_model.inference import ModelIntegrityError, _verify_artifact_hash
+        from service.text_analysis import ModelIntegrityError, _verify_artifact_hash
 
         _verify_artifact_hash(path)
         # Unpickled only after the SHA-256 check above.
