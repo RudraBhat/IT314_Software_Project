@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { SiteHeader, NavLink } from "@/components/Brand";
+import { UnifiedSiteHeader } from "@/components/navigation/UnifiedSiteHeader";
 import { Button, EmptyState, ErrorState, LoadingRows, Notice, Pagination } from "@/components/ui";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { DonationRecord, fetchMyDonations, PaginatedDonations } from "@/services/citizenApi";
@@ -43,20 +43,7 @@ export default function MyDonationsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-      <SiteHeader subtitle="My Donations & Receipts" maxWidth="max-w-4xl">
-        <NavLink href="/donate" variant="primary">
-          + Donate
-        </NavLink>
-        <NavLink href="/my-reports" hideBelow="sm">
-          My Reports
-        </NavLink>
-        <NavLink href="/dashboard" hideBelow="sm">
-          Dashboard
-        </NavLink>
-        <NavLink href="/account" hideBelow="sm">
-          Account
-        </NavLink>
-      </SiteHeader>
+      <UnifiedSiteHeader activeHref="/my-donations" />
 
       <main className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6 md:p-8 space-y-6">
         {anySandbox && (

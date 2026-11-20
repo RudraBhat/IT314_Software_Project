@@ -53,7 +53,7 @@ async function forward(request: NextRequest, ctx: { params: Promise<{ path: stri
       headers,
       body: ["GET", "HEAD"].includes(request.method) ? undefined : await request.text(),
       cache: "no-store",
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(60000),
     });
   } catch {
     return error(503, "BACKEND_UNAVAILABLE", "The field responder service is unreachable. Try again shortly.");

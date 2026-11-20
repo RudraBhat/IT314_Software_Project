@@ -135,7 +135,7 @@ Checked in a browser at **375 px width** (the "mobile" preset): `/donate`, `/fie
 - **Touch targets:** primary actions on `/field`, `/my-reports` and `/donate` are at least 44 px tall (`min-h-11` or `min-h-[44px]`); the main field actions use `min-h-12` (48 px).
 - **Layout:** grids stack to one column on narrow screens (`grid-cols-1 sm:grid-cols-2`), headers wrap instead of overflowing, and the timeline connectors only show from `sm` up.
 - **Page scrolling:** the document scrolls normally. Only `/` (map) and the `/dm` workspace use the fixed full-screen `.app-screen` layout, and the `/dm` workspace scrolls inside its own pane. Do not set `overflow:hidden` or `100vh` on `body`.
-- **Shared header:** every page uses `SiteHeader` / `NavLink` from `components/Brand.tsx` (56 px bar, header links at least 44 px tall). The map header collapses secondary links into a menu below `lg`.
+- **Shared header:** every page uses `SiteHeader` / `NavLink` from `components/Brand.tsx` (56 px bar; header links and buttons share one 36 px height, `HEADER_CONTROL`). The map header collapses secondary links into a menu below `lg`.
 - **Containers:** page content is centred with `max-w-4xl` or `max-w-5xl` on wide screens.
 
 ---

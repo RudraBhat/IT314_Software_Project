@@ -149,7 +149,7 @@ def list_incidents(
         radius_km=radius_km,
     )
     where = f.where()
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         total = conn.execute(
             sql.SQL("SELECT COUNT(*) AS n FROM incidents i {}").format(where), f.params
         ).fetchone()["n"]
@@ -181,7 +181,7 @@ def _actions(row: dict, principal: Principal) -> dict:
 
 @router.get("/incidents/{incident_id}")
 def get_incident(incident_id: uuid.UUID, principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         incident = conn.execute(
             sql.SQL(
                 """
@@ -571,7 +571,7 @@ def reopen_incident(
 
 @router.get("/incidents/{incident_id}/duplicates")
 def duplicate_candidates(incident_id: uuid.UUID, principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         base = conn.execute(
             "SELECT incident_id, canonical_incident_id, description FROM incidents WHERE incident_id = %s",
             (incident_id,),

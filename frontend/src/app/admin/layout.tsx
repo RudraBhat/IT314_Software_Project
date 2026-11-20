@@ -5,7 +5,7 @@ import { Brand } from "@/components/Brand";
 import { AdminNav } from "@/components/staff/AdminNav";
 import { ToastProvider } from "@/components/ui";
 import { signOut } from "@/app/login/actions";
-import { currentUser } from "@/lib/session";
+import { currentUser, homeFor } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Administration · ResQ" };
 
@@ -17,14 +17,16 @@ export const metadata: Metadata = { title: "Administration · ResQ" };
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
   if (!user) redirect("/login?next=/admin");
+  // Other roles go to their own home; nothing administrative is rendered for them.
+  if (user.role !== "APP_MGMT") redirect(homeFor(user.role));
 
-  if (user.role !== "APP_MGMT" || !user.mfa_verified) {
+  if (!user.mfa_verified) {
     return (
       <main className="dm-theme flex min-h-screen items-center justify-center px-4">
         <div className="max-w-md rounded-xl border border-border bg-surface p-6 text-center">
           <p className="text-sm font-semibold text-critical">403 · Not authorised</p>
-          <h1 className="mt-2 text-lg font-semibold">This area is for application administrators</h1>
-          <p className="mt-2 text-sm text-muted">Your account cannot manage platform accounts.</p>
+          <h1 className="mt-2 text-lg font-semibold">Verify your authenticator code</h1>
+          <p className="mt-2 text-sm text-muted">This area needs a session signed in with multi-factor authentication.</p>
           <form action={signOut} className="mt-5">
             <button className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-surface-muted">Sign out</button>
           </form>

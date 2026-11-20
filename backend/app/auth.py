@@ -47,11 +47,15 @@ def _unauthenticated() -> ApiError:
 def load_principal(
     user_id: uuid.UUID, token_version: int, mfa: bool, ip: str | None = None
 ) -> Principal | None:
-    with db.transaction() as conn:
+    # One statement in autocommit mode: a single round trip, read fresh on every request (nothing is
+    # cached), so a role change, disable, lock or token_version bump takes effect immediately.
+    with db.read_only() as conn:
         row = conn.execute(
             """
             SELECT u.user_id, u.email, u.full_name, u.status, r.code AS role,
-                   a.token_version, a.mfa_enabled, a.locked_until
+                   a.token_version, a.mfa_enabled, a.locked_until,
+                   ARRAY(SELECT sp.permission::text FROM staff_permissions sp
+                         WHERE sp.user_id = u.user_id) AS permissions
             FROM users u
             JOIN roles r ON r.role_id = u.role_id
             JOIN user_auth a ON a.user_id = u.user_id
@@ -59,22 +63,18 @@ def load_principal(
             """,
             (user_id,),
         ).fetchone()
-        if (
-            row is None
-            or row["status"] != "ACTIVE"
-            or row["token_version"] != token_version
-            or (row["locked_until"] is not None and row["locked_until"] > datetime.now(UTC))
-        ):
-            return None
-        permissions: frozenset[str] = frozenset()
-        if row["role"] == DM_ROLE:
-            perms = conn.execute(
-                "SELECT permission::text AS p FROM staff_permissions WHERE user_id = %s",
-                (user_id,),
-            ).fetchall()
-            permissions = frozenset(p["p"] for p in perms)
-        elif row["role"] == APP_MGMT_ROLE:
-            permissions = frozenset(PERMISSIONS)
+    if (
+        row is None
+        or row["status"] != "ACTIVE"
+        or row["token_version"] != token_version
+        or (row["locked_until"] is not None and row["locked_until"] > datetime.now(UTC))
+    ):
+        return None
+    permissions: frozenset[str] = frozenset()
+    if row["role"] == DM_ROLE:
+        permissions = frozenset(row["permissions"])
+    elif row["role"] == APP_MGMT_ROLE:
+        permissions = frozenset(PERMISSIONS)
     return Principal(
         user_id=row["user_id"],
         email=row["email"],
@@ -244,7 +244,7 @@ def require_field(request: Request, principal: CurrentUser) -> FieldPrincipal:
     if not get_settings().database_url:
         raise database_unavailable()
 
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         row = conn.execute(
             """
             SELECT m.member_id, m.resource_id AS team_resource_id, m.callsign, m.is_leader,

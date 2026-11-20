@@ -15,16 +15,18 @@ interface GoogleSignInButtonProps {
   onSuccess?: () => void;
   onError?: (err: string) => void;
   next?: string;
-  /** Let Google sign in automatically when this browser profile has one signed-in Google account. */
-  autoSelect?: boolean;
 }
 
 // Pages only staff or admins use. A citizen who signs in with Google must not be sent there.
 const STAFF_AREAS = ["/dm", "/admin", "/field"];
 
+// Google sign-in is for citizens only, so with no (or an unsafe) return path they land on their dashboard,
+// the same as an email sign-in, rather than back on the public map.
+const CITIZEN_HOME = "/citizen/dashboard";
+
 function safeDestination(next: string | undefined): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
-  return STAFF_AREAS.some((area) => next === area || next.startsWith(`${area}/`)) ? "/citizen/dashboard" : next;
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\") || next === "/") return CITIZEN_HOME;
+  return STAFF_AREAS.some((area) => next === area || next.startsWith(`${area}/`)) ? CITIZEN_HOME : next;
 }
 
 export function GoogleSignInButton({
@@ -32,7 +34,6 @@ export function GoogleSignInButton({
   onSuccess,
   onError,
   next,
-  autoSelect = false,
 }: GoogleSignInButtonProps) {
   const router = useRouter();
   const googleBtnRef = useRef<HTMLDivElement>(null);
@@ -98,7 +99,9 @@ export function GoogleSignInButton({
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: handleCredentialResponse,
-          auto_select: autoSelect,
+          // Never sign in on its own: on a shared or emergency-use device that would open someone else's
+          // account, and staff who mean to use email would hit Google's citizen-only refusal.
+          auto_select: false,
           cancel_on_tap_outside: false,
         });
 
@@ -115,13 +118,9 @@ export function GoogleSignInButton({
         setScriptLoaded(true);
         if (mode === "login" && !promptedRef.current) {
           promptedRef.current = true;
-          if (autoSelect) {
-            // One Tap: signs in on its own when this browser profile has a single Google session.
-            window.google.accounts.id.prompt();
-          } else {
-            // An explicit sign-out: forget the automatic choice so Google asks again.
-            window.google.accounts.id.disableAutoSelect?.();
-          }
+          // No One Tap prompt: Google sign-in starts only when the person clicks the button. Also clear
+          // any automatic choice Google remembered from before this change.
+          window.google.accounts.id.disableAutoSelect?.();
         }
         return true;
       } catch (err) {
@@ -160,7 +159,7 @@ export function GoogleSignInButton({
       cancelled = true;
       if (checkInterval) clearInterval(checkInterval);
     };
-  }, [isConfigured, clientId, mode, autoSelect, handleCredentialResponse]);
+  }, [isConfigured, clientId, mode, handleCredentialResponse]);
 
   // Modal behaviour for the staff-refusal dialog: focus it, and let Escape close it.
   useEffect(() => {

@@ -69,7 +69,7 @@ async function forward(request: NextRequest, ctx: RouteContext) {
       headers,
       body,
       cache: "no-store",
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(60000),
     });
     // Bytes, not text: photo attachments are binary and must pass through unchanged.
     const responseHeaders: Record<string, string> = {

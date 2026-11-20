@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { signOut } from "@/app/login/actions";
-import { currentUser } from "@/lib/session";
+import { currentUser, homeFor } from "@/lib/session";
 
 import { DmShell } from "./shell";
 
@@ -11,19 +11,16 @@ export const metadata: Metadata = { title: "Operations · ResQ" };
 export default async function DmLayout({ children }: LayoutProps<"/dm">) {
   const user = await currentUser();
   if (!user) redirect("/login?next=/dm");
+  // Other roles go to their own home (administrators to /admin); nothing operational is rendered for them.
+  if (user.role !== "DISASTER_MGMT") redirect(homeFor(user.role));
 
-  if (user.role !== "DISASTER_MGMT" || !user.mfa_verified) {
+  if (!user.mfa_verified) {
     return (
       <main className="dm-theme flex min-h-screen items-center justify-center px-4">
         <div className="max-w-md rounded-xl border border-border bg-surface p-6 text-center">
           <p className="text-sm font-semibold text-critical">403 · Not authorised</p>
-          <h1 className="mt-2 text-lg font-semibold">This workspace is for Disaster Management staff</h1>
-          <p className="mt-2 text-sm text-muted">Your account does not have access to operational tools.</p>
-          {user.role === "APP_MGMT" && (
-            <a href="/admin" className="mt-4 inline-block text-sm font-semibold text-sky-400 hover:underline">
-              Go to account administration →
-            </a>
-          )}
+          <h1 className="mt-2 text-lg font-semibold">Verify your authenticator code</h1>
+          <p className="mt-2 text-sm text-muted">This workspace needs a session signed in with multi-factor authentication.</p>
           <form action={signOut} className="mt-5">
             <button className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-surface-muted">Sign out</button>
           </form>

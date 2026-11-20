@@ -255,7 +255,7 @@ The web client lives in `frontend/` (Next.js App Router, React 19, TypeScript, T
 **Layout rules**
 - The document scrolls normally. Do not set `overflow: hidden` or `100vh` on `body`.
 - Only full-screen app views (the public map `/` and the `/dm` workspace) use the fixed `.app-screen` class, and `/dm` scrolls inside its own pane.
-- Header links and primary controls must be at least 44 px tall, and pages must not scroll horizontally at 375 px wide.
+- Header links and buttons are 36 px tall (`HEADER_CONTROL` in `Brand.tsx`) inside the 56 px bar; other primary controls must be at least 44 px tall, and pages must not scroll horizontally at 375 px wide.
 
 **Checks** (run from `frontend/`)
 

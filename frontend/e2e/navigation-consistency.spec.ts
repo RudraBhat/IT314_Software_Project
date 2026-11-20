@@ -13,6 +13,7 @@ test.describe("Global Navigation Consistency (Issue #172)", () => {
     { path: "/how-to", name: "How to use" },
     { path: "/safety", name: "Safety" },
     { path: "/donate", name: "Donate" },
+    { path: "/my-donations", name: "My Donations" },
   ];
 
   for (const route of routes) {

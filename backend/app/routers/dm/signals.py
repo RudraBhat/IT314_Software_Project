@@ -39,7 +39,7 @@ def list_signals(
     status: Literal["PENDING", "PROMOTED", "DISMISSED"] | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         return conn.execute(
             """
             SELECT signal_id, source, content_text, language, ai_label, ai_confidence::float AS ai_confidence,

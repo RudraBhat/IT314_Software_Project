@@ -30,7 +30,7 @@ _MODERATION_LABEL = {
 
 @router.get("/moderation/queue")
 def moderation_queue(principal: Moderator):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         items = conn.execute(
             """
             SELECT e.evidence_id, e.incident_id, i.incident_ref, lower(i.scenario::text) AS scenario,

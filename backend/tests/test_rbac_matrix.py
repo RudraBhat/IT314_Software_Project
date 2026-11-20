@@ -116,3 +116,32 @@ def test_only_admin_or_supervisor_passes_the_invitation_guard(client, make):
     assert _call(client, "POST", path, make.staff("SUPERVISOR")["headers"]).status_code == 422
     for headers in (make.citizen()["headers"], make.field_team_user()["headers"], make.staff("DISPATCH")["headers"]):
         assert _call(client, "POST", path, headers).status_code == 403
+
+
+def _invitation_routes():
+    from main import app
+
+    return [
+        (method.upper(), path)
+        for path, methods in app.openapi()["paths"].items()
+        if path.startswith("/api/v1/auth/invitations")
+        for method in methods
+        if method.upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}
+    ]
+
+
+INVITATION_ROUTES = _invitation_routes()
+
+
+def test_invitation_routes_are_discovered():
+    assert len(INVITATION_ROUTES) >= 5
+
+
+@pytest.mark.parametrize("method,path", INVITATION_ROUTES)
+def test_invitation_routes_need_a_token_and_the_inviter_role(client, make, method, path):
+    """/api/v1/auth is exempt from the matrix above because sign-in and setup are public, but the
+    account-management routes under /auth/invitations are not: no token is a 401, and only an
+    administrator or a supervisor passes (everyone else is a 403)."""
+    assert _call(client, method, path).status_code == 401, f"{method} {path} is reachable without a token"
+    for headers in (make.citizen()["headers"], make.field_team_user()["headers"], make.staff("DISPATCH")["headers"]):
+        assert _call(client, method, path, headers).status_code == 403, f"{method} {path} allowed a non-inviter"

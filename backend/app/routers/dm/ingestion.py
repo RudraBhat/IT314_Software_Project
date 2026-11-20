@@ -29,7 +29,7 @@ def ingestion_health(user: DMUser) -> dict[str, Any]:
     # Only sources that are registered today: runs of a retired source stay in the history table
     # but must not linger on the panel as a stale "last run".
     sources = [adapter.name for adapter in registered_adapters()]
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         rows = conn.execute(
             """
             WITH last_run AS (

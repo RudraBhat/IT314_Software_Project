@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { SiteHeader } from "@/components/Brand";
 import { signOut } from "@/app/login/actions";
-import { currentUser } from "@/lib/session";
+import { currentUser, homeFor } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Field Operations · ResQ" };
 
@@ -12,7 +12,9 @@ export default async function FieldLayout({ children }: { children: ReactNode })
   const user = await currentUser();
   if (!user) redirect("/login?next=/field");
 
-  if (user.role !== "FIELD_TEAM" || !user.mfa_verified) {
+  // Other roles go to their own home; nothing field-specific is rendered for them.
+  if (user.role !== "FIELD_TEAM") redirect(homeFor(user.role));
+  if (!user.mfa_verified) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="max-w-md rounded-xl border border-border bg-surface p-6 text-center">

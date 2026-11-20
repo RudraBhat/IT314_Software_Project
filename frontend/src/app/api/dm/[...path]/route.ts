@@ -61,7 +61,7 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/dm/[...path
       headers,
       body,
       cache: "no-store",
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(60000),
     });
   } catch {
     return error(503, "BACKEND_UNAVAILABLE", "The operations service is unreachable. Try again shortly.");

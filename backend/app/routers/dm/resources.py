@@ -55,7 +55,7 @@ def list_resources(
     if q:
         f.add("r.name ILIKE %(q)s", q=f"%{q.strip()}%")
     where = f.where()
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         total = conn.execute(
             sql.SQL("SELECT COUNT(*) AS n FROM resources r {}").format(where), f.params
         ).fetchone()["n"]
@@ -228,7 +228,7 @@ def update_resource(resource_id: uuid.UUID, body: ResourceUpdate, principal: DMU
 
 @router.get("/resources/{resource_id}/assignments")
 def resource_assignments(resource_id: uuid.UUID, principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         if conn.execute("SELECT 1 FROM resources WHERE resource_id = %s", (resource_id,)).fetchone() is None:
             raise not_found("Resource")
         items = conn.execute(
@@ -287,7 +287,7 @@ def release_reservation(
 @router.get("/agency-contacts")
 def agency_contacts(principal: DMUser):
     """External agencies are message recipients only; they hold no accounts (SRS s.2)."""
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         items = conn.execute(
             """
             SELECT agency_id, name, agency_type, contact_email, contact_phone, is_active, updated_at

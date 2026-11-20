@@ -215,7 +215,7 @@ def list_dispatches(
 ):
     f = dispatch_filters(status=status, overdue=overdue, active=active, incident_id=incident_id)
     where = f.where()
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         total = conn.execute(
             sql.SQL("SELECT COUNT(*) AS n FROM dispatch_orders d {}").format(where), f.params
         ).fetchone()["n"]
@@ -231,7 +231,7 @@ def list_dispatches(
 
 @router.get("/dispatches/{dispatch_id}")
 def get_dispatch(dispatch_id: uuid.UUID, principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         dispatch = _fetch(conn, dispatch_id)
         dispatch["assignments"] = conn.execute(
             """
@@ -463,7 +463,7 @@ def list_agency_messages(
     if status:
         f.add("m.status = %(status)s::msg_status", status=status)
     where = f.where()
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         total = conn.execute(
             sql.SQL("SELECT COUNT(*) AS n FROM agency_messages m {}").format(where), f.params
         ).fetchone()["n"]
@@ -478,7 +478,7 @@ def list_agency_messages(
 
 @router.get("/agency-messages/{message_id}")
 def get_agency_message(message_id: uuid.UUID, principal: DMUser):
-    with db.transaction() as conn:
+    with db.read_only() as conn:
         row = conn.execute(
             sql.SQL("{} WHERE m.message_id = %s").format(sql.SQL(_MESSAGE_SELECT)), (message_id,)
         ).fetchone()

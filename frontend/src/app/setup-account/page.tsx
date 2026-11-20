@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { SiteHeader } from "@/components/Brand";
 import { AuthenticatorQr } from "@/components/auth/AuthenticatorQr";
+import { homeFor } from "@/lib/roles";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -126,8 +127,9 @@ function SetupAccountContent() {
     if (res.success && res.user) {
       setStep("complete");
       setSuccessMsg("Multi-factor authentication verified and account fully activated!");
+      // The session is already set: open the new account's own workspace, not the public map.
       setTimeout(() => {
-        router.push("/");
+        router.push(homeFor(res.user?.role));
       }, 1500);
     } else {
       setErrorMsg(res.error || "Invalid 6-digit code. Check your authenticator app and try again.");

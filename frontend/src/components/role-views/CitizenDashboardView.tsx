@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { SiteHeader } from "../Brand";
+import { UnifiedSiteHeader } from "../navigation/UnifiedSiteHeader";
 import { DisasterCategory } from "../../types/resq";
 import { InformationRequestReply } from "@/components/citizen/InformationRequestReply";
 import * as CitizenApi from "../../services/citizenApi";
@@ -86,11 +86,9 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
   currentUser: propUser,
   onOpenCitizenReport,
   onViewPublicMap,
-  onSignOut,
   onClose,
 }) => {
   const currentUser = useMemo(() => propUser ?? { id: "GUEST", name: "Citizen" }, [propUser]);
-  const logout = onSignOut || (() => {});
 
   // Language state (persisted)
   const [lang, setLang] = useState<LanguageCode>("en");
@@ -532,7 +530,11 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
       `}</style>
 
       {/* ─── Blue Header (ResQ AI Bhuvan-inspired Identity) ─── */}
-      <SiteHeader subtitle="Gujarat Emergency Portal" brandHref="/" maxWidth="max-w-7xl">
+      {/* Shared navigation (issue #172); the dashboard adds its own language, SOS and notification controls. */}
+      <UnifiedSiteHeader
+        activeHref="/citizen/dashboard"
+        session={{ authenticated: true, citizen: true, role: "NORMAL_USER", name: currentUser.name }}
+      >
         <div className="flex items-center gap-2.5">
           {/* Trilingual Language Selector */}
           <div className="flex items-center rounded-full bg-sky-950/70 p-0.5 border border-sky-600/50 text-[11px] font-bold">
@@ -572,14 +574,6 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
               {t.backendUnreachable}
             </span>
           )}
-
-          {/* Citizen Profile Pill */}
-          <div className="flex items-center gap-2 bg-white/10 border border-white/15 px-2.5 sm:px-3 py-1 rounded-full text-xs">
-            <span className="w-5 h-5 rounded-full bg-sky-400 text-slate-950 flex items-center justify-center text-[10.5px] font-bold">
-              {currentUser.name.charAt(0)}
-            </span>
-            <span className="font-medium text-white max-w-[90px] sm:max-w-[120px] truncate">{currentUser.name}</span>
-          </div>
 
           {/* Optional View Public Map Button */}
           {onViewPublicMap && (
@@ -685,15 +679,8 @@ export const CitizenDashboardView: React.FC<CitizenDashboardViewProps> = ({
             )}
           </div>
 
-          {/* Sign Out Button */}
-          <button
-            onClick={onSignOut || logout}
-            className="bg-red-700/80 hover:bg-red-600 text-white text-xs px-3 py-1 rounded-full font-medium transition cursor-pointer shadow-xs"
-          >
-            {t.signOut}
-          </button>
         </div>
-      </SiteHeader>
+      </UnifiedSiteHeader>
 
       {/* ─── Active Critical Advisory Top Banner ─── */}
       {publicAlerts.length > 0 && (

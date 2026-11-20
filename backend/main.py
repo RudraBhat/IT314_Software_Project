@@ -123,64 +123,72 @@ async def ingestion_background_worker():
 # ═══════════════════════════════════════════════════════════════════
 # Application Lifespan (startup / shutdown)
 # ═══════════════════════════════════════════════════════════════════
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Payment configuration is checked in every environment: an unsupported PAYMENT_GATEWAY
-    # must stop startup, not turn the first donation into a 500.
+def _validate_runtime_configuration() -> None:
     problems = (
         validate_for_environment(get_settings())
         + payment_config_problems(get_settings())
     )
     if problems:
         raise ConfigError("; ".join(problems))
-    # Startup: ensure database schema migrations are applied
-    if get_settings().database_url:
-        try:
-            from app.migrate import apply_migrations
-            await asyncio.to_thread(apply_migrations)
-        except Exception:
-            logger.exception("Database migration failed on startup")
-            if get_settings().app_env != "development":
-                raise  # never serve traffic on a half-migrated schema
 
-        # Startup: load official PostGIS spatial boundaries into in-memory RAM cache (Option 2)
-        try:
-            from app.geo import load_boundaries_from_db
-            loaded = await asyncio.to_thread(load_boundaries_from_db)
-            if loaded:
-                logger.info("Loaded Gujarat boundary and district cache from PostGIS into RAM.")
-            else:
-                logger.info("PostGIS boundary table not yet populated; active on static fallback.")
-        except Exception:  # noqa: BLE001
-            logger.warning("Failed to load boundary cache from PostGIS; using static fallback.")
+
+async def _startup_database_init() -> None:
+    settings = get_settings()
+    if not settings.database_url:
+        return
+
+    try:
+        from app.migrate import apply_migrations
+        await asyncio.to_thread(apply_migrations)
+    except Exception:
+        logger.exception("Database migration failed on startup")
+        if settings.app_env != "development":
+            raise  # never serve traffic on a half-migrated schema
+
+    # Startup: load official PostGIS spatial boundaries into in-memory RAM cache (Option 2)
+    try:
+        from app.geo import load_boundaries_from_db
+        loaded = await asyncio.to_thread(load_boundaries_from_db)
+        if loaded:
+            logger.info("Loaded Gujarat boundary and district cache from PostGIS into RAM.")
+        else:
+            logger.info("PostGIS boundary table not yet populated; active on static fallback.")
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to load boundary cache from PostGIS; using static fallback.")
+
+
+async def _stop_background_task(task: asyncio.Task | None) -> None:
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _validate_runtime_configuration()
+    await _startup_database_init()
 
     # Startup: spawn worker tasks in background
     worker_task = asyncio.create_task(ai_workers_background_consumer())
     spatial_task = asyncio.create_task(spatial_boundary_monthly_worker())
-    ingestion_task = None
-    if get_settings().ingestion_worker_enabled:
-        ingestion_task = asyncio.create_task(ingestion_background_worker())
-    else:
+    ingestion_task = (
+        asyncio.create_task(ingestion_background_worker())
+        if get_settings().ingestion_worker_enabled
+        else None
+    )
+    if ingestion_task is None:
         logger.info("In-process ingestion scheduler is disabled; use the configured external trigger")
+
     yield
+
     # Shutdown: cancel worker tasks
-    worker_task.cancel()
-    spatial_task.cancel()
-    if ingestion_task is not None:
-        ingestion_task.cancel()
-    try:
-        await worker_task
-    except asyncio.CancelledError:
-        pass
-    try:
-        await spatial_task
-    except asyncio.CancelledError:
-        pass
-    if ingestion_task is not None:
-        try:
-            await ingestion_task
-        except asyncio.CancelledError:
-            pass
+    await _stop_background_task(worker_task)
+    await _stop_background_task(spatial_task)
+    await _stop_background_task(ingestion_task)
     db.close_pool()
 
 
@@ -241,7 +249,7 @@ def api_health():
     database = "not_configured"
     if get_settings().database_url:
         try:
-            with db.transaction() as conn:
+            with db.read_only() as conn:
                 conn.execute("SELECT 1")
             database = "ok"
         except Exception:

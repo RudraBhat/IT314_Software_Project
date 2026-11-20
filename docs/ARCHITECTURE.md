@@ -179,7 +179,7 @@ IT314_Software_Project/
 │   │   │   ├── role-views/     # Dedicated role views (Admin, Citizen, Responder)
 │   │   │   ├── ui.tsx          # Base UI design system primitives
 │   │   │   └── badges.tsx      # Severity, priority, and status indicators
-│   │   ├── context/            # React context providers (ResQContext.tsx)
+│   │   ├── components/auth/    # sign-in widgets and the shared SessionProvider
 │   │   ├── lib/                # Client utilities (api.ts, geo.ts, session.ts, format.ts)
 │   │   └── services/           # Frontend API service adapters (authApi.ts, citizenApi.ts)
 │   └── Dockerfile              # Next.js container build specification
@@ -211,7 +211,9 @@ IT314_Software_Project/
 
 - **Database & Concurrency Management ([`backend/app/db.py`](file:///c:/Users/shahs/OneDrive/Desktop/My%20Folder/DAIICT/Sem5/Software/IT314_Software_Project/backend/app/db.py)):**
   - Manages PostgreSQL connection pools using `psycopg_pool.ConnectionPool`.
-  - Exposes atomic context-managed transactions (`with db.transaction() as conn:`).
+  - Exposes atomic context-managed transactions (`with db.transaction() as conn:`) and `db.read_only()`, an autocommit connection for read-only handlers (a single query is one network round trip instead of three; each statement is its own transaction, so never use it for writes or locking reads).
+  - Pings a pooled connection before reuse only when it sat idle for 30 seconds (Neon closes idle connections); a connection used a moment ago is not pinged, because every ping is a full round trip.
+  - Round trips, not CPU, dominate request time against a remote database (measured about 0.5 s each from a laptop to Neon). The authenticated principal (user, role, status, lock, `token_version` and staff permissions) is loaded in one statement on every request and is deliberately never cached, so a role change, disable, lock or logout takes effect on the next request. Independent statements are pipelined (`conn.pipeline()`) in the dashboard, analytics and sign-in. Redis is not used: after removing the extra round trips every hot path is 1 to 3 round trips, and an external cache would add a network hop plus an invalidation problem for authorisation data.
   - Handles row-level resource allocation locks (`SELECT ... FOR UPDATE`) and PostgreSQL advisory session locks (`pg_try_advisory_xact_lock`).
 
 - **Geospatial & Boundary Engine ([`backend/app/geo.py`](file:///c:/Users/shahs/OneDrive/Desktop/My%20Folder/DAIICT/Sem5/Software/IT314_Software_Project/backend/app/geo.py)):**
@@ -228,10 +230,12 @@ IT314_Software_Project/
 ### 4.2 Frontend Architecture
 
 - **Next.js App Router Structure ([`frontend/src/app/`](file:///c:/Users/shahs/OneDrive/Desktop/My%20Folder/DAIICT/Sem5/Software/IT314_Software_Project/frontend/src/app/)):**
-  - Unified codebase serving Citizen, Dispatcher, and Responder views through role-guarded routes and views.
+  - Unified codebase serving Citizen, Dispatcher, Administrator, and Responder views through role-guarded routes and views.
+  - Each role has its own area: Disaster Management (`DISASTER_MGMT`) works in `/dm`, with navigation filtered by permission; Application Management (`APP_MGMT`) uses the administration console at `/admin` (account directory, invitations, audit log and system status); field responders use `/field`; citizens use `/citizen/dashboard`. A signed-in visitor of another role is redirected to their own area (`homeFor(role)` in `lib/session.ts`), and `/dashboard` sends each role there too. Administrators still have no operational access: the backend answers 403 on every `/api/v1/dm`, `/api/v1/field`, `/api/v1/me` and `/api/v1/incidents` route (`test_admin_has_no_operational_access`).
+  - Route protection has three layers. `proxy.ts` sends visitors with no session cookie to `/login` before anything is rendered; each workspace layout (`/dm`, `/field`) asks the backend who the user is (`currentUser()`), redirects to `/login` when nobody is signed in and to the user's own home (`homeFor(role)`) when the role is wrong; the backend re-checks role, MFA and permission on every API call. The BFF proxies (`/api/dm`, `/api/field`, `/api/invitations`, `/api/citizen`) answer 401 JSON without a session and forward nothing else. Static JavaScript bundles of staff pages are public like any Next.js asset but contain no data; all data comes from guarded API calls.
   - Uses server-side API proxy routes (`/api/dm/[...path]` and `/api/citizen/[...path]`) to securely forward requests to the FastAPI backend while managing session cookies.
-- **State & Context Management ([`frontend/src/context/ResQContext.tsx`](file:///c:/Users/shahs/OneDrive/Desktop/My%20Folder/DAIICT/Sem5/Software/IT314_Software_Project/frontend/src/context/ResQContext.tsx)):**
-  - Holds active authenticated user identity, role, simulated mode state, active alert notifications, and local UI caches.
+- **Session state ([`frontend/src/components/auth/SessionProvider.tsx`](../frontend/src/components/auth/SessionProvider.tsx)):**
+  - The root layout mounts one `SessionProvider`. `useSession()` gives any component the signed-in state (`authenticated`, `role`, `name`) from `GET /api/session` without its own request; the provider stays mounted across client navigation, re-checks quietly after each route change and shows a placeholder only before the first answer, so the header does not flicker between pages.
 
 ### 4.3 AI Workers & Models Architecture
 

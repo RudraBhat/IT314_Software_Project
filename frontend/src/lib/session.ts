@@ -42,6 +42,8 @@ export function setSessionCookies(jar: CookieWriter, data: SessionTokens): void 
   }
 }
 
+export { homeFor } from "./roles";
+
 export type CurrentUser = {
   user_id: string;
   email: string;

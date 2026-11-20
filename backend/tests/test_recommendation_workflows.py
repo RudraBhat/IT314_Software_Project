@@ -360,7 +360,7 @@ def test_list_team_requests_open(dispatcher_principal: Principal):
     def mock_tx():
         yield mock_conn
 
-    with patch("app.db.transaction", mock_tx):
+    with patch("app.db.read_only", mock_tx):
         items = list_team_requests(principal=dispatcher_principal, status="OPEN")
 
     assert len(items) == 1

@@ -5,15 +5,12 @@ import Link from "next/link";
 import { fetchPublicIncidents, fetchPublicAlerts, PublicIncident, PublicAlert } from "../services/citizenApi";
 import { LiveOperationsLayer } from "../components/dm/LiveOperationsLayer";
 import { UnifiedSiteHeader } from "../components/navigation/UnifiedSiteHeader";
+import { useSession } from "../components/auth/SessionProvider";
 import { GUJARAT_CENTER, GUJARAT_DEFAULT_ZOOM, GUJARAT_DISTRICTS, INDIA_BOUNDS } from "../lib/geo";
 
-interface SessionInfo {
-  authenticated: boolean;
-  dm: boolean;
-  citizen: boolean;
-  role: string | null;
-  name: string | null;
-}
+// Last public data this browser tab loaded. Coming back to the map shows it on the first frame while a
+// fresh copy loads in the background (stale-while-revalidate). Public data only; nothing personal.
+let publicDataCache: { incidents: PublicIncident[]; alerts: PublicAlert[] } | null = null;
 
 // Two base maps, both OpenStreetMap data. The map keeps its position and zoom when you switch between them.
 const TILE_LAYERS = {
@@ -49,10 +46,12 @@ export default function PublicPortalPage() {
   // Last map position, so switching the base map keeps where you are zoomed in.
   const viewRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
 
-  const [incidents, setIncidents] = useState<PublicIncident[]>([]);
-  const [alerts, setAlerts] = useState<PublicAlert[]>([]);
+  const [incidents, setIncidents] = useState<PublicIncident[]>(() => publicDataCache?.incidents ?? []);
+  const [alerts, setAlerts] = useState<PublicAlert[]>(() => publicDataCache?.alerts ?? []);
+  // True only until the first answer when nothing is cached; later refreshes stay silent.
+  const [loadingIncidents, setLoadingIncidents] = useState(() => publicDataCache === null);
   const [selectedIncident, setSelectedIncident] = useState<PublicIncident | null>(null);
-  const [session, setSession] = useState<SessionInfo | null>(null);
+  const { session } = useSession();
   const [error, setError] = useState<string | null>(null);
   const [coordsText, setCoordsText] = useState("Gujarat, India");
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
@@ -63,20 +62,7 @@ export default function PublicPortalPage() {
   const [activeBaseLayer, setActiveBaseLayer] = useState<"streets" | "humanitarian">("streets");
   const visibleIncidents = districtFilter ? incidents.filter((i) => i.district === districtFilter) : incidents;
 
-  // 1. Fetch user session
-  const checkSession = useCallback(async () => {
-    try {
-      const res = await fetch("/api/session", { cache: "no-store" });
-      if (res.ok) {
-        const data: SessionInfo = await res.json();
-        setSession(data);
-      }
-    } catch {
-      setSession({ authenticated: false, dm: false, citizen: false, role: null, name: null });
-    }
-  }, []);
-
-  // 2. Fetch public data
+  // Public map data. It does not wait for the session check: the two load in parallel.
   const loadData = useCallback(async () => {
     try {
       const [incRes, alertRes] = await Promise.all([
@@ -86,6 +72,7 @@ export default function PublicPortalPage() {
 
       if (incRes.data) {
         setIncidents(incRes.data);
+        setError(null);
       } else if (incRes.error) {
         setError(incRes.error);
       }
@@ -93,26 +80,22 @@ export default function PublicPortalPage() {
       if (alertRes.data) {
         setAlerts(alertRes.data);
       }
+      if (incRes.data) {
+        publicDataCache = { incidents: incRes.data, alerts: alertRes.data ?? publicDataCache?.alerts ?? [] };
+      }
     } catch {
       setError("Failed to load public disaster data.");
+    } finally {
+      setLoadingIncidents(false);
     }
   }, []);
 
   useEffect(() => {
-    let isCancelled = false;
-    const init = async () => {
-      await checkSession();
-      if (!isCancelled) {
-        await loadData();
-      }
-    };
-    init();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadData() only sets state after the requests resolve
+    void loadData();
     const interval = setInterval(loadData, 30000);
-    return () => {
-      isCancelled = true;
-      clearInterval(interval);
-    };
-  }, [checkSession, loadData]);
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   // 3. Initialize Leaflet Map
   useEffect(() => {
@@ -365,7 +348,7 @@ export default function PublicPortalPage() {
   return (
     <div className="app-screen relative bg-slate-900 font-sans flex flex-col">
       {/* Top Header */}
-      <UnifiedSiteHeader activeHref="/" session={session}>
+      <UnifiedSiteHeader activeHref="/">
         <button
           onClick={() => setShowAlertsDrawer(!showAlertsDrawer)}
           className="relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-700/60 bg-sky-950/80 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-900"
@@ -397,6 +380,15 @@ export default function PublicPortalPage() {
               <span className="font-semibold text-slate-200">{visibleIncidents.length}</span> verified public incidents
               <span className="hidden sm:inline"> displayed · Auto-refreshes every 30s</span>
             </div>
+            {loadingIncidents && (
+              <div
+                role="status"
+                className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-sky-700/60 bg-sky-950/80 px-2 py-0.5 text-[10px] font-semibold text-sky-200 sm:text-[11px]"
+              >
+                <span className="size-2.5 animate-spin rounded-full border-2 border-sky-300 border-t-transparent" aria-hidden />
+                Loading active incidents…
+              </div>
+            )}
             {error && (
               <div className="mt-1.5 text-[10px] sm:text-[11px] text-red-300 bg-red-950/80 px-2 py-1 rounded border border-red-800">
                 ⚠️ {error}
