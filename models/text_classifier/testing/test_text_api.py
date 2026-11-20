@@ -177,8 +177,8 @@ def main() -> int:
                         help="Input CSV path (default: ../data/tweets_multilingual.csv)")
     parser.add_argument("--api-url", default=DEFAULT_API_URL,
                         help=f"Render service base URL (default: {DEFAULT_API_URL})")
-    parser.add_argument("--out-dir", default="results",
-                        help="Directory for output reports (default: results)")
+    parser.add_argument("--out-dir", default=str(Path(__file__).resolve().parents[3] / "docs" / "ai" / "reports" / "text_classifier"),
+                        help="Directory for output reports (default: docs/ai/reports/text_classifier)")
     parser.add_argument("--health-wait-seconds", type=int, default=300,
                         help="Maximum time to wait for a sleeping Render service/model.")
     parser.add_argument("--request-timeout", type=int, default=120,

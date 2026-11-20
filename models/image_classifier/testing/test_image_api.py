@@ -50,7 +50,11 @@ def parse_args():
         help="Root folder containing the extracted image directories "
              "(the folder that directly contains natural_disaster, maria, etc.)",
     )
-    parser.add_argument("--output", default="results/deployment_test_results.csv")
+    parser.add_argument(
+        "--output",
+        default=str(Path(__file__).resolve().parents[3] / "docs" / "ai" / "reports" / "image_classifier" / "deployment_test_results.csv"),
+        help="Results CSV (default: docs/ai/reports/image_classifier/deployment_test_results.csv)",
+    )
     parser.add_argument("--limit", type=int, default=0,
                         help="Maximum number of rows to test; 0 means all")
     parser.add_argument("--timeout", type=int, default=180)
