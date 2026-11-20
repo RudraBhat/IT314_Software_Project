@@ -6,7 +6,7 @@ A model that classifies social-media posts as disasters. It has two parts:
 * an **image classifier** for disaster photos.
 
 Both are served as FastAPI apps on Render, with model files stored on Hugging Face.
-This README covers the whole path: data, training, export, deployment and testing.
+This document covers the whole path: data, training, export, deployment and testing.
 
 ## Live services
 
@@ -24,19 +24,27 @@ while while the service wakes up and downloads its model. Docs are at `/docs`, h
 ## Repository layout
 
 ```
-ai-workers/model/
+models/
 |
 ├── text_classifier/
 │   ├── data/                     # synthetic training CSV + test CSV
 │   ├── train/                    # IndicBERT fine-tuning + ONNX INT8 export
 │   ├── MuRIL/                    # larger, more accurate model (not deployed)
-│   ├── deployment/               # FastAPI app for Render
-│   └── testing/                  # live-API test script + saved results
+│   ├── deployment/               # FastAPI app for Render (.python-version 3.11.11)
+│   └── testing/                  # live-API test script
 └── image_classifier/
     ├── train/                    # training + evaluation scripts
-    ├── deployment/               # FastAPI app for Render
-    └── testing/                  # API test script + saved results
+    ├── deployment/               # FastAPI app for Render (.python-version 3.11.11)
+    └── testing/                  # API test script
+
+docs/ai/reports/
+├── text_classifier/              # saved API and MuRIL test results
+└── image_classifier/             # saved API test results
 ```
+
+Paths below are relative to `models/` unless they start with `docs/`. `models/` also holds the
+English text model behind the triage service's `/analyze-text` ([text-model.md](text-model.md)); the scope of every
+folder is in [folder-scope.md](folder-scope.md).
 
 ---
 
@@ -105,7 +113,7 @@ python train_indicbert.py --train-csv ../data/disaster_multilingual_train_v2_150
 Extra training notes:
 
 * Run `python train_indicbert.py --help` for all options.
-* If Hugging Face asks for access to the base model, set `HF_TOKEN` to a read token first.
+* The base model is public, so no Hugging Face token is needed.
 * Outputs in `outputs/`: the best model folder (`indicbert_disaster_classifier_v2_best/`) and its zip,
   training history, validation and held-out confusion matrices, per-language metrics and prediction CSVs.
 * The `data/` columns used: training `text`, `label`, `language`, `scenario_group`; test `text`, `label`, `language`.
@@ -146,7 +154,7 @@ Caveats on this comparison:
 
 MuRIL details: max length 192, batch 8 with gradient accumulation, lr 2e-5, up to 6 epochs, early stopping,
 seed 42. Its weak spots: 39 of 112 Earthquake messages were predicted `Non-Disaster`, and 25 of 144 Cyclone
-messages were predicted `Earthquake`. Full report: `text_classifier/MuRIL/muril_local_test_report.txt`.
+messages were predicted `Earthquake`. Full report: [`docs/ai/reports/text_classifier/muril_local_test_report.txt`](reports/text_classifier/muril_local_test_report.txt).
 
 ## 1.4 Export for deployment
 
@@ -154,17 +162,20 @@ The API needs ONNX INT8 files, not the PyTorch checkpoint:
 
 ```bash
 python export_onnx_int8.py --model-dir outputs/indicbert_disaster_classifier_v2_best \
-    --export-dir outputs/hf_export          # add --upload-repo USER/REPO with HF_TOKEN to upload
+    --export-dir outputs/hf_export          # add --upload-repo USER/REPO to upload
 ```
 
 This writes `model_int8.onnx`, `spiece.model`, `tokenizer_config.json`, `special_tokens_map.json`,
-`label_mapping.json` and `config.json`. Upload them to a Hugging Face model repository.
+`label_mapping.json` and `config.json`. Upload them to a public Hugging Face model repository. Uploading is the only
+step that needs a token: set a write token in `HF_TOKEN` on your own machine for that one command, never in a
+deployed service.
 
 ## 1.5 Deployment
 
 * Push `text_classifier/deployment/` to GitHub and create a Render web service from it. Model weights are **not** committed to Git.
 * Set `PYTHON_VERSION=3.11.11` (also pinned in `.python-version`), `HF_MODEL_REPO=Dhruvil-14/indicbert-disaster-api`,
-  `HF_REVISION=main`, `MAX_LENGTH=160`, and `HF_TOKEN` only if the repo is private.
+  `HF_REVISION=main`, `MAX_LENGTH=160` (must match training) and `MODEL_DIR=/tmp/indicbert_model`.
+  The model repository is public, so no `HF_TOKEN` is needed.
 * Build: `pip install --no-cache-dir -r requirements.txt`. Start: `uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1`. Health check: `/health`.
 * ONNX Runtime CPU inference, one worker, one intra-op thread, serialised requests, to stay inside 512 MB.
   The last health check showed a peak RSS of about 387 MB. Re-check after changing the model.
@@ -174,7 +185,6 @@ This writes `model_int8.onnx`, `spiece.model`, `tokenizer_config.json`, `special
   `PYTHON_VERSION` variable (the variable wins); do not rely on `runtime.txt`.
 * The Hugging Face repo must contain `model_int8.onnx`, `spiece.model`, `tokenizer_config.json`,
   `special_tokens_map.json`, `label_mapping.json`, `config.json`.
-* Extra env var: `MODEL_DIR=/tmp/indicbert_model`. Keep `HF_TOKEN` secret and never commit it.
 * Model files download into Render's ephemeral `/tmp` at startup, so restarts or spin-downs re-download them.
   This setup reduces overhead but does not guarantee the model fits a 512 MB instance.
 * API routes: `GET /`, `GET /health`, `POST /predict`, `GET /docs`. Example body: `{"text": "તમારો સંદેશ અહીં લખો"}`.
@@ -187,10 +197,10 @@ pip install -r requirements.txt
 python test_text_api.py --api-url https://indicbert-disaster-api.onrender.com   # --limit 20 for a quick try
 ```
 
-Defaults: `--csv ../data/tweets_multilingual.csv`, output to `results/`. The script waits for a sleeping
+Defaults: `--csv ../data/tweets_multilingual.csv`, output to `docs/ai/reports/text_classifier/`. The script waits for a sleeping
 Render service to wake up and sends requests one at a time. Saved files: `api_test_report.txt`,
 `metrics_summary.json`, `metrics_by_language.csv`, `metrics_by_augmentation.csv` and
-`tweets_multilingual_api_predictions.csv`. All 512 requests succeeded. Results (accuracy 0.658, macro-F1 0.659) are in `text_classifier/testing/results/`.
+`tweets_multilingual_api_predictions.csv`. All 512 requests succeeded. Results (accuracy 0.658, macro-F1 0.659) are in [`docs/ai/reports/text_classifier/`](reports/text_classifier/).
 
 | Class | Precision | Recall | F1 | Support |
 |---|---:|---:|---:|---:|
@@ -274,15 +284,16 @@ Weakest classes: `other_disaster`, then `hurricane`. Common confusions: `other_d
 for review; that threshold was explored on the test set and is not a tuned recommendation. A confident
 prediction is not verified evidence of an incident. Judge the model by per-class F1 and recall, not accuracy alone;
 rare or ambiguous classes (`landslide`, `earthquake`, `other_disaster`) need attention, which is what the review flag is for.
-Notes from the saved evaluation run are in `image_classifier/train/model_check_notes.md`.
+Notes from the saved evaluation run are in [`docs/ai/image-classifier-model-check.md`](image-classifier-model-check.md).
 
 ## 2.4 Deployment
 
 * Push `image_classifier/deployment/` to GitHub; create a Render web service (Python, Free plan).
 * Build: `pip install -r requirements.txt`. Start: `uvicorn app:app --host 0.0.0.0 --port $PORT`. Health check: `/health`.
-* Upload `best_model.pt` to a **public** Hugging Face model repo and set `HF_MODEL_REPO_ID` on Render
-  (optional `HF_MODEL_FILENAME`, default `best_model.pt`). The checkpoint must contain the keys
-  `classes`, `img_size`, `model_name` and `model`.
+* Upload `best_model.pt` to a **public** Hugging Face model repo and set `HF_MODEL_REPO_ID=Dhruvil-14/disaster-classifier`
+  on Render, plus `PYTHON_VERSION=3.11.11` (also pinned in `.python-version`). Optional: `HF_MODEL_FILENAME`
+  (default `best_model.pt`) and `HF_MODEL_REVISION`. The repository is public, so no `HF_TOKEN` is needed.
+  The checkpoint must contain the keys `classes`, `img_size`, `model_name` and `model`.
 * `needs_review` is set when confidence is below a threshold (default 0.75, with per-class overrides in `app.py`).
 * Hugging Face setup: create a Model repo, upload `best_model.pt`, keep it public, and copy the ID (`USERNAME/REPO_NAME`).
 * Render setup: choose the Python runtime and the Free plan; do not add the `.pt` file to Git.
@@ -312,14 +323,14 @@ python test_image_api.py --api-url https://disaster-classifier-api.onrender.com 
 
 The full test split (3,195 images) was run through the API: 3,192 requests succeeded and 3 failed.
 Accuracy 0.8396, macro-F1 0.8160, which matches the notebook evaluation (0.8391 / 0.8153). Per-image
-results are in `image_classifier/testing/results/deployment_test_results.csv`. The saved report
+results are in [`docs/ai/reports/image_classifier/deployment_test_results.csv`](reports/image_classifier/deployment_test_results.csv). The saved report
 shows the run against a local server (`http://127.0.0.1:8000`) rather than the Render URL.
 
 ---
 
 ## 2.6 Planned follow-up (from the Sprint 1 notes)
 
-`image_classifier/train/model_check_notes.md` lists these open items: confirm the checkpoint and `classes.json`;
+[`docs/ai/image-classifier-model-check.md`](image-classifier-model-check.md) lists these open items: confirm the checkpoint and `classes.json`;
 test at least 50 images through the prediction endpoint and compare with the reported accuracy; and implement a
 class mapping to incident types (`fire` to INDUSTRIAL_FIRE, `flood` to URBAN_FLOODING, `hurricane` to CYCLONE,
 `earthquake` to EARTHQUAKE; `landslide` and `other_disaster` out of scope; `not_disaster` no suggestion).

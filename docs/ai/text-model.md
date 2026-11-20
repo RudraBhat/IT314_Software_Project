@@ -1,6 +1,6 @@
 # English crisis text model
 
-This package adds an optional, separately callable text-analysis model. It does not change the existing `/triage` response or the image classifier. The 200-row team-authored draft and prompt-injection fixtures are not included in training.
+The English text model is trained in `models/text_model/` and loaded at runtime by `ai-workers/service/text_analysis.py`. It adds an optional, separately callable text-analysis model. It does not change the existing `/triage` response or the image classifier. The 200-row team-authored draft and prompt-injection fixtures are not included in training.
 
 ## What it predicts
 
@@ -25,16 +25,18 @@ The source labels include `related`, `request`, `offer`, `direct_report`, and hu
 
 ## Train and evaluate
 
-From `ai-workers/`:
+From `models/text_model/train/`:
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
-python -m text_model.download_data
-python -m text_model.download_india_data
-python -m text_model.train
+pip install -r requirements.txt   # reuses the ai-workers/requirements.txt pins
+python download_data.py
+python download_india_data.py
+python train.py
 ```
+
+The training tests run from `models/text_model/testing/` with `pip install -r requirements.txt` and `python -m pytest`.
 
 Training uses complete-event holdouts for Appen and a separate stratified split for the India relevance corpus:
 
@@ -46,7 +48,7 @@ Training uses complete-event holdouts for Appen and a separate stratified split 
 
 The India split is random because its public master file has no event or time column. Its score is a same-source holdout and is less demanding than the event-held-out Sandy score. Language detection can also reject short English text as uncertain. The relevance review threshold is selected on Pakistan validation data to target at least 90% accuracy on accepted predictions while retaining at least 50% coverage; achieved validation coverage and accuracy are recorded in the report. Multilabel thresholds are selected on the same Appen Pakistan validation event.
 
-The train command writes `artifacts/model.joblib`, `artifacts/metadata.json`, and `reports/evaluation.json`. The model artifact is local and ignored by Git. The tracked evaluation report contains metrics and hashes, not message text. Inference checks the scikit-learn version recorded in the artifact; keep the pinned version in `ai-workers/requirements.txt` aligned when rebuilding the image.
+The train command writes `models/text_model/artifacts/model.joblib`, `models/text_model/artifacts/metadata.json`, and [`docs/ai/reports/text_model/evaluation.json`](reports/text_model/evaluation.json). The model artifact is local and ignored by Git. The tracked evaluation report contains metrics and hashes, not message text. Inference checks the scikit-learn version recorded in the artifact; the training requirements reuse `ai-workers/requirements.txt`, so the pinned version always matches the image.
 
 ## Class balancing for the category heads
 
@@ -64,7 +66,7 @@ Measured on the same pinned Appen data and the same event splits (train Haiti/ne
 | Micro-precision | 0.621 | 0.520 |
 | Heads with F1 = 0 | 15 of 24 | 10 of 24 |
 
-Recall rises more than precision falls, which suits advisory "candidate for review" suggestions that a human checks. Caveats: it is a single held-out event with very few positives for many categories (for example 1 for `hospitals`, 3 for `fire`), so per-category changes are noisy; and the numbers above were produced without the India relevance file (the Mendeley download was not reachable), which does not feed the category heads. Re-run `python -m text_model.train` with both datasets to regenerate `reports/evaluation.json` before relying on exact values.
+Recall rises more than precision falls, which suits advisory "candidate for review" suggestions that a human checks. Caveats: it is a single held-out event with very few positives for many categories (for example 1 for `hospitals`, 3 for `fire`), so per-category changes are noisy; and the numbers above were produced without the India relevance file (the Mendeley download was not reachable), which does not feed the category heads. Re-run `python train.py` (from `models/text_model/train/`) with both datasets to regenerate `docs/ai/reports/text_model/evaluation.json` before relying on exact values.
 
 The same experiment showed that balancing the **relevance** head does not help: Sandy accuracy fell from 0.905 to 0.860 and macro-F1 from 0.635 to 0.621, with `NOT_RELATED` recall up (0.24 to 0.35) but precision down (0.50 to 0.30). The relevance head is therefore left unchanged. Its weak point remains `NOT_RELATED` on event-held-out data, which needs more hard negatives rather than re-weighting.
 
@@ -76,21 +78,21 @@ The downloader retrieves only the publicly available HumAID event set 1 at pinne
 
 This experiment uses event-level separation: eight events for training, Ecuador and Hurricane Matthew for validation, and Cyclone Idai, Greece wildfires, and Sri Lanka floods for a final held-out test. Exact duplicate text is assigned to the highest-priority held-out split. The test events are not used for fitting or threshold selection. The report contains aggregate scores and hashes only, never post text or IDs. These events are old and do not validate performance on current Gujarat feeds.
 
-To reproduce the experiment from `ai-workers/` (a Python/PyTorch build supported by your machine may be needed):
+To reproduce the experiment from `models/text_model/humaid/` (a Python/PyTorch build supported by your machine may be needed):
 
 ```sh
-pip install -r requirements-transformer.txt
-python -m text_model.download_humaid_events
-python -m text_model.evaluate_humaid_tfidf
-python -m text_model.train_humaid_transformer --epochs 2 --batch-size 16 --max-length 96
+pip install -r requirements.txt
+python download_events.py
+python evaluate_tfidf.py
+python train_transformer.py --epochs 2 --batch-size 16 --max-length 96
 ```
 
-The TF-IDF reference is tuned only on validation data and writes `text_model/reports/humaid_tfidf_evaluation.json`. Model files are local under `text_model/artifacts/humaid_bertweet`; the aggregate result is `text_model/reports/humaid_transformer_evaluation.json`. Compare both scores on the same held-out events. A local-only advisory prediction function is available as `text_model.humaid_inference.predict_humaid_category`; it requires the locally trained artifact and always marks human review as required. This is an offline research experiment and is not loaded by `/analyze-text` or `/triage`.
+The TF-IDF reference is tuned only on validation data and writes [`docs/ai/reports/text_model/humaid_tfidf_evaluation.json`](reports/text_model/humaid_tfidf_evaluation.json). Model files are local under `models/text_model/artifacts/humaid_bertweet`; the aggregate result is [`docs/ai/reports/text_model/humaid_transformer_evaluation.json`](reports/text_model/humaid_transformer_evaluation.json). Compare both scores on the same held-out events. A local-only advisory prediction function is available as `predict_humaid_category` in `humaid/inference.py`; it requires the locally trained artifact and always marks human review as required. This is an offline research experiment and is not loaded by `/analyze-text` or `/triage`.
 
-To test one message interactively from `ai-workers/`, activate an environment with `requirements-transformer.txt` installed, then run:
+To test one message interactively from `models/text_model/humaid/`, activate an environment with its `requirements.txt` installed, then run:
 
 ```sh
-python -m text_model.predict_humaid
+python predict.py
 ```
 
 The command prompts for one English message, runs the local weights, and prints the weights-file SHA-256 so the artifact can be verified. It does not send the text to a server.
@@ -99,10 +101,10 @@ Recorded 2026-11-04 UTC run: BERTweet reached test macro-F1 `0.6954` and accurac
 
 ## Run the analysis endpoint
 
-Set `TEXT_MODEL_DIR` to the directory containing `model.joblib`, then start the existing worker from `ai-workers/`:
+Set `TEXT_MODEL_DIR` to the directory containing `model.joblib`, then start the existing worker from `ai-workers/`. The artifact trained above is in `models/text_model/artifacts`:
 
 ```sh
-TEXT_MODEL_DIR=./text_model/artifacts uvicorn triage_service:app --host 127.0.0.1 --port 8001
+TEXT_MODEL_DIR=../models/text_model/artifacts uvicorn triage_service:app --host 127.0.0.1 --port 8001
 ```
 
 Send a text and, if available, source metadata to `POST /analyze-text`:
