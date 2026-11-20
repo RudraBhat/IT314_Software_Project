@@ -1,4 +1,4 @@
-"""Public API (docs/api_contracts.md s.1): privacy, filters, no demo fallback."""
+"""Public API (docs/architecture/api_contracts.md s.1): privacy, filters, no demo fallback."""
 
 import pytest
 

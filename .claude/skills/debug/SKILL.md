@@ -17,7 +17,7 @@ Systematically trace and resolve bugs while maintaining system integrity and avo
    - Auth & Session: Check JWT validation, Argon2id verification, TOTP MFA state.
    - Concurrency & State: Check row locks (`SELECT ... FOR UPDATE`), transaction boundaries, advisory locks.
    - Geospatial & PostGIS: Check coordinate validity, boundary containment, polygon cache.
-   - API & Schema: Compare request/response payloads against Pydantic schemas and `docs/api_contracts.md`.
+   - API & Schema: Compare request/response payloads against Pydantic schemas and `docs/architecture/api_contracts.md`.
 2. Pinpoint the exact root cause before modifying any code.
 
 ## 3. Targeted Fix Implementation

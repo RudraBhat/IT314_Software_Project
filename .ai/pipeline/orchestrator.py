@@ -216,7 +216,7 @@ class PipelineOrchestrator:
         # Repository Rules
         agents_md = self.repo_root / "AGENTS.md"
         claude_md = self.repo_root / "CLAUDE.md"
-        arch_doc = self.repo_root / "docs" / "ARCHITECTURE.md"
+        arch_doc = self.repo_root / "docs" / "architecture" / "ARCHITECTURE.md"
 
         if agents_md.exists():
             print("✅ AGENTS.md: Found")
@@ -231,9 +231,9 @@ class PipelineOrchestrator:
             all_ok = False
 
         if arch_doc.exists():
-            print("✅ docs/ARCHITECTURE.md: Found")
+            print("✅ docs/architecture/ARCHITECTURE.md: Found")
         else:
-            print("❌ docs/ARCHITECTURE.md: Missing")
+            print("❌ docs/architecture/ARCHITECTURE.md: Missing")
             all_ok = False
 
         # Claude Settings & Git Deny Rules
@@ -293,7 +293,7 @@ class PipelineOrchestrator:
 ## Instructions for Google Antigravity:
 1. Open this repository in Google Antigravity.
 2. Review the plan at `.ai/reports/{plan_ref}`.
-3. Review `docs/ARCHITECTURE.md` and `AGENTS.md`.
+3. Review `docs/architecture/ARCHITECTURE.md` and `AGENTS.md`.
 4. Apply the required code changes with minimal, targeted modifications.
 5. Respect all DRCH constraints:
    - Neon PostgreSQL 16 + PostGIS only (no Supabase Auth)

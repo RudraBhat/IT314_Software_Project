@@ -1,6 +1,0 @@
-# Optional local dependency set for the experimental BERTweet trainer.
-# Keep PyTorch out of the base inference image until a model is selected.
-torch==2.15.0
-transformers==5.23.0
-accelerate==1.15.0
-emoji==0.6.0

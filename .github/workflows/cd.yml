@@ -6,7 +6,7 @@ on:
     # S3-12 / S3-18: a release tag (vX.Y.Z or vX.Y.Z-rcN) builds every image from that exact commit and
     # tags it with the version, so a release can be deployed and rolled back by version. Tag builds do
     # not deploy and do not move `latest`; the release is deployed by pointing Render at the version
-    # tag (docs/release-runbook.md section 4).
+    # tag (docs/operations/release-runbook.md section 4).
     tags: [ "v*.*.*" ]
   workflow_dispatch:
 

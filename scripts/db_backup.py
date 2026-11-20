@@ -12,11 +12,11 @@ Safety:
 * The password is passed to the tools through PGPASSWORD, never on the command line.
 * restore refuses a target database whose name does not end in "_restore" or "_test", so a backup is
   never restored over a live database by accident. Pass --force only when you really mean to replace
-  that database, for example in a declared rollback (docs/runbook-migration.md).
+  that database, for example in a declared rollback (docs/operations/runbook-migration.md).
 * Backups contain personal data: keep them out of git (backups/ and *.dump are ignored) and delete
   them when they are no longer needed.
 
-On Neon, a branch (docs/runbook-migration.md, Step 1) is the faster rollback point; this script is the
+On Neon, a branch (docs/operations/runbook-migration.md, Step 1) is the faster rollback point; this script is the
 portable copy that also works for the docker-compose fallback.
 """
 

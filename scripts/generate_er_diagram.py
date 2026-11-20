@@ -2,11 +2,11 @@
 """Generate the ER diagram of the final schema from the SQL migrations (S3-16). Owner: Zalak.
 
 Reads backend/db/migrations/*.sql in order, follows CREATE TABLE and ALTER TABLE ... ADD COLUMN, and writes
-a Mermaid erDiagram to docs/er-diagram.md (GitHub renders Mermaid in Markdown). Re-run it after adding a
+a Mermaid erDiagram to docs/architecture/er-diagram.md (GitHub renders Mermaid in Markdown). Re-run it after adding a
 migration so the diagram in the final report matches the schema:
 
-  python scripts/generate_er_diagram.py            # writes docs/er-diagram.md
-  python scripts/generate_er_diagram.py --check    # exits 1 when docs/er-diagram.md is out of date
+  python scripts/generate_er_diagram.py            # writes docs/architecture/er-diagram.md
+  python scripts/generate_er_diagram.py --check    # exits 1 when docs/architecture/er-diagram.md is out of date
 
 It is a small parser for the DDL style used in this repository, not a full SQL parser.
 """
@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = ROOT / "backend" / "db" / "migrations"
-OUTPUT = ROOT / "docs" / "er-diagram.md"
+OUTPUT = ROOT / "docs" / "architecture" / "er-diagram.md"
 
 _COMMENT = re.compile(r"--[^\n]*")
 _CREATE = re.compile(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.]+)\s*\(", re.IGNORECASE)
@@ -173,17 +173,17 @@ def build_document(tables: dict[str, Table], migration_names: list[str]) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate docs/er-diagram.md from the SQL migrations")
-    parser.add_argument("--check", action="store_true", help="fail when docs/er-diagram.md is out of date")
+    parser = argparse.ArgumentParser(description="Generate docs/architecture/er-diagram.md from the SQL migrations")
+    parser.add_argument("--check", action="store_true", help="fail when docs/architecture/er-diagram.md is out of date")
     args = parser.parse_args()
     files = sorted(MIGRATIONS.glob("*.sql"), key=lambda p: p.name)
     document = build_document(parse([f.read_text(encoding="utf-8") for f in files]), [f.name for f in files])
     if args.check:
         current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.exists() else ""
         if current != document:
-            print("docs/er-diagram.md is out of date: run python scripts/generate_er_diagram.py", file=sys.stderr)
+            print("docs/architecture/er-diagram.md is out of date: run python scripts/generate_er_diagram.py", file=sys.stderr)
             return 1
-        print("docs/er-diagram.md is up to date")
+        print("docs/architecture/er-diagram.md is up to date")
         return 0
     OUTPUT.write_text(document, encoding="utf-8", newline="\n")
     print(f"wrote {OUTPUT.relative_to(ROOT)}")

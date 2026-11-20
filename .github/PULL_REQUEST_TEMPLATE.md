@@ -53,7 +53,7 @@
 **Quality**
 - [ ] The PR title is a Conventional Commit and the PR contains only changes related to this task.
 - [ ] Relevant tests and lint pass locally (or CI covers them).
-- [ ] Relevant documentation is updated (`docs/`, `docs/api_contracts.md`, `docs/env-variables.md`).
+- [ ] Relevant documentation is updated (`docs/`, `docs/architecture/api_contracts.md`, `docs/architecture/env-variables.md`).
 
 **Security and privacy**
 - [ ] No secrets, credentials, or real personal/emergency-report data are included.

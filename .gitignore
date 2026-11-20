@@ -100,8 +100,9 @@ backend/.venv/
 backend/venv/
 ai-workers/.venv/
 ai-workers/venv/
-ai-workers/text_model/data/external/
-ai-workers/text_model/artifacts/
+models/text_model/data/external/
+models/text_model/artifacts/
+ai-workers/artifacts/
 
 # Python packaging & distribution
 develop-eggs/
@@ -258,8 +259,13 @@ documents/
 .ai/handoffs/
 
 # 10. Certain Personal files to keep ignored
-docs/sprints/remaining-work.md
+docs/project/sprints/remaining-work.md
 
 # 11. Database backups (scripts/db_backup.py): they contain personal data, never commit them
 backups/
 *.dump
+
+# Local outputs of the models/ training and evaluation scripts (weights, checkpoints, run results)
+models/**/outputs/
+models/image_classifier/train/model_check/
+models/text_classifier/MuRIL/muril_local_test_results/

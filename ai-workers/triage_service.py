@@ -1,6 +1,6 @@
 """DRCH AI triage service. Run: uvicorn triage_service:app --host 0.0.0.0 --port 8001
 
-POST /triage  - advisory scenario/priority suggestion (contract: docs/api_contracts.md s.7.1)
+POST /triage  - advisory scenario/priority suggestion (contract: docs/architecture/api_contracts.md s.7.1)
 GET  /health  - liveness (s.7.2)
 Set AI_TRIAGE_TOKEN to require "Authorization: Bearer <token>" on /triage.
 
@@ -16,7 +16,6 @@ scenario and confidence replace the rules' ones; priority always follows the wri
 import hmac
 import os
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field, model_validator
@@ -101,9 +100,9 @@ def analyze_text_endpoint(
         if not hmac.compare_digest(supplied, expected):
             raise HTTPException(status_code=401, detail="invalid or missing token")
 
-    from text_model.inference import ModelCompatibilityError, ModelIntegrityError, predict_text
+    from service.text_analysis import DEFAULT_MODEL_DIR, ModelCompatibilityError, ModelIntegrityError, predict_text
 
-    model_dir = os.getenv("TEXT_MODEL_DIR", str(Path(__file__).resolve().parent / "text_model" / "artifacts"))
+    model_dir = os.getenv("TEXT_MODEL_DIR", str(DEFAULT_MODEL_DIR))
     try:
         analysis = predict_text(body.description, model_dir=model_dir)
     except FileNotFoundError as exc:

@@ -1,4 +1,4 @@
-"""The one payment-gateway interface used by the donation flow (docs/api_contracts.md section 7).
+"""The one payment-gateway interface used by the donation flow (docs/architecture/api_contracts.md section 7).
 
 Every gateway (the sandbox MockGateway and the live RazorpayGateway) implements the same three
 operations. A donation is CONFIRMED only after a gateway has verified a signature over the

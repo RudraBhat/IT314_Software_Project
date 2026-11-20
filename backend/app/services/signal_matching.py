@@ -4,7 +4,7 @@ Finds PENDING ``source_signals`` that may describe the same event so a dispatche
 together. Nothing here confirms a disaster, merges signals, creates incidents or dispatches teams:
 callers only read. The ranking score is a sort hint, NOT a probability that two alerts are the same event.
 
-Tuning: every threshold is a module constant below (documented in docs/signal-matching.md).
+Tuning: every threshold is a module constant below (documented in docs/architecture/signal-matching.md).
 """
 
 from __future__ import annotations

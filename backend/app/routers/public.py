@@ -1,6 +1,6 @@
 """Public read-only endpoints - no authentication.
 
-Contract: docs/api_contracts.md section 1. Owner: Nisarg (S1-07); consumed by the public map (S1-09).
+Contract: docs/architecture/api_contracts.md section 1. Owner: Nisarg (S1-07); consumed by the public map (S1-09).
 
 Privacy rules enforced in SQL:
   * only VERIFIED / DISPATCHED / RESOLVED incidents that a DM officer verified;

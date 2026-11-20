@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when an environment variable read by code is missing from docs/env-variables.md.
+"""Fail when an environment variable read by code is missing from docs/architecture/env-variables.md.
 
 Scans backend/, ai-workers/ (os.getenv / os.environ) and frontend/src, frontend/next.config.ts
 (process.env.X). Run from the repository root:  python scripts/check_env_docs.py
@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DOC = (ROOT / "docs" / "env-variables.md").read_text(encoding="utf-8")
+DOC = (ROOT / "docs" / "architecture" / "env-variables.md").read_text(encoding="utf-8")
 IGNORE = {"NODE_ENV", "PATH", "HOME", "PORT", "HOSTNAME", "CI"}  # set by the platform, not by us
 
 PY = re.compile(r"""os\.(?:getenv|environ\.get)\(\s*["']([A-Z][A-Z0-9_]+)["']|os\.environ\[\s*["']([A-Z][A-Z0-9_]+)["']""")
@@ -37,7 +37,7 @@ for base, pattern, suffixes in (
 
 missing = sorted(n for n in used if n not in IGNORE and f"`{n}`" not in DOC)
 if missing:
-    print("Environment variables used in code but not documented in docs/env-variables.md:")
+    print("Environment variables used in code but not documented in docs/architecture/env-variables.md:")
     for name in missing:
         print(f"  - {name}  (read in {', '.join(sorted(used[name]))})")
     sys.exit(1)

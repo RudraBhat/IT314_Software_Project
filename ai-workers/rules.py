@@ -1,7 +1,7 @@
 """Deterministic, explainable triage rules (model "drch-triage-v1-rules").
 
 Pure functions with no I/O so they are trivial to test. The output follows the contract in
-docs/api_contracts.md section 7 and is ADVISORY: the backend validates it again and a human decides.
+docs/architecture/api_contracts.md section 7 and is ADVISORY: the backend validates it again and a human decides.
 """
 
 from __future__ import annotations

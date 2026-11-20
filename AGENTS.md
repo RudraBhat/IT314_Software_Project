@@ -4,11 +4,11 @@ These rules apply to every AI coding agent and assistant working in this reposit
 
 ## 1. Project Context & Documentation
 - **Platform:** ResQ Disaster Response Coordination Hub for Gujarat (FastAPI + Neon PostgreSQL PostGIS + Next.js 16).
-- **Architecture:** Read `docs/ARCHITECTURE.md` before architectural or cross-module changes.
-- **API Contracts:** `docs/api_contracts.md` defines the REST contracts and the standard error format.
-- **Environment Variables:** `docs/env-variables.md` lists supported configuration (names only, never values).
+- **Architecture:** Read `docs/architecture/ARCHITECTURE.md` before architectural or cross-module changes.
+- **API Contracts:** `docs/architecture/api_contracts.md` defines the REST contracts and the standard error format.
+- **Environment Variables:** `docs/architecture/env-variables.md` lists supported configuration (names only, never values).
 - **Topic Rules:** Load the matching file in `.agents/rules/` for detail: `architecture.md`, `backend-database.md`, `frontend.md`, `security.md`.
-- **AI Workflow:** `docs/AI_WORKFLOW.md` describes the supported agent modes and the local orchestration pipeline.
+- **AI Workflow:** `docs/guides/AI_WORKFLOW.md` describes the supported agent modes and the local orchestration pipeline.
 
 ## 2. Core Engineering Rules
 - **Inspect First:** Inspect existing code, dependencies, and docs before making changes. Search `backend/app/` and `frontend/src/` for reusable services, components, and types.

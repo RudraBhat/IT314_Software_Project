@@ -3,8 +3,7 @@ __pycache__/
 *$py.class
 venv/
 .venv/
-text_model/data/external/
-text_model/artifacts/
+artifacts/
 .env*
 !.env.example
 .git
@@ -16,3 +15,10 @@ README.md
 *.md
 .DS_Store
 Thumbs.db
+
+# Not part of the running triage service: tests, offline evaluation and datasets (all models live in ../models)
+tests/
+eval/
+data/
+requirements-*.txt
+.pytest_cache/

@@ -1,0 +1,1127 @@
+# 📑 ResQ — API Contracts Specification
+
+**Lead & Integration Architect:** Siddh (@Siddhcreator-1706)  
+**Standard Error Format:** Standardized according to SRS s.15.7 and `app.errors`:
+```json
+{
+  "error": {
+    "code": "STRING_ERROR_CODE",
+    "message": "Human readable explanation",
+    "details": null
+  }
+}
+```
+
+---
+
+## 1. Public Data Endpoints (Owner: Nisarg)
+
+### 1.1 Verified Public Incidents
+* **Path:** `GET /api/v1/public/incidents`
+* **Auth:** None (Public)
+* **Query Parameters:**
+  * `district` *(optional string)*: Filter by Gujarat district (e.g. `Ahmedabad`, `Surat`)
+  * `scenario` *(optional string)*: `cyclone`, `industrial_fire`, `urban_flooding`
+  * `bbox` *(optional string)*: `min_lon,min_lat,max_lon,max_lat`
+* **Response (200 OK):**
+```json
+[
+  {
+    "reference": "INC-GUJ-2026-001",
+    "scenario": "urban_flooding",
+    "district": "Ahmedabad",
+    "status": "VERIFIED",
+    "verified_priority": "HIGH",
+    "verified_at": "2026-10-24T14:30:00Z",
+    "latitude": 23.0478,
+    "longitude": 72.5694
+  }
+]
+```
+* **Security & Privacy Rules:**
+  * Only incidents with status in `('VERIFIED', 'DISPATCHED', 'RESOLVED')` and `verified_by IS NOT NULL` are returned.
+  * No reporter identity, citizen contact info, or raw free-text fields are exposed.
+  * Coordinates are rounded to 4 decimal places (~11 meters).
+* **Errors:**
+  * `422 VALIDATION_FAILED`: Invalid bounding box or parameter format.
+
+### 1.2 Public Active Campaigns
+* **Path:** `GET /api/v1/public/campaigns`
+* **Auth:** None (Public)
+* **Response (200 OK):**
+```json
+[
+  {
+    "campaign_id": "c0000000-0000-0000-0000-000000000001",
+    "title": "Gujarat Urban Flood Relief & Rehabilitation Fund 2026",
+    "purpose": "Emergency relief and supply distribution across flood affected zones.",
+    "scenario": "urban_flooding",
+    "target_amount": 5000000.00,
+    "currency": "INR",
+    "status": "ACTIVE"
+  }
+]
+```
+
+### 1.3 Public Early Warnings & External Alerts
+* **Path:** `GET /api/v1/public/alerts`
+* **Auth:** None (Public)
+* **Response (200 OK):**
+```json
+[
+  {
+    "alert_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+    "source": "IMD",
+    "event_type": "CYCLONE",
+    "severity": "HIGH",
+    "area_text": "Kutch Border Region",
+    "is_fallback": false,
+    "effective_at": "2026-10-24T12:00:00Z",
+    "expires_at": "2026-10-25T12:00:00Z"
+  }
+]
+```
+
+### 1.4 Published Safety Guidance & Public Updates (NU-FR-08)
+* **Paths:** `GET /api/v1/public/safety-content` and `GET /api/v1/public/updates`. No authentication. Optional `scenario` filter (`cyclone`, `industrial_fire`, `urban_flooding`; anything else is `422`).
+* **safety-content:** only guidance a publisher has published. Fields: `content_id`, `scenario`, `title`, `body`, `source`, `version`, `published_at`. Drafts, approved-but-unpublished and superseded versions are never returned.
+* **updates:** only published broadcast updates. Fields: `update_id`, `scenario`, `title`, `body`, `area_label`, `published_at`; newest first, at most 50.
+* **Privacy:** no author or approver names, no linked incident, no internal notes. The `/safety` page shows these above its general guidance and falls back to the general guidance when the service is unreachable.
+
+### 1.5 Relief Shelters
+* **Public path:** `GET /api/v1/public/shelters`. No authentication. Returns the shelters that are `OPERATIONAL` or `FULL` (closed ones are hidden), by name, at most 500. Fields: `id`, `name`, `type` (`SHELTER`, `RELIEF_CAMP` or `MEDICAL_POST`), `lat`, `lon` (rounded to 4 decimals), `address`, `district`, `total_capacity`, `current_occupancy`, `available_beds` (`null` unless both are known, never negative), `contact_number`, `status`, `notes`, `is_simulated`. An empty list means none are published; the citizen dashboard then says so. No internal ids, authors or timestamps are returned.
+* **Dispatcher paths:** `GET /api/v1/dm/shelters` (all shelters, closed included; `include_closed=false` hides them), `POST /api/v1/dm/shelters` (201) and `PUT /api/v1/dm/shelters/{id}` (replaces the whole record). They need the `DISPATCH` or `SUPERVISOR` permission (`403 PERMISSION_REQUIRED` otherwise).
+* **Body:** `name`, `type`, `address_text`, `district`, `latitude`, `longitude`, `total_capacity`, `current_occupancy`, `contact_number` (digits, spaces, `+ - ( )`), `status`, `notes` (max 500) and a required `reason` of 5 to 500 characters. `422` if `current_occupancy` exceeds `total_capacity`, a coordinate is out of range, or a value is not allowed; `404` for an unknown shelter on update.
+* **Audit:** `SHELTER_CREATED` and `SHELTER_UPDATED`, with the actor, the reason and, for updates, the before and after values. A shelter is never deleted: set it to `CLOSED` to hide it.
+* **Transparency:** `is_simulated` marks sample data; the dashboard labels it. No sample shelters are seeded, so a fresh database publishes none.
+
+---
+
+## 2. Citizen Authentication & Reporting API (Owner: Zalak)
+
+### 2.1 Citizen Registration
+* **Path:** `POST /api/v1/auth/register` (alias: `POST /api/v1/auth/signup`)
+* **Auth:** None (Public)
+* **Rate limit:** 10 requests per hour per client IP (`429 RATE_LIMITED`).
+* **Request Headers:** `Content-Type: application/json`
+* **Request Body:**
+```json
+{
+  "email": "citizen@example.in",
+  "password": "StrongPassword123!",
+  "full_name": "Ramesh Patel",
+  "phone": "+919876543210",
+  "preferred_language": "gu"
+}
+```
+* **Response (201 Created):** the account fields below plus the sign-in fields of 2.2 (`access_token`, `expires_in`, `user`, …), so the client can start a session immediately.
+```json
+{
+  "user_id": "7a35eb42-6362-47d3-8e41-0f7300c14b43",
+  "email": "citizen@example.in",
+  "full_name": "Ramesh Patel",
+  "role": "NORMAL_USER",
+  "status": "ACTIVE",
+  "access_token": "eyJhbGciOi...",
+  "token_type": "bearer",
+  "expires_in": 3600
+}
+```
+* **Errors:**
+  * `409 DUPLICATE_EMAIL`: Email already exists (`{"error": {"code": "DUPLICATE_EMAIL", "message": "An account with this email already exists."}}`).
+  * `422 WEAK_PASSWORD`: Password does not meet security policy (minimum 8 chars, 1 digit, 1 special symbol).
+  * `429 RATE_LIMITED`: Rate limit exceeded on registration attempts.
+
+### 2.2 Sign In (citizens and staff)
+* **Path:** `POST /api/v1/auth/login`
+* **Auth:** None (Public)
+* **Rate limit:** 20 requests per 5 minutes per client IP.
+* **Request Body:**
+```json
+{
+  "email": "citizen@example.in",
+  "password": "StrongPassword123!"
+}
+```
+* **Response (200 OK), citizen** — citizens do not use MFA, so the token is issued immediately:
+```json
+{
+  "mfa_required": false,
+  "access_token": "eyJhbGciOi...",
+  "token": "eyJhbGciOi...",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "role": "NORMAL_USER",
+  "user": {
+    "id": "7a35eb42-6362-47d3-8e41-0f7300c14b43",
+    "email": "citizen@example.in",
+    "name": "Ramesh Patel",
+    "role": "NORMAL_USER"
+  }
+}
+```
+* **Response (200 OK), staff** (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`): `{"mfa_required": true, "mfa_token": "eyJ..."}`. The client then calls `POST /api/v1/auth/mfa/verify` with `{"mfa_token", "code"}` (6-digit TOTP; 20 requests per 5 minutes) and receives the citizen-shaped response above with `"mfa_required": false`. The `mfa_token` is valid for `MFA_TOKEN_MINUTES` (default 5).
+* **Lifetimes:** access tokens last `ACCESS_TOKEN_MINUTES` (default 15; `expires_in` is in seconds) and are renewed with a refresh token (section 9). Repeated failures lock the account for `LOGIN_LOCKOUT_MINUTES` (default 15).
+* **Errors:**
+  * `401 INVALID_CREDENTIALS`: wrong email or password, locked or disabled account (one generic message, so account existence is not revealed).
+  * `403 ACCOUNT_NOT_SETUP`: an invited account has not finished setup; use the emailed invitation link (9.2).
+  * `403 MFA_NOT_ENROLLED`: a staff account has no authenticator enrolled.
+  * `401 MFA_CHALLENGE_INVALID` / `401 MFA_INVALID` (MFA step): the challenge expired / the code is wrong.
+  * `429 RATE_LIMITED`.
+* **Password reset, invitations and Google sign-in:** see section 9. Replacing a password increments the user's `token_version`, which revokes every session issued before.
+
+### 2.3 Submit Incident Report
+* **Path:** `POST /api/v1/incidents`
+* **Auth:** Bearer Token (`require_citizen`)
+* **Headers:**
+  * `Authorization: Bearer <token>`
+  * `Idempotency-Key: <unique-uuid-or-client-key>` — **required** (max 100 characters). Generate one key per report draft and reuse it on every retry of that draft.
+* **Request Body:**
+```json
+{
+  "scenario": "urban_flooding",
+  "description": "Severe waterlogging on main market road, water entered shops.",
+  "reported_urgency": "HIGH",
+  "people_affected": 15,
+  "location_source": "GPS",
+  "latitude": 23.0225,
+  "longitude": 72.5714,
+  "address_text": "Near Usmanpura Underpass",
+  "landmark": "Opposite Jain Temple"
+}
+```
+* **Response (201 Created):**
+```json
+{
+  "incident_id": "3c0b05b3-3a1e-450e-a226-bcfe69d0d939",
+  "incident_ref": "INC-2026-000104",
+  "status": "SUBMITTED",
+  "district": "Ahmedabad",
+  "created_at": "2026-10-24T15:00:00Z"
+}
+```
+* **Validation & Security:**
+  * Rejects locations outside Gujarat state boundaries with `422 OUTSIDE_GUJARAT`.
+  * A missing or blank `Idempotency-Key` is rejected with `422 IDEMPOTENCY_KEY_REQUIRED` (same rule as `POST /api/v1/donations`); nothing is created.
+  * Idempotent: a repeated call with the same `Idempotency-Key` returns `200 OK` with the same incident body instead of creating a duplicate.
+
+### 2.4 My Incidents Listing & Timeline
+* **Path:** `GET /api/v1/me/incidents`
+* **Auth:** Bearer Token (`require_citizen`)
+* **Path:** `GET /api/v1/me/incidents/{id}`
+* **Auth:** Bearer Token (`require_citizen`)
+* **Response (200 OK):**
+```json
+{
+  "incident_id": "3c0b05b3-3a1e-450e-a226-bcfe69d0d939",
+  "incident_ref": "INC-2026-000104",
+  "scenario": "urban_flooding",
+  "status": "VERIFIED",
+  "timeline": [
+    {
+      "status": "SUBMITTED",
+      "timestamp": "2026-10-24T15:00:00Z"
+    },
+    {
+      "status": "VERIFIED",
+      "timestamp": "2026-10-24T15:12:00Z"
+    }
+  ]
+}
+```
+* **Isolation Rule:** Attempting to access another citizen's incident returns `404 NOT_FOUND` (no existence leak). Internal dispatcher notes and rationale are stripped.
+* **Readable labels:** the incident has `status_label` and every timeline entry has `label` (for example "Report submitted", "More information requested"); clients show these instead of raw status codes.
+
+### 2.5 Information Response
+* **Path:** `POST /api/v1/me/incidents/{id}/information-response` (the earlier `/information` path still works)
+* **Auth:** Bearer Token (`require_citizen`); own incident only (others return `404`)
+* **When:** the incident is `NEEDS_INFORMATION` (a dispatcher asked with `POST /api/v1/dm/incidents/{id}/information-requests`). The question appears in the incident `timeline` (2.4) as the `message` of the `NEEDS_INFORMATION` entry.
+* **Request Body:** `message` (3-2000 characters) and/or a corrected `latitude` + `longitude` (given together, with optional `address_text`); at least one is required.
+```json
+{ "message": "It is next to the Jain temple, water is waist deep." }
+```
+* **Response (201 Created):** `{"incident_id": "...", "status": "SUBMITTED", "status_label": "Report submitted"}`; the incident returns to `SUBMITTED` so it re-enters the verification queue. The reply is stored in the status history as `Reporter reply: <message>` (and "Reporter corrected the location" when a point is sent), visible to dispatchers, and an audit entry is written.
+* **Errors:** `404 NOT_FOUND` (not your incident); `409 NOT_AWAITING_INFORMATION` unless the incident is in `NEEDS_INFORMATION`; `422 VALIDATION_FAILED` (bad message length or coordinates); `422 OUTSIDE_GUJARAT` for a corrected point outside Gujarat; `429 RATE_LIMITED` (the response does not state the limit).
+
+---
+
+### 2.6 Photo Attachments (NU-FR-05)
+* **Upload:** `POST /api/v1/me/incidents/{id}/attachments`, citizen only, own open incident. The photo is the raw request body with `Content-Type: image/jpeg|image/png|image/webp` and an optional percent-encoded `X-Filename`. Returns `201` with `{evidence_id, file_name, mime_type, size_bytes, status, uploaded_at}`; the same photo again returns `200` with the first.
+* **List / download / remove:** `GET .../attachments` (`{items, max_attachments}`), `GET .../attachments/{evidence_id}` (the image, `nosniff`, not cached), `DELETE .../attachments/{evidence_id}` (deletes the file and keeps an audit record).
+* **Limits:** 5 MB per photo, 5 photos per report. The type is checked from the file's bytes, not the header. Before storage the server strips metadata without re-encoding: JPEG EXIF/XMP (APP1), IPTC (APP13) and comments (only the orientation tag is kept); PNG `eXIf`, `tEXt`, `zTXt`, `iTXt`, `tIME` chunks and any bytes after `IEND`; WebP `EXIF` and `XMP ` chunks. `size_bytes` and duplicate detection use the stripped file; a file whose structure cannot be read is `415 INVALID_IMAGE`. `status` is `Awaiting review` until a moderator decides (`Approved`, `Held for review`); removed photos are not listed.
+* **Errors:** `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE` / `INVALID_IMAGE`, `409 TOO_MANY_ATTACHMENTS` / `INCIDENT_CLOSED`, `404` for anyone else's report or photo, `429 RATE_LIMITED`.
+* **Storage:** bytes live in `evidence_blobs` (migration 11); metadata and moderation state stay in `evidence_files`, so photos appear in the moderation queue (`GET /api/v1/dm/moderation/queue`), where a moderator opens the image with `GET /api/v1/dm/moderation/{evidence_id}/content` (`MODERATOR` permission, audited). A photo is never shown publicly before a moderator approves it.
+* **Dispatcher view:** `GET /api/v1/dm/incidents/{incident_id}/evidence/{evidence_id}/content` returns an approved (`CLEAN`) photo on that incident to any DM user (`nosniff`, `no-store`, restrictive CSP). Pending, quarantined, removed or other-incident photos are `404`; citizens get `403`. Each view writes an `EVIDENCE_VIEWED` audit entry.
+
+### 2.7 Account: Profile, Password, Notifications
+* **Profile:** `GET /api/v1/me/profile` returns `{user_id, email, full_name, phone, preferred_language, alerts: {in_app, email, sms}, created_at, has_password}`; `has_password` is `false` for a Google sign-in account that never set one. `PATCH /api/v1/me/profile` accepts any of `full_name`, `phone`, `preferred_language` (`en`, `hi`, `gu`), `email_alerts`, `sms_alerts`. The email is the sign-in identity and is not editable; in-app notifications cannot be turned off; email and SMS are stored preferences only. Invalid values return `422`; changes are audited.
+* **Password:** `POST /api/v1/me/password` with `{current_password, new_password}`. The new password follows the registration policy and must differ from the current one (`422 WEAK_PASSWORD` / `PASSWORD_UNCHANGED`); a wrong current password is `400 INVALID_CURRENT_PASSWORD` and is audited. An account with no password (Google sign-in only) gets `409 NO_PASSWORD_SET` and sets one through `POST /api/v1/auth/forgot-password` first. On success every session, including this one, is ended and the response is `{"changed": true, "sign_in_required": true}`. Rate limited.
+* **Notifications:** `POST /api/v1/me/notifications/read-all` marks all of your in-app notifications read and returns `{"marked_read": n}`.
+* **Email copy:** a citizen with email alerts on is also emailed each in-app notification (sent in the background, never blocks the action; simulated and logged when no SMTP is configured). SMS is only a stored preference; there is no SMS provider.
+* **Withdraw request:** `POST /api/v1/me/incidents/{id}/withdrawal-request` with optional `{reason}`. Allowed for your own report while `SUBMITTED`, `NEEDS_INFORMATION` or `VERIFIED`; it only records the request (history row and audit entry, `withdrawal_requested: true` on the report) and never changes the status, because a dispatcher decides. `409 NOT_WITHDRAWABLE` after dispatch or closure, `409 ALREADY_REQUESTED`, `404` for another citizen's report. Rate limited.
+* **Dispatcher visibility:** `GET /api/v1/dm/incidents` and `GET /api/v1/dm/incidents/{id}` return `withdrawal_requested` (true only while the report is still `SUBMITTED`, `NEEDS_INFORMATION` or `VERIFIED`, since the request is stale once help is sent or the report is closed). The list also accepts `withdrawal_requested=true` to show only those reports. Nothing is withdrawn automatically; the dispatcher rejects or carries on.
+* **Delete account:** `POST /api/v1/me/account/deletion` with `{password}`. Refused with `409 OPEN_REPORTS` while any report is not `RESOLVED`, `CLOSED` or `REJECTED`; a wrong password is `400 INVALID_CURRENT_PASSWORD` and audited; an account with no password gets `409 NO_PASSWORD_SET`, as above. On success the name, email, phone and address are erased, photos and notifications deleted, the account disabled and every session ended (`{"deleted": true, "sign_in_required": true}`). Reports stay on record for the audit trail without a link to an identity. Rate limited.
+
+---
+
+## 3. Field Team Responder API (Owner: Nisarg)
+
+> [!NOTE]
+> This section is a high-level summary stub retained for Sprint 1 traceability. For the complete, production-grade Sprint 2 API specification — including full request/response contracts, state transition rules, idempotency, isolation guarantees, and error codes — refer to **[Section 5: Field Operations API](#5-field-operations-api)**.
+
+| Endpoint | Path | Method |
+| :--- | :--- | :--- |
+| Responder profile | `/api/v1/field/me` | `GET` |
+| Active assignments | `/api/v1/field/assignments` | `GET` |
+| Acknowledge dispatch | `/api/v1/field/dispatches/{id}/acknowledgement` | `POST` |
+| Reject dispatch | `/api/v1/field/dispatches/{id}/rejection` | `POST` |
+| Report progress | `/api/v1/field/dispatches/{id}/progress` | `POST` |
+| Request backup team | `/api/v1/field/dispatches/{id}/team-requests` | `POST` |
+| Complete mission | `/api/v1/field/dispatches/{id}/completion` | `POST` |
+
+*(All routes require `Authorization: Bearer <token>` with `FIELD_TEAM` role. See Section 5 for full contracts.)*
+
+---
+
+## 4. Ingestion & Signal Promotion API (Owners: Rudra & Shlok)
+
+### 4.1 Ingestion Trigger Endpoint
+* **Path:** `POST /api/v1/internal/ingest/run`
+* **Auth:** Header `X-Ingest-Token` or `Authorization: Bearer <INGEST_TOKEN>`
+* **Query Parameters:** `source` *(optional string: `SACHET`, `REPLAY`, `GNEWS`, `BLUESKY`, `ALL`)*
+* **Response (200 OK):** a single run for a named source; an array of per-source runs for `ALL`.
+```json
+{
+  "run_id": "e2f0980c-61cb-4bc1-90a8-bcf6b45a6c02",
+  "source": "SACHET",
+  "items_fetched": 4,
+  "items_stored": 2,
+  "status": "SUCCESS"
+}
+```
+
+The configured scheduler targets a 15-minute cadence. Local development uses the backend poller; staging uses the GitHub Actions trigger with the backend poller disabled. `POST /api/v1/dm/ingestion/poll` starts an immediate poll for staff with `DISPATCH` or `SUPERVISOR`; `GET /api/v1/dm/ingestion/health` returns each source's latest run, 24-hour counts and latest error. Both require an MFA-verified staff session. `REPLAY` rows are always marked simulated; `GNEWS` and `BLUESKY` are live text sources, off unless `NEWS_RSS_ENABLED` / `BLUESKY_SEARCH_ENABLED` is set, and their rows are marked not simulated. New GNEWS/BLUESKY rows use `DISASTER_CLASSIFIER_URL` when configured (section 8.2.1); otherwise they retain the legacy `/triage` prelabel path (section 8.1). The public alerts API returns only unexpired SACHET, GDACS or IMD alerts and includes the source and fallback flag.
+
+### 4.2 Raw Signals Queue (DM Workspace)
+* **Path:** `GET /api/v1/dm/signals`
+* **Auth:** Staff Session (`DISASTER_MGMT`)
+* **Query Parameters:** `status` (`PENDING`, `PROMOTED`, `DISMISSED`)
+* **Response (200 OK):**
+```json
+[
+  {
+    "signal_id": "4b684531-ec7b-40eb-bdff-6e94f1be9eb6",
+    "source": "BLUESKY",
+    "content_text": "Water rising rapidly near Ashram Road underpass. Cars floating!",
+    "language": "en",
+    "ai_label": "URBAN_FLOODING",
+    "ai_confidence": 0.91,
+    "ai_details": {
+      "model": "indicbert-disaster-api",
+      "classification": {
+        "prediction": "Flood",
+        "is_disaster": true,
+        "confidence": 0.91,
+        "probabilities": {
+          "Fire": 0.01,
+          "Earthquake": 0.01,
+          "Cyclone": 0.02,
+          "Flood": 0.91,
+          "Non-Disaster": 0.05
+        }
+      }
+    },
+    "status": "PENDING",
+    "latitude": 23.0450,
+    "longitude": 72.5680,
+    "location_precision": "EXACT",
+    "source_created_at": null,
+    "source_url": null,
+    "created_at": "2026-10-24T14:20:00Z"
+  }
+]
+```
+`ai_details.classification` contains the raw result from `DISASTER_CLASSIFIER_URL`; `is_disaster` is false only for `Non-Disaster`. The classification probabilities are the model output, while `ai_label` is only a compatible DRCH scenario suggestion.
+
+### 4.3 Signal Promotion to Incident
+* **Path:** `POST /api/v1/dm/signals/{id}/promote`
+* **Auth:** Staff Session (`DISASTER_MGMT` with `PUBLISHER` or `SUPERVISOR`)
+* **Response (201 Created):**
+```json
+{
+  "signal_id": "4b684531-ec7b-40eb-bdff-6e94f1be9eb6",
+  "status": "PROMOTED",
+  "incident_ref": "INC-2026-000105",
+  "incident_status": "SUBMITTED"
+}
+```
+*(Promoted incidents start as `SUBMITTED` and are NOT publicly visible until verified by a dispatcher).*
+
+### 4.3.1 Manual deletion of public social signals
+* **Path:** `DELETE /api/v1/dm/signals/{id}`
+* **Auth:** Staff Session (`DISASTER_MGMT` with `SUPERVISOR`)
+* **Body:** `{ "rationale": "Source deletion request" }`
+* Deletes an unpromoted `BLUESKY` or `GNEWS` signal and its stored text/link/location evidence. The hashed source ID remains as a tombstone so a later poll cannot reimport the same post. The action is written to the append-only audit log. Promoted signals cannot be deleted here because the content is part of an incident record; handle those through the incident-record process.
+
+### 4.4 Related Signal Suggestions (advisory)
+* **Path:** `GET /api/v1/dm/signals/related`
+* **Auth:** Staff Session (`DISASTER_MGMT`)
+* **Query Parameters:** `signal_id` *(optional UUID)*, `limit` *(1-500, default 100)*
+* **Response (200 OK):** `{ method: "heuristic", advisory: true, requires_human_review: true, rules, pairs[], pairs_total, groups[], unlocated[], unlocated_total, truncated }`. Each pair has `signal_a`, `signal_b`, `distance_m`, `minutes_apart`, `label_agreement`, `ranking_score` (0-100 sort hint, not a probability), `reasons[]`, `warnings[]`.
+* Each signal summary includes its source time when present and a `match_time_basis`; otherwise it uses received time and marks the fallback. Only `location_precision = EXACT` signals participate. Approximate centroids remain in the response as review candidates.
+* Read-only: it never promotes, dismisses, merges or dispatches. Full rules, thresholds, example and limitations: [signal-matching.md](signal-matching.md).
+
+### 4.5 Incident Duplicate Candidates (advisory, S2-07)
+* **Path:** `GET /api/v1/dm/incidents/{id}/duplicates`
+* **Auth:** Staff Session (`DISASTER_MGMT`)
+* **Candidates:** found by the rules (same scenario, within `window_hours` of each other, within `radius_m` or the same address, not closed, not already linked, not dismissed), at most 20.
+* **Response (200 OK):** `{ method: "rules+text", advisory: true, rules: { radius_m, window_hours, weights, note }, candidates[] }`, best score first. Each candidate keeps the earlier fields (`incident_id`, `incident_ref`, `status`, `scenario`, `address_text`, `submitted_at`, `people_affected`, `description_excerpt`, `distance_m`, `minutes_apart`, `same_address`, `rationale`) and adds `text_similarity` (0-1, character-trigram cosine of the two descriptions), `score` (0-1, weighted from wording, distance, time gap and same address), `method` and `explanation`. The full description is never returned.
+* `weights` are reasoned defaults until they are tuned on labelled duplicate pairs. Nothing is linked or merged automatically; the dispatcher decides with `POST /api/v1/dm/incidents/{id}/duplicates/{candidate_id}/decision` (`LINK`, `MERGE` or `DISMISS`, unchanged).
+
+### 4.6 Internal Incident Notes
+* **Paths:** `GET /api/v1/dm/incidents/{id}/notes` and `POST /api/v1/dm/incidents/{id}/notes`
+* **Auth:** Staff Session (`DISASTER_MGMT`), no extra permission. Notes are never returned to citizens or field teams.
+* **Purpose:** A shared log for the dispatch team on one incident (for example what was agreed on a call), so the next shift can pick up where the last stopped. Append-only: there is no edit or delete, a correction is a new note.
+* **`GET` response (200):** `{"items": [{"note_id", "body", "created_at", "author_name", "mine"}]}`, newest first. `mine` is true for notes the caller wrote.
+* **`POST` body:** `{"body": "..."}`, 1 to 1,000 characters after trimming. Response `201` is the created note in the same shape. Allowed on any incident, including a closed one. Rate limited to 60 notes per hour per user.
+* **Audit:** each note writes an `INCIDENT_NOTE_ADDED` entry on the incident with the note id only; the text itself stays in `incident_notes`.
+* **Errors:** `404 NOT_FOUND` (unknown incident), `422` (empty, blank or over-long body), `401`/`403` for anyone who is not signed-in Disaster Management staff.
+
+### 4.7 CSV Exports of the Incident and Dispatch Queues
+* **Paths:** `GET /api/v1/dm/incidents/export` and `GET /api/v1/dm/dispatches/export`
+* **Auth:** Staff Session (`DISASTER_MGMT`), no extra permission. Rate limited to 10 exports per hour per user.
+* **Filters:** the same query parameters as the list they come from. Incidents: `scenario`, `status`, `priority`, `from`, `to`, `q`, `near_lat`, `near_lon`, `radius_km`. Dispatches: `status`, `overdue`, `active`, `incident_id`. Both share the list's filter code, so an export always matches what the screen shows. Invalid values answer `422`.
+* **Response (200):** `text/csv; charset=utf-8` attachment (`incidents-YYYYMMDD-HHMM.csv`, `dispatches-...`) with a UTF-8 byte order mark so Excel reads names correctly, `Cache-Control: no-store`, newest first, at most 5,000 rows. `X-Export-Truncated: true` means the cap cut the file; narrow the filters to get the rest.
+* **Columns:** incidents: reference, scenario, status, priority, reported urgency, people affected, address, landmark, latitude, longitude, submitted, updated, closed, evidence files, active dispatches. Dispatches: dispatch, incident, scenario, status, priority, agency, requested by, requested, acknowledged, overdue, escalated.
+* **Privacy:** the incident export never includes the reporter's name, phone or email, or the free-text description. Dispatch instructions and the agency's acknowledging contact are also left out. Dates are UTC.
+* **Spreadsheet safety:** any cell that begins with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with a quote so it cannot run as a formula when opened.
+* **Audit:** each export writes `INCIDENTS_EXPORTED` or `DISPATCHES_EXPORTED` with the actor, row count, whether it was truncated and the filters used.
+* **Errors:** `401`/`403` for anyone who is not signed-in Disaster Management staff with a verified second factor, `422` for invalid filters.
+
+### 4.8 Reopening a Closed Incident
+* **Path:** `POST /api/v1/dm/incidents/{id}/reopen`. Body `{"reason": "...", "version": n}`. Requires the `CLOSURE` permission. Only a `CLOSED` incident can be reopened; the reason is audited.
+* **Where it goes:** back to where work can continue, based on the status it was closed from. `RESOLVED` returns as `VERIFIED` (it can be dispatched or resolved again) and `REJECTED` returns as `SUBMITTED` (it needs a fresh decision), because neither of those two statuses has a way forward. `SUBMITTED`, `NEEDS_INFORMATION`, `VERIFIED` and `DISPATCHED` return as they were. An incident with no priority never returns as `VERIFIED` or `DISPATCHED`; it returns as `SUBMITTED`, because verification requires a priority.
+* **Citizen view:** a report that was rejected, or closed without ever being resolved, is shown with a plain explanation instead of the four-stage progress bar (Submitted, Verified, Dispatched, Resolved). A closed report that was resolved still shows the finished path.
+
+### 4.9 Agency Directory
+* **Read:** `GET /api/v1/dm/agency-contacts` (any `DISASTER_MGMT` staff). Returns `{"items": [{"agency_id", "name", "agency_type", "contact_email", "contact_phone", "is_active", "updated_at"}]}`, active agencies first.
+* **Write:** `POST /api/v1/dm/agencies` and `PUT /api/v1/dm/agencies/{agency_id}`. Both need the `SUPERVISOR` permission (`403 PERMISSION_REQUIRED` otherwise) and are rate limited to 30 changes per hour per user.
+* **Body (both):** `{"name": 2-200 chars, "agency_type": "FIRE"|"POLICE"|"NDRF"|"MEDICAL"|"MUNICIPAL"|"NGO", "contact_email": email|null, "contact_phone": digits, spaces, + - ( ) 3-20 chars|null, "is_active": bool, "reason": 5-500 chars}`. At least one of email and phone is required so the agency can be reached. `PUT` replaces the whole record. Text is trimmed. The reason is recorded in the audit log.
+* **Responses:** `201` (create) and `200` (update) return the saved agency in the shape above.
+* **Never deleted:** an agency is deactivated, not removed. An inactive agency cannot receive new dispatches (`422 UNKNOWN_AGENCY`) or be linked to new resources, and its history is kept. It can be reactivated with another `PUT`.
+* **Audit:** `AGENCY_CREATED`, `AGENCY_UPDATED`, `AGENCY_DEACTIVATED` or `AGENCY_REACTIVATED`, with before and after values on edits.
+* **Errors:** `409 DUPLICATE_NAME` (names are unique regardless of capitalisation), `409 NO_CHANGE` (nothing differs), `409 AGENCY_IN_USE` (deactivating while dispatches to it are still `REQUESTED`, `ACKNOWLEDGED` or `DISPATCHED`; `details.active_dispatches` says how many), `404` (unknown agency), `422` (invalid body).
+* **Note:** the baseline seed (`10_reference_data.sql`) runs once per database and is tracked, so edits survive restarts. The developer-only `scripts/seed_reset.py` re-applies it and would re-activate the seeded agencies.
+
+---
+
+## 5. Field Operations API
+
+> [!IMPORTANT]
+> All field endpoints require `Authorization: Bearer <token>` issued to a `FIELD_TEAM` role user. Field users do **not** require TOTP MFA — password authentication only. Every dispatch-specific route enforces strict cross-team isolation: requesting another team's dispatch returns `404 NOT_FOUND` (never `403`) to eliminate enumeration attacks.
+
+### 5.1 Field Responder Profile
+
+* **Path:** `GET /api/v1/field/me`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Response (200 OK):**
+```json
+{
+  "user_id": "a1b2c3d4-0000-0000-0000-000000000001",
+  "email": "responder@ndrf.gov.in",
+  "full_name": "Arjun Mehta",
+  "phone": "+919876543210",
+  "role": "FIELD_TEAM",
+  "callsign": "NDRF-602-A",
+  "is_leader": true,
+  "member_id": "b2c3d4e5-0000-0000-0000-000000000002",
+  "team_resource_id": "18e69001-f111-4ebc-87d0-c3d3bb7a0002",
+  "team_name": "NDRF 602 Flood Rescue Unit (Ahmedabad Sabarmati)",
+  "agency_id": "a0000000-0000-0000-0000-000000000001",
+  "agency_name": "NDRF 6th Battalion (Vadodara)",
+  "capabilities": ["boat", "flood_rescue", "water_rescue", "dewatering_pump"],
+  "status": "AVAILABLE"
+}
+```
+* **Errors:**
+  * `401 UNAUTHORIZED`: Missing or expired token.
+  * `403 FORBIDDEN`: Authenticated user does not have `FIELD_TEAM` role.
+  * `404 NOT_FOUND`: Responder's team membership record not found.
+
+---
+
+### 5.2 Active Assignments
+
+* **Path:** `GET /api/v1/field/assignments`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Query Parameters:**
+  * `active` *(optional boolean, default `false`)*: If `true`, returns only dispatches in statuses `REQUESTED`, `ACKNOWLEDGED`, or `DISPATCHED`.
+* **Response (200 OK):**
+```json
+[
+  {
+    "dispatch_id": "d0000000-0000-0000-0000-000000000001",
+    "dispatch_ref": "DSP-2026-000042",
+    "status": "ACKNOWLEDGED",
+    "priority": "HIGH",
+    "incident_id": "3c0b05b3-3a1e-450e-a226-bcfe69d0d939",
+    "incident_ref": "INC-2026-000104",
+    "scenario": "urban_flooding",
+    "district": "Ahmedabad",
+    "address_text": "Near Usmanpura Underpass",
+    "landmark": "Opposite Jain Temple",
+    "latitude": 23.0225,
+    "longitude": 72.5714,
+    "instructions": "Deploy inflatable boat to rescue stranded residents on 3rd floor.",
+    "dispatched_at": "2026-10-24T15:00:00Z",
+    "acknowledged_at": "2026-10-24T15:04:00Z",
+    "overdue": false
+  }
+]
+```
+* **Isolation Rule:** Only dispatches assigned to the authenticated responder's team are returned. No other team's data is ever included.
+
+---
+
+### 5.3 Acknowledge Dispatch
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/acknowledgement`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:** *(empty — no body required)*
+* **Response (200 OK):**
+```json
+{
+  "status": "ACKNOWLEDGED",
+  "dispatch_ref": "DSP-2026-000042",
+  "acknowledged_at": "2026-10-24T15:04:00Z"
+}
+```
+* **State Transition:** `REQUESTED` → `ACKNOWLEDGED`
+* **Idempotency:** If the dispatch is already `ACKNOWLEDGED`, returns `200 OK` without error (safe for mobile network retries).
+* **Errors:**
+  * `404 NOT_FOUND`: Dispatch does not exist or is not assigned to the caller's team.
+  * `409 DISPATCH_STATE_CONFLICT`: Dispatch is in a terminal state and cannot be acknowledged.
+
+---
+
+### 5.4 Reject Dispatch
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/rejection`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:**
+```json
+{
+  "reason": "Team currently engaged in active rescue; capacity unavailable for secondary deployment."
+}
+```
+* **Response (200 OK):**
+```json
+{
+  "status": "REJECTED",
+  "dispatch_ref": "DSP-2026-000042",
+  "updated_at": "2026-10-24T15:06:00Z"
+}
+```
+* **State Transition:** `REQUESTED` / `ACKNOWLEDGED` → `REJECTED`
+* **Side Effect:** All reserved resources (`resource_assignments`) for the dispatch are released back to `status = 'AVAILABLE'`.
+* **Errors:**
+  * `422 VALIDATION_FAILED`: `reason` field is missing or too short (minimum 3 characters).
+  * `404 NOT_FOUND`: Dispatch not found or not assigned to caller's team.
+  * `409 DISPATCH_STATE_CONFLICT`: Dispatch is already in a non-rejectable state.
+
+---
+
+### 5.5 Report Operational Progress
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/progress`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:**
+```json
+{
+  "status": "EN_ROUTE",
+  "note": "ETA 8 minutes. All equipment loaded.",
+  "latitude": 23.0310,
+  "longitude": 72.5650
+}
+```
+* **Valid `status` values:** `EN_ROUTE`, `ON_SCENE`, `UPDATE`, `DELAYED`
+* **Response (200 OK):**
+```json
+{
+  "progress_id": "e5f6a7b8-0000-0000-0000-000000000003",
+  "dispatch_id": "d0000000-0000-0000-0000-000000000001",
+  "status": "EN_ROUTE",
+  "note": "ETA 8 minutes. All equipment loaded.",
+  "recorded_at": "2026-10-24T15:08:00Z"
+}
+```
+* **State Transitions (automatic):**
+  * `EN_ROUTE` + dispatch is `ACKNOWLEDGED` → dispatch advances to `DISPATCHED`; parent incident advances from `VERIFIED` → `DISPATCHED`.
+  * All other events record progress milestone only (no dispatch status change).
+* **GPS coordinates:** Optional. If provided, stored in `dispatch_progress` for audit and situational tracking.
+* **Errors:**
+  * `404 NOT_FOUND`: Dispatch not found or not assigned to caller's team.
+  * `409 DISPATCH_NOT_ACKNOWLEDGED`: Cannot report `EN_ROUTE` without prior acknowledgement.
+
+---
+
+### 5.6 Request Backup / Reinforcement Team
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/team-requests`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:**
+```json
+{
+  "required_capability": "hazmat",
+  "note": "Chemical spill detected in basement — require hazmat decontamination unit urgently."
+}
+```
+* **Response (201 Created):**
+```json
+{
+  "request_id": "f7a8b9c0-0000-0000-0000-000000000004",
+  "dispatch_id": "d0000000-0000-0000-0000-000000000001",
+  "required_capability": "hazmat",
+  "note": "Chemical spill detected in basement — require hazmat decontamination unit urgently.",
+  "status": "OPEN",
+  "created_at": "2026-10-24T15:12:00Z"
+}
+```
+* **Side Effects:**
+  * Inserts a record into `team_requests` with `status = 'OPEN'`.
+  * Sends an in-app notification to all active dispatchers (`DISPATCH` permission) with the requesting team name and capability needed.
+* **Errors:**
+  * `422 VALIDATION_FAILED`: `required_capability` missing or `note` exceeds 1000 characters.
+  * `404 NOT_FOUND`: Dispatch not found or not assigned to caller's team.
+
+---
+
+### 5.7 Complete Mission
+
+* **Path:** `POST /api/v1/field/dispatches/{dispatch_id}/completion`
+* **Auth:** Bearer Token (`FIELD_TEAM` role)
+* **Request Body:**
+```json
+{
+  "summary": "All stranded residents evacuated. Area secured. No further immediate risk.",
+  "civilians_evacuated": 14,
+  "civilians_treated": 3,
+  "notes": "Handoff to district relief camp. Structural damage assessment pending."
+}
+```
+* **Response (200 OK):**
+```json
+{
+  "status": "COMPLETED",
+  "dispatch_ref": "DSP-2026-000042",
+  "civilians_evacuated": 14,
+  "civilians_treated": 3,
+  "updated_at": "2026-10-24T17:45:00Z"
+}
+```
+* **State Transition:** `DISPATCHED` → `COMPLETED`
+* **Critical Rule:** The **parent incident remains open** (status is NOT changed to `RESOLVED`). The incident must be resolved separately by a dispatcher after all assigned teams report completion.
+* **Side Effect:** All assigned team resources (`resource_assignments`) are released back to `status = 'AVAILABLE'`.
+* **Errors:**
+  * `422 VALIDATION_FAILED`: `summary` missing or too short (minimum 5 characters).
+  * `404 NOT_FOUND`: Dispatch not found or not assigned to caller's team.
+  * `409 DISPATCH_STATE_CONFLICT`: Dispatch is not in `DISPATCHED` state.
+
+---
+
+## 6. Team Recommendation Engine & Backup Decision API
+
+> [!NOTE]
+> **Ranking (S3-14):** `Score = (primary capability groups covered × 10) + (secondary capability tags × 3) − (distance km × 0.08)`.
+> Primary capabilities are grouped by job (for example `boat`, `flood_rescue` and `water_rescue` are one "water rescue" group), so a team scores once per group, not once per synonym tag. Every team with at least one primary match ranks above every team without one. Higher score = higher rank; `distance_km` breaks ties.
+> If the incident has no coordinates the engine uses the district centroid from `get_district_centroid()` (33 Gujarat districts), and finally Ahmedabad State HQ.
+> With a configured database the PostGIS answer is authoritative: if no team is available the list is **empty** (it never falls back to in-memory seed teams). The in-memory seed teams are used only when `DATABASE_URL` is unset (offline demo).
+
+### 6.1 Query Recommended Teams
+
+* **Path:** `GET /api/v1/dm/incidents/{incident_id}/team-recommendations`
+* **Auth:** Staff Session (`DISASTER_MGMT`, MFA verified)
+* **Query Parameters:**
+  * `limit` *(optional integer, 1–20, default `5`)*: Maximum candidate teams to return.
+* **Response (200 OK):**
+```json
+{
+  "incident_id": "3c0b05b3-3a1e-450e-a226-bcfe69d0d939",
+  "scenario": "URBAN_FLOODING",
+  "requires_confirmation": true,
+  "recommendations": [
+    {
+      "resource_id": "18e69001-f111-4ebc-87d0-c3d3bb7a0002",
+      "team_name": "NDRF 602 Flood & Water Rescue Unit (Ahmedabad Sabarmati)",
+      "agency_id": "a0000000-0000-0000-0000-000000000007",
+      "agency": "NDRF 6th Battalion (Vadodara)",
+      "distance_km": 1.9,
+      "capability_match": ["boat", "flood_rescue", "water_rescue"],
+      "secondary_match": ["diver_squad", "inflatable_boats"],
+      "matched_count": 3,
+      "score": 15.85,
+      "rank": 1,
+      "reasons": "Partial capability match (boat, flood_rescue, water_rescue; covers 1 of 2 required capability groups); also offers diver_squad, inflatable_boats - 1.9 km away (nearest capable team)",
+      "status": "AVAILABLE",
+      "capabilities": {"boat": true, "water_rescue": true, "flood_rescue": true, "inflatable_boats": true, "diver_squad": true}
+    }
+  ],
+  "generated_at": "2026-11-05T15:00:00Z"
+}
+```
+* **Field notes for the frontend:**
+  * `scenario` is the database enum value (`URBAN_FLOODING`, `INDUSTRIAL_FIRE`, `CYCLONE`).
+  * `agency` (not `agency_name`) carries the agency display name.
+  * `secondary_match`, `matched_count` and `score` were **added in S3-14**; they are additive and optional to display. `score` is advisory and only meaningful for ordering within one response.
+  * `reasons` calls a team "nearest capable team" only when it is the closest team with a primary match.
+* **Scenario → capability rules (S3-14):**
+
+| Scenario | Primary capability groups (10 pts per group) | Secondary tags (3 pts each) |
+| :--- | :--- | :--- |
+| `urban_flooding` | water rescue: `boat`, `flood_rescue`, `water_rescue` · dewatering: `dewatering_pump` | `diver_squad`, `inflatable_boats`, `medical` |
+| `industrial_fire` | firefighting: `fire`, `fire_tender`, `water_tender` · hazmat: `hazmat`, `chemical_foam`, `industrial_fire`, `breathing_apparatus` | `gas_leak`, `smoke_extraction`, `high_rise_rescue`, `medical` |
+| `cyclone` | rescue: `search_and_rescue`, `cyclone_response`, `high_wind_rescue` · debris clearing: `debris_clearing` · shelter: `shelter_management` · first aid: `medical_first_aid` | `boat`, `heavy_extrication`, `water_rescue`, `heavy_machinery`, `medical` |
+
+* **Constraints:**
+  * Only `AVAILABLE` resources of `type = 'TEAM'` with `quantity_available > 0` are ranked; reserved, maintenance or already-dispatched teams are **strictly excluded** (so a dispatched team disappears from the list: no double booking).
+  * `requires_confirmation: true` is **always** returned — this endpoint is **strictly advisory** and never creates a dispatch. Dispatch creation stays on `POST /api/v1/dm/incidents/{id}/dispatches` with the `DISPATCH` permission.
+* **Errors:**
+  * `404 NOT_FOUND`: Incident does not exist.
+  * `401 MFA_REQUIRED`: Staff token without verified MFA.
+  * `403 ROLE_REQUIRED`: Caller is not `DISASTER_MGMT`.
+
+---
+
+### 6.2 List Field Backup Requests
+
+* **Path:** `GET /api/v1/dm/team-requests`
+* **Auth:** Staff Session (`DISASTER_MGMT`)
+* **Query Parameters:**
+  * `status` *(optional, default `OPEN`)*: `OPEN` | `APPROVED` | `DECLINED` | `ALL`
+  * `limit` *(optional integer, 1–100, default `50`)*
+  * `offset` *(optional integer, default `0`)*
+* **Response (200 OK):**
+```json
+[
+  {
+    "request_id": "f7a8b9c0-0000-0000-0000-000000000004",
+    "dispatch_id": "d0000000-0000-0000-0000-000000000001",
+    "dispatch_ref": "DSP-2026-000042",
+    "incident_id": "3c0b05b3-3a1e-450e-a226-bcfe69d0d939",
+    "incident_ref": "INC-2026-000104",
+    "requested_by": "a1b2c3d4-0000-0000-0000-000000000001",
+    "requested_by_name": "Arjun Mehta",
+    "team_name": "NDRF 602 Flood Rescue Unit (Ahmedabad Sabarmati)",
+    "required_capability": "hazmat",
+    "note": "Chemical spill detected in basement.",
+    "status": "OPEN",
+    "decision_rationale": null,
+    "decided_by": null,
+    "decided_at": null,
+    "created_at": "2026-10-24T15:12:00Z"
+  }
+]
+```
+
+---
+
+### 6.3 Decide on a Backup Request (Approve / Decline)
+
+* **Path:** `POST /api/v1/dm/team-requests/{request_id}/decision`
+* **Auth:** Staff Session (`DISASTER_MGMT`) with the **`DISPATCH`** permission
+* **Request Body:**
+```json
+{
+  "action": "APPROVE",
+  "target_resource_id": "18e69001-f111-4ebc-87d0-c3d3bb7a0009",
+  "rationale": "Hazmat unit dispatched from Vatva Industrial Zone depot."
+}
+```
+* **`action` values:** `APPROVE` | `DECLINE`
+* **`rationale`:** Required for `DECLINE`; optional for `APPROVE`.
+* **Response (200 OK — APPROVE):**
+```json
+{
+  "request_id": "f7a8b9c0-0000-0000-0000-000000000004",
+  "status": "APPROVED",
+  "decision_rationale": "Hazmat unit dispatched from Vatva Industrial Zone depot.",
+  "decided_at": "2026-10-24T15:20:00Z",
+  "dispatch_draft": {
+    "incident_id": "3c0b05b3-3a1e-450e-a226-bcfe69d0d939",
+    "incident_ref": "INC-2026-000104",
+    "required_capability": "hazmat",
+    "suggested_resource_id": "18e69001-f111-4ebc-87d0-c3d3bb7a0009",
+    "suggested_resource_name": "NDRF Hazmat Response Unit (Vadodara)",
+    "receiving_agency_id": "a0000000-0000-0000-0000-000000000001",
+    "priority": "HIGH",
+    "instructions": "Reinforce DSP-2026-000042: Deploy hazmat unit as requested by frontline responders."
+  }
+}
+```
+* **Response (200 OK — DECLINE):**
+```json
+{
+  "request_id": "f7a8b9c0-0000-0000-0000-000000000004",
+  "status": "DECLINED",
+  "decision_rationale": "No hazmat units currently available in district. Escalated to state HQ.",
+  "decided_at": "2026-10-24T15:21:00Z",
+  "dispatch_draft": null
+}
+```
+* **Concurrency:** Uses `SELECT ... FOR UPDATE` row lock; double-deciding a request returns `409 TEAM_REQUEST_ALREADY_DECIDED`.
+* **Side Effects:**
+  * On `APPROVE`: Updates `team_requests.status = 'APPROVED'`; writes audit entry; notifies the requesting field user.
+  * On `DECLINE`: Updates `team_requests.status = 'DECLINED'`; writes audit entry with rationale; notifies the requesting field user.
+  * `dispatch_draft` (approve only): Pre-populated dispatch creation payload — dispatcher must **manually** create the dispatch using this data.
+* **Errors:**
+  * `403 PERMISSION_REQUIRED`: Caller lacks the `DISPATCH` permission.
+  * `404 NOT_FOUND`: Request ID (or `target_resource_id`) does not exist.
+  * `409 TEAM_REQUEST_ALREADY_DECIDED`: Request has already been approved or declined.
+  * `422 RATIONALE_REQUIRED`: `action = DECLINE` requires a non-empty `rationale`.
+  * `422 CAPABILITY_MISMATCH`: `target_resource_id` does not have the requested capability.
+* **Auto-suggestion (approve without `target_resource_id`):** ranks AVAILABLE teams that have the requested capability (Section 6.1 engine). If none is available, `suggested_resource_id` is `null` and `instructions` ends with "manual allocation required"; no team is invented.
+
+---
+
+## 7. Payments & Donations Foundation API (Owner: Shlok)
+
+### 7.1 Create Donation Order
+* **Path:** `POST /api/v1/donations`
+* **Auth:** Optional Citizen Bearer Token or Guest Email
+* **Headers:** `Idempotency-Key: <unique-key>`
+* **Request Body:**
+```json
+{
+  "campaign_id": "c0000000-0000-0000-0000-000000000001",
+  "amount": 2500.00,
+  "currency": "INR",
+  "guest_name": "Suresh Mehta",
+  "guest_email": "suresh@example.in",
+  "is_anonymous": false
+}
+```
+* **Response (201 Created):**
+```json
+{
+  "donation_id": "a189f782-b7e1-45df-911b-3ca976ebff12",
+  "gateway_name": "MOCK_GATEWAY",
+  "gateway_order_id": "order_mock_sandbox_9921",
+  "amount": 2500.00,
+  "currency": "INR",
+  "status": "PENDING",
+  "failure_reason": null,
+  "is_sandbox": true,
+  "checkout_key": null
+}
+```
+* **`checkout_key`:** the public Razorpay key id the browser needs to open Razorpay Checkout; `null` for the mock gateway. It is never a secret. After checkout succeeds, the browser sends Razorpay's `razorpay_payment_id` and `razorpay_signature` to 7.2 as `gateway_payment_id` and `signature`.
+
+* **Gateway:** selected with `PAYMENT_GATEWAY` (`mock` or `razorpay`); `gateway_name` is `MOCK_GATEWAY` or `RAZORPAY`. `is_sandbox` comes from the gateway: always `true` for the mock gateway, `true` for Razorpay test keys, `false` only for `rzp_live` keys.
+* **Errors:** `422 IDEMPOTENCY_KEY_REQUIRED`, `409 IDEMPOTENCY_CONFLICT`, `409 CAMPAIGN_NOT_ACTIVE`, `502 GATEWAY_UNAVAILABLE` (the gateway refused or could not be reached; nothing is stored).
+
+### 7.2 Verify Payment & Issue Receipt
+* **Path:** `POST /api/v1/donations/{id}/verify`
+* **Signature:** mock gateway: HMAC-SHA256 (`MOCK_GATEWAY_SECRET`) over `<order_id>|<payment_id>|<amount with 2 decimals>|<currency>`, so a signature for another amount or currency is rejected. Razorpay: Razorpay's checkout signature over `<order_id>|<payment_id>`; the amount is fixed by the server-created order.
+* **Request Body:**
+```json
+{
+  "gateway_payment_id": "pay_mock_12345678",
+  "signature": "hmac_sha256_mock_signature"
+}
+```
+* **Response (200 OK):**
+```json
+{
+  "donation_id": "a189f782-b7e1-45df-911b-3ca976ebff12",
+  "status": "CONFIRMED",
+  "receipt_no": "REC-2026-000412",
+  "receipt_issued_at": "2026-10-24T15:30:00Z"
+}
+```
+* **Errors:** `400 INVALID_SIGNATURE` (audited; the donation is unchanged), `409 ALREADY_CONFIRMED` (confirmed with a different payment), `409 GATEWAY_MISMATCH` (created under another gateway).
+* **Idempotent:** if the webhook (7.3) confirmed the donation first, the same payment returns `200` with the same receipt.
+* **Late payment:** a `FAILED` donation (cancelled, expired or after a failed attempt, see 7.5) is still confirmed by a valid signature for its order, amount and currency, because the gateway captured the money; the receipt is issued as usual and the confirmation is audited with the earlier reason.
+
+### 7.5 Donation Endings: Cancel and Expiry (S3-11)
+* **Path:** `POST /api/v1/donations/{id}/cancel` (no body)
+* **Auth:** the donor's Bearer Token for a signed-in donation; for a guest donation, whoever holds the id (same rule as 7.2). Another donor gets `404`.
+* **Response (200 OK):** `{"donation_id": "…", "status": "FAILED", "failure_reason": "ABANDONED"}`. Idempotent: cancelling a `FAILED` donation returns its current state and writes no second audit row.
+* **Errors:** `409 DONATION_ALREADY_CONFIRMED`, `404 NOT_FOUND`.
+* **Failure reasons** (`failure_reason`, migration 12; `null` unless `status` is `FAILED`): `ABANDONED` (donor cancelled), `GATEWAY_DECLINED` (webhook `payment.failed`), `EXPIRED` (still unpaid 30 minutes after it was created). Expiry is applied whenever donations are created, read, paid, cancelled or listed for oversight; each one is audited (`DONATION_EXPIRED`).
+* An expired or cancelled order cannot use the sandbox payment step (`409 DONATION_NOT_PENDING`); the donor starts a new order. A real payment captured later still confirms it (7.2, 7.3).
+
+### 7.3 Payment Webhook (server-to-server)
+* **Path:** `POST /api/v1/payments/webhook/{gateway}` — `{gateway}` is `mock` or `razorpay` and must match `PAYMENT_GATEWAY` (otherwise `404`).
+* **Auth:** none; authenticated by an HMAC-SHA256 signature over the raw body: `X-Mock-Signature` (`MOCK_GATEWAY_SECRET`) or `X-Razorpay-Signature` (`RAZORPAY_WEBHOOK_SECRET`).
+* **Event id:** `X-Razorpay-Event-Id` / `X-Mock-Event-Id` header (mock also accepts a top-level `id`); without one, a SHA-256 of the body is used. Each event id is processed once (`payment_webhook_events`, migration 11).
+* **Body:** Razorpay payment event shape for both gateways:
+```json
+{
+  "event": "payment.captured",
+  "payload": {"payment": {"entity": {"id": "pay_123", "order_id": "order_123", "amount": 250000, "currency": "INR"}}}
+}
+```
+* **Response (200 OK):** `{"received": true, "event_id": "evt_1", "outcome": "CONFIRMED", "donation_id": "…"}`. Every verified event answers 200 so the gateway stops retrying; `outcome` is one of `CONFIRMED` (also for a `FAILED` donation whose payment was captured later), `ALREADY_CONFIRMED`, `DUPLICATE_EVENT`, `AMOUNT_MISMATCH` (amount in paise or currency differs from the donation; nothing changes, audited), `PAYMENT_CONFLICT`, `FAILED` (`payment.failed` on a `PENDING` donation; `failure_reason` `GATEWAY_DECLINED`), `UNKNOWN_ORDER`, `IGNORED_EVENT_TYPE`, `IGNORED_NOT_PENDING`.
+* **Errors:** `400 INVALID_SIGNATURE` (audited, nothing changes).
+
+### 7.4 My Donations & Receipts
+* **Path:** `GET /api/v1/me/donations?page=1&limit=25`
+* **Auth:** Bearer Token (`require_citizen`). Guest donations have no account and are not listed.
+* **Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "donation_id": "a189f782-b7e1-45df-911b-3ca976ebff12",
+      "campaign_id": "c0000000-0000-0000-0000-000000000001",
+      "campaign_title": "Cyclone relief - Porbandar",
+      "amount": 2500.00,
+      "currency": "INR",
+      "status": "CONFIRMED",
+      "failure_reason": null,
+      "is_anonymous": false,
+      "is_sandbox": true,
+      "receipt_no": "REC-2026-000412",
+      "receipt_issued_at": "2026-10-24T15:30:00Z",
+      "created_at": "2026-10-24T15:28:00Z",
+      "confirmed_at": "2026-10-24T15:30:00Z"
+    }
+  ],
+  "page": 1, "limit": 25, "total": 1, "pages": 1
+}
+```
+
+---
+
+## 8. AI Triage Service Contract (Owner: Rudra / Neeti)
+
+### 8.1 Fast Triage Prediction
+* **Path:** `POST /triage`
+* **Request Body:**
+```json
+{
+  "incident_ref": "INC-GUJ-2026-001",
+  "reported_scenario": "urban_flooding",
+  "description": "Heavy water accumulation, people stranded on rooftops near river bank.",
+  "reported_urgency": "HIGH",
+  "people_affected": 20,
+  "has_coordinates": true,
+  "details": {}
+}
+```
+* **Response Contract (200 OK):**
+```json
+{
+  "model": "drch-triage-v1-rules",
+  "scenario": "URBAN_FLOODING",
+  "priority": "CRITICAL",
+  "confidence": 0.89,
+  "uncertainty": null,
+  "factors": [
+    {"name": "people_affected", "detail": ">= 10 individuals involved", "weight": 0.4},
+    {"name": "stranded_trapped", "detail": "High risk distress keywords detected", "weight": 0.5}
+  ]
+}
+```
+* **Which engine answers (S2-06):** by default the rules baseline (`model` = `drch-triage-v1-rules`). When `TRIAGE_MODEL_DIR` holds a checked scenario model (`ai-workers/service/scenario_model.py`), `model` is that model's name, `scenario` and `confidence` come from it, its first factor is `{"name": "text_model", "detail": "<dataset label> (<probability>)"}` and the rules' `scenario_keywords` factor is dropped. `priority` and its factors always come from the written priority rules ([ai/triage-rules.md](../ai/triage-rules.md)). Labels `earthquake`, `other_disaster` and `not_disaster` are returned as `OTHER`. A missing, unchecked or failing model leaves the rules answer in place. The backend guardrails (`backend/app/services/ai_provider.py`) treat both engines alike: confidence below `AI_LOW_CONFIDENCE_THRESHOLD` (default 0.6) is stored as `LOW_CONFIDENCE`, `OTHER` as out of scope.
+
+### 8.2 English Text Analysis (Experimental Advisory Endpoint)
+* **Path:** `POST /analyze-text`
+* **Auth:** Optional `Authorization: Bearer <AI_TRIAGE_TOKEN>` when the worker token is configured.
+* **Purpose:** Run the separately trained English crisis-message model. This endpoint is additive and does not change `/triage` or the backend incident lifecycle.
+* **Request Body:**
+```json
+{
+  "description": "The underpass is flooded and several people need rescue.",
+  "source": "example-feed",
+  "source_created_at": "2026-11-04T12:30:00Z",
+  "latitude": 23.02,
+  "longitude": 72.57
+}
+```
+* **Response (200 OK):** Includes advisory disaster relevance and probabilities for learned help intent, direct-report, and humanitarian information categories. Low-confidence relevance is returned as `REVIEW` with a candidate label. Text not confidently detected as English returns `LANGUAGE_UNCERTAIN` or `UNSUPPORTED_LANGUAGE` without classification. `source_metadata` is copied from the caller; it is not extracted from the text. The model explicitly returns `NOT_TRAINED` for the project's exact operational scenario and priority, location mentions, and event-time extraction.
+* **Availability:** Returns `503` when `TEXT_MODEL_DIR` does not point to a trained model artifact. Human review is required; this response must not trigger incident verification or dispatch.
+
+### 8.2.1 Multilingual Disaster Classifier for Ingested Text
+When `DISASTER_CLASSIFIER_URL` is configured, the ingestion worker sends each new GNEWS/BLUESKY signal's sanitized text to the deployed IndicBERT disaster classifier. Source, timestamps, language hint, location, and verification link remain in the local signal record; the model API accepts text only. The worker sends PII-scrubbed original wording and does not translate it.
+
+* **Method:** `POST <DISASTER_CLASSIFIER_URL>` (for example `https://<classifier-host>/predict`; the real URL is set only in the local `.env` and the deployed service's environment).
+* **Request headers:** `Content-Type: application/json`, `Accept: application/json`; no authentication is currently required by this deployed endpoint.
+* **Request body:**
+```json
+{"text": "Sanitized original signal text"}
+```
+* **Response body:**
+```json
+{
+  "prediction": "Flood",
+  "confidence": 0.91,
+  "probabilities": {
+    "Fire": 0.01,
+    "Earthquake": 0.01,
+    "Cyclone": 0.02,
+    "Flood": 0.91,
+    "Non-Disaster": 0.05
+  }
+}
+```
+* **Stored classifier result:** The signal API includes `ai_details.classification` with `prediction`, `is_disaster`, `confidence`, and `probabilities`. `is_disaster` is false only for `Non-Disaster`; all four disaster classes are retained as positive classifier results. The raw prediction is preserved even where it does not map exactly to a DRCH operational scenario. A compatible, confident `Flood` or `Cyclone` may also populate the existing `ai_label`; the `Fire` class remains generic and is not silently relabeled as industrial fire.
+* **Processing bounds:** At most 50 new or changed GNEWS/BLUESKY signals are sent per ingestion run. A failed request leaves the signal stored and available for review; the attempted signal is not automatically retried. The existing `/triage` service remains separate and is used only when `DISASTER_CLASSIFIER_URL` is unset.
+* **Scope:** This classifier stage determines the broad disaster class only. It does not assign priority, verify an incident, cluster signals, or dispatch resources. `Non-Disaster` remains stored with `is_disaster: false`; the field lets a later pipeline stage distinguish it from disaster candidates. All predictions are advisory.
+
+### 8.3 AI Service Health
+* **Path:** `GET /health`
+* **Response (200 OK):** `{"status": "ok", "service": "drch-ai-triage", "triage_engine": "rules"}`. `triage_engine` is `rules`, or `model:<model name>` when a checked scenario model is loaded (8.1).
+
+### 8.4 Optional LLM Adapter (`ai-workers/service/llm.py`)
+* Not an HTTP endpoint: a library called by `/triage` (8.1). **Off by default** (`LLM_ENABLED`); the provider key is read from `LLM_API_KEY` only.
+* When enabled, the `/triage` response is the unchanged rules result plus, only when they apply, `llm_second_opinion` (`{"scenario", "priority", "source": "llm"}`) and `english_summary` (a string). The backend's guardrails ignore both fields until the S3-07 evaluation decides whether the LLM stays on.
+* `second_opinion` runs only when the rules confidence is below 0.6 and returns `{"scenario", "priority", "source": "llm"}` limited to the allowed labels, otherwise nothing. `english_summary` summarises Hindi or Gujarati text. Replies that are not valid JSON or use other labels are rejected.
+* Only the report text is sent, with emails and phone numbers masked; no reporter identity. The result is advisory and never decides anything.
+
+### 8.5 AI Versus Human Decisions (`GET /api/v1/dm/analytics`)
+* The `ai_by_decision` list counts AI suggestions by `scenario`, `human_action` and `confidence_band` (`n` per row). Filters: `scenario`, `from`, `to`.
+* **Definitions:** `human_action` is what the dispatcher recorded: `ACCEPTED` (suggestion used as given), `MODIFIED` (used with changes) or `REJECTED`; `UNDECIDED` means no decision yet. `confidence_band` is the AI confidence at suggestion time: `HIGH` 0.80 or more, `MEDIUM` 0.60 to 0.79, `LOW` below 0.60, `UNKNOWN` when none was recorded. The same wording is returned in `definitions.confidence_bands`.
+* Suggestions are advisory; this endpoint only counts what humans decided.
+
+---
+
+## 9. Account Security API: Password Reset, Invitations & Google Sign-In (Owner: Zalak / Siddh)
+
+All endpoints below are under `/api/v1`, use the standard error format, and never reveal whether an email is registered. Tokens in links are single-use, random (32 bytes) and stored only as SHA-256 hashes. Links in emails are built from `FRONTEND_URL`.
+
+| Item | Value | Setting |
+| :--- | :--- | :--- |
+| Password-reset link lifetime | 15 minutes | `PASSWORD_RESET_TOKEN_MINUTES` |
+| Invitation link lifetime | 48 hours | `INVITATION_TOKEN_HOURS` |
+| MFA setup session (after accepting an invitation) | 15 minutes | fixed |
+| Access token | 15 minutes | `ACCESS_TOKEN_MINUTES` |
+| Refresh token, idle limit (staff / citizen) | 48 hours / 30 days | `REFRESH_IDLE_HOURS_STAFF`, `REFRESH_IDLE_HOURS_CITIZEN` |
+| Refresh token, absolute limit (staff / citizen) | 7 days / 90 days | `REFRESH_MAX_HOURS_STAFF`, `REFRESH_MAX_HOURS_CITIZEN` |
+| Active sessions per user | 5 | `MAX_ACTIVE_SESSIONS` |
+
+`POST /api/v1/auth/refresh` (public, rate limited) takes `{"refresh_token"}` and returns `access_token`, `expires_in`, a replacement `refresh_token`, `refresh_expires_in` and `role`. Every sign-in response (`login`, `mfa/verify`, `signup`, `google`, invitation setup) also carries `refresh_token` and `refresh_expires_in`. Refresh tokens are single-use and stored only as SHA-256 hashes. Errors, all `401`: `INVALID_REFRESH_TOKEN`, `SESSION_EXPIRED` (idle or absolute limit reached, account disabled or locked, password or MFA changed, logged out) and `REFRESH_TOKEN_REUSED` (an already-used token was replayed outside the grace window; the whole session is revoked and audited as `REFRESH_TOKEN_REUSE`). Logout revokes every refresh token of the user.
+
+Rate limits are per client IP (sliding window, `429 RATE_LIMITED` with `details.retry_after_seconds`).
+
+### 9.1 Password Reset
+1. **Request a link** — `POST /auth/forgot-password`, body `{"email": "user@example.in"}`. Rate limit 5 per 15 minutes. Always `200 OK` with `{"message": "If this email is registered and active, a password reset link has been sent."}`; an email (link `…/reset-password?token=…`) is sent only to an active, unlocked account.
+2. **Check the link** — `GET /auth/reset-password/verify?token=…` → `200 {"valid": true, "message": "Password reset token is valid"}` or `400 RESET_TOKEN_INVALID`.
+3. **Set the password** — `POST /auth/reset-password`, body `{"token": "…", "new_password": "…"}` (`new_password` 12–1024 characters). Rate limit 10 per 15 minutes. `200 {"message": "…"}`; the token is cleared and `token_version` is incremented, so all existing sessions are revoked. MFA enrolment is kept. Errors: `400 RESET_TOKEN_INVALID` (unknown, used or expired), `422 VALIDATION_FAILED`.
+
+### 9.2 Staff Invitations
+Staff accounts (`DISASTER_MGMT`, `FIELD_TEAM`, `APP_MGMT`) are never created with a password chosen by someone else: they are invited and finish setup themselves.
+
+* **Invite** — `POST /auth/invitations`
+  * **Auth:** Bearer Token with verified MFA: an `APP_MGMT` administrator, or a `DISASTER_MGMT` user with the `SUPERVISOR` permission.
+  * **Body:** `{"email", "full_name", "role": "DISASTER_MGMT" | "FIELD_TEAM" | "APP_MGMT", "phone"?, "designation"?, "permissions"?: ["DISPATCH", …]}` (`permissions` apply to `DISASTER_MGMT` only).
+  * **Response (201 Created):** `{"user_id", "email", "role", "status": "PENDING_SETUP", "message"}`; an email with `…/setup-account?token=…` is sent.
+  * **Errors:** `400 CANNOT_INVITE_CITIZEN` (citizens self-register, 2.1), `400 INVALID_ROLE`, `400 UNKNOWN_PERMISSION`, `403 PRIVILEGE_ESCALATION` (only `APP_MGMT` may invite `APP_MGMT`; a supervisor cannot grant permissions they do not hold), `403 INVITER_REQUIRED`, `401 MFA_REQUIRED`, `409 EMAIL_TAKEN`.
+* **Check the link** — `GET /auth/invitation/verify?token=…` → `200 {"valid": true, "email", "full_name", "role", "requires_mfa": true}` or `400 INVITATION_INVALID` (unknown, used, expired, or the account is no longer `PENDING_SETUP`).
+* **Accept** — `POST /auth/invitation/accept`, body `{"token", "password"}` (`password` 12–1024 characters). Rate limit 10 per 15 minutes. The token is cleared at once. For staff roles the response is `200 {"mfa_required": true, "mfa_setup_token", "mfa_secret", "mfa_uri", "message"}`: the invitee adds the secret to an authenticator app. Errors: `400 INVITATION_INVALID`, `422 VALIDATION_FAILED`.
+* **Enrol TOTP and activate** — `POST /auth/invitation/verify-totp`, body `{"mfa_setup_token", "code"}`. Rate limit 20 per 5 minutes. On success the account becomes `ACTIVE` and the response is the signed-in response of 2.2 (with MFA verified). Errors: `401 MFA_SETUP_EXPIRED` (setup session older than 15 minutes: restart from the link), `401 MFA_INVALID` (wrong code; the account stays `PENDING_SETUP`), `401 INVALID_CREDENTIALS`.
+* Until setup is complete, `POST /auth/login` answers `403 ACCOUNT_NOT_SETUP`.
+
+### 9.3 Google Sign-In (citizens only)
+* **Path:** `POST /auth/google`, body `{"credential": "<Google Identity Services ID token>"}`. Rate limit 20 per 5 minutes.
+* **Behaviour:** the ID token is verified with Google and its audience must equal `GOOGLE_CLIENT_ID`; the Google email must be verified. An existing **citizen** is signed in; an unknown email is registered as a new citizen (`NORMAL_USER`) and signed in. The response is the signed-in response of 2.2.
+* **Citizen-only rule:** a Google identity never yields a staff session, and an email that belongs to a staff account (dispatcher, field team or admin) can never be used as a citizen: emails are unique across all roles, so `POST /auth/register` also answers `409 DUPLICATE_EMAIL`. If the email belongs to a staff account, in any account state, the request is refused with `403 GOOGLE_STAFF_NOT_ALLOWED` and a `GOOGLE_LOGIN_DENIED` audit entry; staff sign in with password and TOTP (2.2). The web app answers that code with a dialog telling the person to use email, password and authenticator code.
+* **Automatic sign-in:** the login page enables Google One Tap `auto_select`, so a browser profile with one signed-in Google account signs a citizen in without a click. It is switched off after an explicit sign-out (`/login?signed_out=1`) and after a staff refusal. Staff are never signed in this way.
+* **Errors:** `503 GOOGLE_AUTH_UNAVAILABLE` (`GOOGLE_CLIENT_ID` not configured), `401 GOOGLE_AUTH_FAILED` (invalid token, wrong audience or no email), `401 GOOGLE_EMAIL_NOT_VERIFIED`, `502 GOOGLE_SERVICE_UNAVAILABLE` (Google could not be reached), `401 INVALID_CREDENTIALS` (locked or inactive citizen), `403 GOOGLE_STAFF_NOT_ALLOWED`, `429 RATE_LIMITED`.
+
+### 9.4 Auth Error Codes
+| Code | HTTP | Meaning |
+| :--- | :--- | :--- |
+| `INVALID_CREDENTIALS` | 401 | Sign-in failed (generic on purpose) |
+| `ACCOUNT_NOT_SETUP` | 403 | Invited account has not completed setup |
+| `MFA_NOT_ENROLLED` | 403 | Staff account without an authenticator |
+| `MFA_CHALLENGE_INVALID` | 401 | MFA sign-in challenge expired or invalid |
+| `MFA_INVALID` | 401 | Wrong TOTP code |
+| `MFA_SETUP_EXPIRED` | 401 | Invitation MFA setup session expired |
+| `MFA_REQUIRED` | 401 | Route needs an MFA-verified session |
+| `RESET_TOKEN_INVALID` | 400 | Password-reset link unknown, used or expired |
+| `INVITATION_INVALID` | 400 | Invitation link unknown, used or expired |
+| `CANNOT_INVITE_CITIZEN` / `INVALID_ROLE` / `UNKNOWN_PERMISSION` | 400 | Invalid invitation request |
+| `PRIVILEGE_ESCALATION` / `INVITER_REQUIRED` | 403 | Caller may not issue this invitation |
+| `EMAIL_TAKEN` / `DUPLICATE_EMAIL` | 409 | Email already registered (invitation / registration) |
+| `WEAK_PASSWORD` | 422 | Registration password policy not met |
+| `GOOGLE_AUTH_UNAVAILABLE` | 503 | Google sign-in not configured |
+| `GOOGLE_AUTH_FAILED` / `GOOGLE_EMAIL_NOT_VERIFIED` | 401 | Google token rejected |
+| `GOOGLE_SERVICE_UNAVAILABLE` | 502 | Google could not be reached |
+| `GOOGLE_STAFF_NOT_ALLOWED` | 403 | Google sign-in attempted for a staff account |
+| `RATE_LIMITED` | 429 | Too many requests from this IP |
+
+### 9.5 Administrator: Staff Account Directory
+* **Path:** `GET /api/v1/admin/accounts`
+* **Auth:** Bearer token of an `APP_MGMT` administrator with verified MFA. Dispatch supervisors, dispatchers, field teams and citizens get `403`; no token or no MFA gets `401`.
+* **Query:** `q` (part of a name or email, case-insensitive, `%` and `_` are literal; up to 100 characters), `role` (`DISASTER_MGMT`, `FIELD_TEAM` or `APP_MGMT`), `status` (`ACTIVE`, `PENDING_SETUP`, `DISABLED`, `LOCKED` or `PENDING_VERIFICATION`), `page`, `limit` (1–100, default 25). Anything else is `422`.
+* **Response (200):** `{"items": [...], "page", "limit", "total", "pages", "summary": {"total", "by_role", "by_status"}}`, newest account first. Each item has `user_id`, `email`, `full_name`, `role`, `designation`, `status`, `mfa_enabled`, `last_login_at`, `is_locked` (temporary lockout after failed sign-ins), `permissions` (sorted names), `team_name` (field responders), `active_sessions` (devices currently signed in: sessions whose refresh token is unrevoked, unexpired and matches the account's current token version), `created_at` and `is_you`. `summary` counts all staff accounts and ignores the filters.
+* **Privacy:** only staff accounts are listed; citizens never appear. No phone number, password hash, MFA secret or session detail is returned.
+
+#### Export the directory
+* **Path:** `GET /api/v1/admin/accounts/export`, with the directory's `q`, `role` and `status` filters. Same authentication as the directory; rate limited (10 per hour per client).
+* **Response (200):** a UTF-8 CSV download (`Content-Disposition: attachment`, `Cache-Control: no-store`, byte-order mark for Excel), newest first, at most 5000 rows. Columns: Name, Email, Role, Designation, Status, Authenticator set up, Last sign-in, Created, Permissions (space separated), Team. Cells that a spreadsheet could run as a formula (starting with `=`, `+`, `-`, `@`, tab or carriage return) are prefixed with a quote.
+* **Privacy:** staff only, never citizens, and no phone number, password hash or MFA secret. Because it copies staff email addresses out of the system, every export is recorded as `ACCOUNTS_EXPORTED` with the actor, the row count and the filters used.
+* **Errors:** `422` for an invalid filter value.
+
+#### Disable and enable an account
+* **Paths:** `POST /api/v1/admin/accounts/{user_id}/disable` and `POST /api/v1/admin/accounts/{user_id}/enable`. Same authentication as the directory (`APP_MGMT` with verified MFA); rate limited (30 per hour per client).
+* **Body:** `{"reason": "..."}`, 5 to 500 characters, required and recorded in the audit log (`422` otherwise).
+* **Disable:** sets the account to `DISABLED` and bumps its session version. The person cannot sign in, and their current session ends on their next request. Nothing is deleted. Returns `{"user_id", "status": "DISABLED"}`. Audit action `ACCOUNT_DISABLED` with the actor, the reason and the before and after state.
+* **Enable:** an account that had finished setup becomes `ACTIVE` and any lockout is cleared; one that never finished setup goes back to `PENDING_SETUP` and needs a new invitation link (resend it from the pending list). Old sessions stay ended. Returns `{"user_id", "status"}`. Audit action `ACCOUNT_ENABLED`.
+* **Errors:** `409 CANNOT_DISABLE_SELF`, `409 LAST_ADMIN` (the last active administrator cannot be disabled), `409 ALREADY_DISABLED`, `409 NOT_DISABLED`, `404` for a citizen or unknown account.
+
+#### Disable or sign out several accounts
+* **Path:** `POST /api/v1/admin/accounts/bulk`. Authentication as disable; rate limited to 10 calls per hour. Body `{"action": "disable" | "sign-out", "user_ids": ["..."], "reason": "..."}`: 1 to 25 distinct ids, reason 5 to 500 characters.
+* **Effect:** Each account is handled on its own, in its own transaction, with exactly the rules and audit entry (`ACCOUNT_DISABLED` or `ACCOUNT_SIGNED_OUT`, with the shared reason) of the single action. An account that cannot be changed (yourself, the last active administrator, already disabled, not active, a citizen or unknown id) is reported and skipped; the others still go through.
+* **Response (200):** `{"action", "done", "skipped", "results": [{"user_id", "ok", "code", "message"}]}`, in the order requested. `code` and `message` are null when `ok` is true, otherwise the error the single action would have returned (for example `CANNOT_DISABLE_SELF`, `ALREADY_DISABLED`, `NOT_ACTIVE`, `NOT_FOUND`, `LAST_ADMIN`).
+* **Errors:** `422` for an empty or oversized list, a repeated id, an unknown action or a short reason. Re-enabling and resetting a sign-in are not bulk actions.
+
+#### Edit a person's details
+* **Path:** `PUT /api/v1/admin/accounts/{user_id}/profile`. Same authentication and rate limit as disable. Body `{"full_name": "...", "designation": "..." | null, "reason": "..."}`: name 2 to 120 characters, designation up to 120 (blank clears it), reason 5 to 500. Audited as `PROFILE_UPDATED` with the old and new values.
+* **Effect:** Changes the display name and designation of any staff account, including your own and accounts that have not finished setup. The email address is the sign-in identity and cannot be changed here.
+* **Response:** `{"user_id": "...", "full_name": "...", "designation": "..." | null}`.
+* **Errors:** `409 NO_CHANGE` (nothing differs), `422` for an invalid name, designation or reason, `404` for a citizen or unknown account.
+
+#### Sign a person out everywhere
+* **Path:** `POST /api/v1/admin/accounts/{user_id}/sign-out`. Same authentication and rate limit as disable. Body `{"reason": "..."}`, 5 to 500 characters, audited as `ACCOUNT_SIGNED_OUT`.
+* **Effect:** For an account that has finished setup and is not disabled: bumps `token_version` (access tokens stop working on the next request) and revokes every refresh token (`ADMIN_SIGN_OUT`), so no session can renew. The account stays usable; the person signs in again with their password and authenticator. Use it after a lost or shared device; use disable to block the person, or reset sign-in when the password or authenticator is lost.
+* **Response:** `{"user_id": "...", "status": "ACTIVE", "signed_out": true}` (`status` is the account's unchanged status).
+* **Errors:** `409 CANNOT_SIGN_OUT_SELF`, `409 NOT_ACTIVE` (disabled or awaiting setup: no sessions to end), `404` for a citizen or unknown account.
+
+#### Reset a person's sign-in
+* **Path:** `POST /api/v1/admin/accounts/{user_id}/reset-credentials`. Same authentication and rate limit as disable. Body `{"reason": "..."}`, 5 to 500 characters, audited.
+* **Effect:** for an `ACTIVE` staff account whose person lost their phone or password. The account goes back to `PENDING_SETUP`, the password stays but the authenticator is removed, sessions end, lockout and any pending password reset are cleared, and a single-use setup link (same expiry as invitations) is emailed to them. They choose a new password and enrol a new authenticator on `/setup-account`. The administrator never sees the link, a password or an authenticator secret. Returns `{"user_id", "status": "PENDING_SETUP", "invitation_expires_at", "email_configured"}`; `email_configured` is false when no SMTP host is set, so no email left the server. Audit action `ACCOUNT_CREDENTIALS_RESET`.
+* **Errors:** `409 CANNOT_RESET_SELF`, `409 ACCOUNT_DISABLED` (enable it first), `409 ALREADY_PENDING` (resend its invitation instead), `409 LAST_ADMIN` (the only active administrator cannot be reset), `404` for a citizen or unknown account.
+
+#### Edit a staff member's permissions
+* **Path:** `PUT /api/v1/admin/accounts/{user_id}/permissions`. Same authentication and rate limit as disable.
+* **Body:** `{"permissions": ["DISPATCH", ...], "reason": "..."}`. `permissions` is the full new set (any of `PUBLISHER`, `MODERATOR`, `CLOSURE`, `DISPATCH`, `SUPERVISOR`; an empty list removes them all; duplicates are ignored); `reason` is 5 to 500 characters and audited.
+* **Effect:** only Disaster Management accounts have permissions. The change applies on the person's very next request; they are not signed out. Returns `{"user_id", "permissions"}` (sorted). Audit action `PERMISSIONS_CHANGED` with the actor, the reason, and the before and after sets.
+* **Errors:** `422 UNKNOWN_PERMISSION` (or a short reason), `409 NO_CHANGE` (the set is identical), `409 NO_PERMISSIONS_FOR_ROLE` (field team and administrator accounts), `404` for a citizen or unknown account.
+
+#### System status
+* **Path:** `GET /api/v1/admin/system`. Same authentication as the directory (`APP_MGMT` with verified MFA).
+* **Response (200):** `{"database": {"status", "latency_ms"}, "version", "email": {"configured", "simulated"}, "mfa_key_valid", "accounts": {"invitations_open", "invitations_expired", "locked", "active_without_mfa"}, "audit": {"last_entry_at", "last_verified_at", "last_verification_ok"}, "checked_at"}`. Staff accounts only are counted. `email.simulated` is true when no SMTP host is set, so invitation and reset links are not delivered.
+* **Privacy:** booleans, counts and timestamps only. No setting value, address, key, password or personal data is returned.
+
+#### Audit log
+* **Path:** `GET /api/v1/admin/audit`. Same authentication as the directory (`APP_MGMT` with verified MFA).
+* **Scope:** account and security entries only: entity `user` (account changes, sign-ins, registrations), `route` (denied requests) and `audit` (chain checks). Operational entries (incidents, dispatches, donations, evidence and so on) are never returned, because administrators have no operational access.
+* **Query:** `q` (part of a staff name or email, or of an action; it never matches a citizen), `action` (exact), `result` (`SUCCESS`, `FAILURE` or `DENIED`), `user_id` (entries made by or about one account), `from` and `to` (dates, inclusive; a start after the end is `422`), `page`, `limit` (1–100, default 25). Newest first.
+* **Response (200):** `{"items", "page", "limit", "total", "pages", "facets": {"actions": [...]}}`. Each item has `audit_id`, `occurred_at`, `action`, `entity_type`, `entity_id`, `result`, `rationale`, `actor` and `target` (`{user_id, role, name, email}` or `null` for the system), `ip`, `before` and `after`.
+* **Privacy:** when the actor or target is a citizen only their role is returned (no name, email or id), and a citizen actor's `ip`, `before` and `after` are `null`.
+* **Verify the chain:** `POST /api/v1/admin/audit/verify` checks the SHA-256 hash chain (the same check as `python -m app.cli verify-audit`) and returns `{"valid", "records", "mismatches", "message", "verified_at"}`. The check is recorded as `AUDIT_CHAIN_VERIFIED` (result `FAILURE` when tampering is found). Rate limited to 6 per hour because it reads the whole table.
+
+---
+
+## 10. Owner Sign-Off Matrix
+
+| Endpoint Domain | Responsible Owner | Contract Status |
+| :--- | :--- | :--- |
+| **Tech Lead & Integration Architect** | Siddh (@Siddhcreator-1706) | ✅ Approved & Signed |
+| **Citizen & Public Backend** | Zalak | ✅ Standard Agreed |
+| **Dispatch & Field Backend / Geo** | Nisarg | ✅ Standard Agreed |
+| **Payments & Signal Promotion** | Shlok | ✅ Standard Agreed |
+| **Ingestion & External Feeds** | Rudra | ✅ Standard Agreed |
+| **AI Model & Evaluation Lead** | Neeti | ✅ Standard Agreed |

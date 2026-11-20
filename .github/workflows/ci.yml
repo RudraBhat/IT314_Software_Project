@@ -27,6 +27,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       backend: ${{ steps.filter.outputs.backend }}
       ai-workers: ${{ steps.filter.outputs['ai-workers'] }}
+      models: ${{ steps.filter.outputs.models }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -42,7 +43,7 @@ jobs:
             backend:
               - 'backend/**'
               - 'scripts/**'
-              - 'docs/env-variables.md'
+              - 'docs/architecture/env-variables.md'
               - 'render.yaml'
               - 'docker-compose*.yml'
               - 'ruff.toml'
@@ -50,6 +51,11 @@ jobs:
             ai-workers:
               - 'ai-workers/**'
               - 'docker-compose*.yml'
+              - 'ruff.toml'
+              - '.github/workflows/ci.yml'
+            models:
+              - 'models/**'
+              - 'ai-workers/requirements.txt'
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
 
@@ -128,7 +134,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs['ai-workers'] == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs['ai-workers'] == 'true' || needs.detect-changes.outputs.models == 'true' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -146,18 +152,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ruff_cache
-          key: ${{ runner.os }}-ruff-${{ hashFiles('backend/**', 'ai-workers/**') }}
+          key: ${{ runner.os }}-ruff-${{ hashFiles('backend/**', 'ai-workers/**', 'models/**') }}
           restore-keys: ${{ runner.os }}-ruff-
 
       - name: Install code quality and security tools (pinned in requirements-dev.txt)
         run: pip install -r backend/requirements-dev.txt
 
       - name: Run Ruff linter
-        run: ruff check backend/ ai-workers/ --no-fix
+        run: ruff check backend/ ai-workers/ models/ --no-fix
 
       - name: Run Bandit security scan (SAST)
         run: |
-          bandit -r backend/ ai-workers/ -ll -ii
+          bandit -r backend/ ai-workers/ models/ -ll -ii
           # scripts/ are developer tools: B104 (0.0.0.0 in an allow-list) and B608
           # (SQL built from internal table names) are reviewed false positives there.
           bandit -r scripts/ -ll -ii --skip B104,B608
@@ -175,14 +181,14 @@ jobs:
           python -m pytest backend/tests/test_units.py -q --tb=short
 
   # ============================================================================
-  # 2b. AI Workers Test Suite (runs when ai-workers changes, without the database job)
+  # 2b. AI Workers and Models Test Suites (run when ai-workers or models changes, without the database job)
   # ============================================================================
   ai-workers-tests:
     name: AI Workers / Test Suite
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs['ai-workers'] == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.detect-changes.outputs['ai-workers'] == 'true' || needs.detect-changes.outputs.models == 'true' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -202,12 +208,20 @@ jobs:
         working-directory: ./ai-workers
         run: python -m pytest tests -v --tb=short --junitxml=junit-ai-workers.xml
 
+      # models/text_model/testing/requirements.txt reuses ai-workers/requirements.txt, so it is already installed above.
+      - name: Run model training tests
+        if: always()
+        working-directory: ./models/text_model/testing
+        run: python -m pytest -v --tb=short --junitxml=junit-models.xml
+
       - name: Upload AI workers test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ai-workers-test-results
-          path: ai-workers/junit-ai-workers.xml
+          path: |
+            ai-workers/junit-ai-workers.xml
+            models/text_model/testing/junit-models.xml
           if-no-files-found: ignore
           retention-days: 14
 
@@ -827,6 +841,7 @@ jobs:
           CHANGED_FRONTEND: ${{ needs.detect-changes.outputs.frontend }}
           CHANGED_BACKEND: ${{ needs.detect-changes.outputs.backend }}
           CHANGED_AI: ${{ needs.detect-changes.outputs['ai-workers'] }}
+          CHANGED_MODELS: ${{ needs.detect-changes.outputs.models }}
           EVENT: ${{ github.event_name }}
         run: |
           echo "=== CI Job Results ==="
@@ -862,13 +877,15 @@ jobs:
           E2E_CHANGED=false
           if [ "$CHANGED_FRONTEND" = "true" ] || [ "$CHANGED_BACKEND" = "true" ]; then E2E_CHANGED=true; fi
           PY_CHANGED=false
-          if [ "$CHANGED_BACKEND" = "true" ] || [ "$CHANGED_AI" = "true" ]; then PY_CHANGED=true; fi
+          if [ "$CHANGED_BACKEND" = "true" ] || [ "$CHANGED_AI" = "true" ] || [ "$CHANGED_MODELS" = "true" ]; then PY_CHANGED=true; fi
+          AI_TESTS_CHANGED=false
+          if [ "$CHANGED_AI" = "true" ] || [ "$CHANGED_MODELS" = "true" ]; then AI_TESTS_CHANGED=true; fi
 
           require_success detect-changes "$DETECT"
           require_success security-secrets-scan "$SECRETS_SCAN"
           require_if_changed frontend-check "$FRONTEND" "$CHANGED_FRONTEND"
           require_if_changed python-check "$PYTHON" "$PY_CHANGED"
-          require_if_changed ai-workers-tests "$AI_TESTS" "$CHANGED_AI"
+          require_if_changed ai-workers-tests "$AI_TESTS" "$AI_TESTS_CHANGED"
           require_if_changed backend-and-db-tests "$BACKEND" "$CHANGED_BACKEND"
           require_if_changed e2e "$E2E" "$E2E_CHANGED"
           require_success container-validation "$CONTAINER"
