@@ -20,7 +20,6 @@ export function CitizenDashboardClient({ user }: CitizenDashboardClientProps) {
   return (
     <CitizenDashboardView
       currentUser={user}
-      onViewPublicMap={() => router.push("/")}
       onOpenCitizenReport={() => router.push("/report")}
       onSignOut={async () => {
         await signOut();
