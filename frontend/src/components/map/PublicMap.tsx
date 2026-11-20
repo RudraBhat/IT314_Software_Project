@@ -408,27 +408,7 @@ export function PublicMap() {
         </div>
 
         <div className="pointer-events-auto flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          {isDm && (
-            <div className={`${panel} flex gap-1 p-1 text-xs`} role="group" aria-label="Map view">
-              {(
-                [
-                  ["operations", "Live operations"],
-                  ["public", "Public map"],
-                ] as const
-              ).map(([key, text]) => (
-                <button
-                  key={key}
-                  onClick={() => setView(key)}
-                  aria-pressed={view === key}
-                  className={`rounded-lg px-2.5 py-1 font-semibold transition ${
-                    view === key ? "bg-[#0c4a75] text-white" : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {text}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Alert controls come first so the view switch and base map keep their place when they appear. */}
           {showPublic && (
           <>
           <button
@@ -451,6 +431,27 @@ export function PublicMap() {
             Alerts on map: {showAlertsLayer ? "On" : "Off"}
           </button>
           </>
+          )}
+          {isDm && (
+            <div className={`${panel} flex gap-1 p-1 text-xs`} role="group" aria-label="Map view">
+              {(
+                [
+                  ["operations", "Live operations"],
+                  ["public", "Public map"],
+                ] as const
+              ).map(([key, text]) => (
+                <button
+                  key={key}
+                  onClick={() => setView(key)}
+                  aria-pressed={view === key}
+                  className={`rounded-lg px-2.5 py-1 font-semibold transition ${
+                    view === key ? "bg-[#0c4a75] text-white" : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
           )}
           <div className={`${panel} flex gap-1 p-1 text-xs`} role="group" aria-label="Base map">
             {(
