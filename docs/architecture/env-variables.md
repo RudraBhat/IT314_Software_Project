@@ -42,7 +42,8 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `NEWS_RSS_ENABLED` | no | `false` | Turns on the `GNEWS` signal adapter: Google News RSS search for Gujarat hazard headlines in English, Gujarati and Hindi. Stores headline, publisher, time and link only. |
 | `BLUESKY_SEARCH_ENABLED` | no | `false` | Turns on the free `BLUESKY` pilot for Gujarat hazard posts; supported original scripts and Romanised posts are retained when they pass the hazard/location filters. The handle is not stored; the public source URL uses the post author's DID. |
 | `BLUESKY_SEARCH_URL` | no | `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts` | Bluesky AppView search endpoint; only `api.bsky.app` and `public.api.bsky.app` over https are accepted. |
-| `SOCIAL_REPLAY_FILE` | no | packaged JSONL replay | Path to the team-authored, sanitised social replay fixture. Replay records are always marked simulated. |
+| `SOCIAL_REPLAY_ENABLED` | no | `false` | Turns on the `REPLAY` signal adapter, which loads the team-authored simulated fixture. Off by default so no fixture data reaches signals or the ingestion health page. |
+| `SOCIAL_REPLAY_FILE` | no | packaged JSONL replay | Path to the team-authored, sanitised social replay fixture (used only when `SOCIAL_REPLAY_ENABLED=true`). Replay records are always marked simulated. |
 | `INGEST_INTERVAL_SECONDS` | no | `900` | Local in-process adapter polling interval (15 minutes). |
 | `INGESTION_WORKER_ENABLED` | no | `true` in development, `false` elsewhere | Runs the in-process poller. Keep it disabled in staging when GitHub Actions owns the schedule. |
 | `GIT_SHA` | no | `dev` | Commit id shown by `/api/v1/health` (CD smoke test). |

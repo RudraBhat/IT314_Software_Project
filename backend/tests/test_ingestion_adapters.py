@@ -341,8 +341,10 @@ def test_live_text_adapters_are_skipped_unless_enabled():
     from app.config import get_settings
     from app.services.ingestion import run_ingestion
 
-    settings = replace(get_settings(), database_url=None, news_rss_enabled=False, bluesky_search_enabled=False)
-    for source in ("GNEWS", "BLUESKY"):
+    settings = replace(
+        get_settings(), database_url=None, news_rss_enabled=False, bluesky_search_enabled=False, social_replay_enabled=False
+    )
+    for source in ("GNEWS", "BLUESKY", "REPLAY"):
         [result] = run_ingestion(source, settings)
         assert result["status"] == "SKIPPED"
         assert "disabled" in result["message"]
