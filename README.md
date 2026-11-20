@@ -1,4 +1,25 @@
-# ResQ — Disaster Response Coordination Hub for Gujarat
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="frontend/public/logo-dark.svg">
+    <img src="frontend/public/logo.svg" alt="ResQ" width="300">
+  </picture>
+</p>
+
+<h3 align="center">Report it. Verify it. Dispatch help. Track it to the end.</h3>
+
+<p align="center">Disaster Response Coordination Hub for Gujarat</p>
+
+<p align="center">
+  <a href="https://github.com/Siddhcreator-1706/IT314_Software_Project/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Siddhcreator-1706/IT314_Software_Project/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/Siddhcreator-1706/IT314_Software_Project/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/Siddhcreator-1706/IT314_Software_Project/actions/workflows/codeql.yml/badge.svg?branch=main"></a>
+  <a href="#versions-and-releases"><img alt="Version: 1.0.0 planned for 30 Nov 2026" src="https://img.shields.io/badge/version-1.0.0%20(30%20Nov%202026)-0C4A75"></a>
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue"></a>
+  <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white">
+  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white">
+  <img alt="PostgreSQL 16 with PostGIS" src="https://img.shields.io/badge/PostgreSQL-16%20%2B%20PostGIS-4169E1?logo=postgresql&logoColor=white">
+</p>
+
+---
 
 ResQ coordinates disaster response across Gujarat. Citizens report emergencies from a phone or browser. Disaster Management staff verify the reports, decide priority and dispatch agencies and field teams. Field teams receive their orders and report progress until the job is done. The public sees a live map of verified incidents, official early warnings, shelters and safety guidance.
 
@@ -12,13 +33,14 @@ The platform supports three disaster scenarios: **cyclone**, **industrial fire**
 - [Core principles](#core-principles)
 - [Architecture](#architecture)
 - [Technology](#technology)
-- [Repository layout](#repository-layout)
+- [Project structure](#project-structure)
 - [Getting started](#getting-started)
 - [What is real and what is simulated](#what-is-real-and-what-is-simulated)
 - [Testing and CI/CD](#testing-and-cicd)
 - [Deployment](#deployment)
+- [Versions and releases](#versions-and-releases)
 - [Documentation](#documentation)
-- [Contributing](#contributing)
+- [Contributing, conduct and security](#contributing-conduct-and-security)
 - [License](#license)
 
 ---
@@ -55,33 +77,92 @@ These rules are enforced in code and covered by tests in `backend/tests/`.
 
 ```mermaid
 flowchart LR
-    subgraph Clients
-        B[Browser / phone]
+    subgraph People["👥 People"]
+        CIT["🧑 Citizens and public"]
+        DM["🧭 Disaster Management staff"]
+        FT["🚒 Field teams"]
+        ADM["🛡️ Administrators"]
     end
-    subgraph Frontend["Frontend (Next.js, Vercel)"]
-        UI[Pages: public map, citizen, /dm, /field, /admin]
-        PX[Same-origin API proxy routes<br/>session cookies]
-    end
-    subgraph Backend["Backend API (FastAPI, Render)"]
-        API[REST API /api/v1]
-        ING[Ingestion poller]
-    end
-    DB[(PostgreSQL 16 + PostGIS<br/>Neon)]
-    AIW[AI triage service<br/>ai-workers]
-    TXT[Multilingual text classifier<br/>models/text_classifier]
-    IMG[Disaster image classifier<br/>models/image_classifier]
-    EXT[Official and public feeds<br/>SACHET CAP, news, social]
-    GEO[Geocoding<br/>Google / Nominatim]
 
-    B --> UI --> PX --> API
-    API --> DB
+    subgraph Web["🌐 Frontend · Next.js on Vercel"]
+        UI["Pages<br/>public map · citizen · /dm · /field · /admin"]
+        PX["API proxy routes<br/>httpOnly session cookies"]
+    end
+
+    subgraph Core["⚙️ Backend · FastAPI on Render"]
+        API["REST API /api/v1<br/>auth · RBAC · audit log"]
+        ING["Ingestion poller"]
+    end
+
+    DB[("🗄️ PostgreSQL 16 + PostGIS<br/>Neon")]
+
+    subgraph AI["🤖 Advisory AI · optional"]
+        AIW["Triage service<br/>ai-workers"]
+        TXT["Text classifier<br/>IndicBERT ONNX"]
+        IMG["Image classifier<br/>PyTorch"]
+    end
+
+    subgraph Ext["📡 External services"]
+        FEEDS["SACHET CAP alerts<br/>news · social"]
+        GEO["Geocoding<br/>Google / Nominatim"]
+        MAIL["Email (SMTP)"]
+    end
+
+    CIT & DM & FT & ADM --> UI --> PX --> API
+    API <--> DB
     ING --> DB
-    API --> AIW
-    ING --> TXT
-    API --> IMG
-    ING --> EXT
+    API -. advisory .-> AIW
+    API -. photos .-> IMG
+    ING -. signals .-> TXT
+    ING --> FEEDS
     API --> GEO
+    API --> MAIL
+
+    classDef people fill:#E0F2FE,stroke:#0C4A75,color:#0C4A75
+    classDef web fill:#0C4A75,stroke:#0C4A75,color:#FFFFFF
+    classDef core fill:#38BDF8,stroke:#0C4A75,color:#0F172A
+    classDef data fill:#FEF3C7,stroke:#B45309,color:#78350F
+    classDef ai fill:#EDE9FE,stroke:#6D28D9,color:#4C1D95
+    classDef ext fill:#F1F5F9,stroke:#64748B,color:#334155
+    class CIT,DM,FT,ADM people
+    class UI,PX web
+    class API,ING core
+    class DB data
+    class AIW,TXT,IMG ai
+    class FEEDS,GEO,MAIL ext
+    style People fill:#F8FAFC,stroke:#CBD5E1,color:#0F172A
+    style Web fill:#EFF6FF,stroke:#0C4A75,color:#0C4A75
+    style Core fill:#F0F9FF,stroke:#38BDF8,color:#0C4A75
+    style AI fill:#F5F3FF,stroke:#A78BFA,color:#4C1D95
+    style Ext fill:#F8FAFC,stroke:#CBD5E1,color:#334155
 ```
+
+### How an incident moves through ResQ
+
+```mermaid
+flowchart LR
+    R["🧑 Citizen reports<br/>location · photos"] --> V{"🧭 Dispatcher<br/>reviews"}
+    V -- needs detail --> NI["❓ Needs information"] --> V
+    V -- not genuine --> RJ["❌ Rejected"]
+    V -- verified + priority --> D["🚒 Dispatched<br/>agencies and teams"]
+    D --> F["📍 Field team<br/>en route · on scene"]
+    F --> RS["✅ Resolved"] --> C["🔒 Closed"]
+    AI["🤖 AI triage<br/>advisory only"] -. suggests .-> V
+
+    classDef step fill:#E0F2FE,stroke:#0C4A75,color:#0C4A75
+    classDef human fill:#0C4A75,stroke:#0C4A75,color:#FFFFFF
+    classDef done fill:#D1FAE5,stroke:#047857,color:#064E3B
+    classDef stop fill:#FEE2E2,stroke:#DC2626,color:#7F1D1D
+    classDef ai fill:#EDE9FE,stroke:#6D28D9,color:#4C1D95
+    class R,NI,D,F step
+    class V human
+    class RS,C done
+    class RJ stop
+    class AI ai
+```
+
+Every arrow above is a human decision or a field report, and each one is written to the audit log.
+
 
 - The browser never calls the backend directly. Next.js route handlers under `frontend/src/app/api/` forward requests and keep the session in httpOnly cookies.
 - The backend applies database migrations on startup and refuses to start in staging or production when a required secret is missing.
@@ -103,19 +184,31 @@ Read [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) for 
 
 ---
 
-## Repository layout
+## Project structure
 
-| Path | Contents |
-|---|---|
-| `frontend/` | Next.js web client: pages in `src/app/`, shared components in `src/components/`, API proxy routes in `src/app/api/`, Playwright tests in `e2e/` |
-| `backend/` | FastAPI API (`main.py`, `app/`), SQL migrations and seeds (`db/`), pytest suite (`tests/`), admin CLI (`python -m app.cli`) |
-| `ai-workers/` | AI triage service (`triage_service.py`, `rules.py`, `service/`) and its tests |
-| `models/` | Model training, evaluation and deployment code for the text and image classifiers |
-| `scripts/` | Smoke, scenario, load-test, backup and documentation-check scripts (see [scripts/README.md](scripts/README.md)) |
-| `docs/` | Architecture, API contracts, environment variables, guides, runbooks and quality reports (see [docs/README.md](docs/README.md)) |
-| `docker-compose.yml` | Local stack: PostGIS, backend, frontend and AI triage service |
-| `docker-compose.prod.yml` | Self-hosted production stack from published images |
-| `render.yaml` | Render service definitions |
+```text
+IT314_Software_Project/
+├── frontend/                 Next.js web client
+│   ├── src/app/              routes: public map, /report, /citizen, /dm, /field, /admin, API proxy (api/)
+│   ├── src/components/       shared UI, header and branding, map, staff and DM components
+│   ├── src/lib/, services/   API client, formatting, geo helpers, typed API calls
+│   ├── public/               logos and icons
+│   └── e2e/                  Playwright end-to-end tests
+├── backend/                  FastAPI API
+│   ├── main.py               app entry point (migrations run on startup)
+│   ├── app/                  routers/, services/, schemas/, ingest adapters, cli.py, migrate.py
+│   ├── db/                   migrations/ (ordered SQL), seeds/reference/, seeds/demo/
+│   └── tests/                pytest suite (unit and PostGIS-backed)
+├── ai-workers/               advisory AI triage service (rules + optional scenario model) and tests
+├── models/                   text and image classifiers: train/, testing/, deployment/
+├── scripts/                  smoke, scenario, load test, backup, seed reset, docs checks
+├── docs/                     architecture/, ai/, guides/, operations/, quality/, project/
+├── .github/                  CI/CD and CodeQL workflows, issue forms, PR template, CODEOWNERS
+├── docker-compose.yml        local stack: PostGIS, backend, frontend, AI triage
+├── docker-compose.prod.yml   self-hosted production stack from published images
+├── render.yaml               Render service definitions
+└── Makefile                  test, migrate, seed-reset, smoke, sync-geo
+```
 
 ---
 
@@ -222,6 +315,28 @@ Every environment variable is documented in [docs/architecture/env-variables.md]
 
 ---
 
+## Versions and releases
+
+ResQ follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Until 1.0.0 there are no release tags: every merge to `main` is deployed to staging, smoke-tested, then deployed to production.
+
+| Version | What it is | Date |
+|---|---|---|
+| Sprints 1–3 | Core loop, response and AI, then hardening; continuous delivery from `main`, untagged | Sep – Nov 2026 |
+| `v1.0.0-rc1` | Release candidate: final staging check of the release build | before 30 Nov 2026 (planned) |
+| **`v1.0.0`** | **First production release** | **30 Nov 2026 (planned)** |
+| `v1.0.x` | Bug and security fixes only | after 1.0.0, as needed |
+| `v1.x.0` | New features that keep existing API contracts and data | after 1.0.0 |
+
+How a release is cut:
+1. Freeze `main`. CI and the staging smoke test must be green.
+2. Tag the commit, for example `git tag v1.0.0 && git push origin v1.0.0`.
+3. The CD workflow builds every image from that exact commit and publishes it to GHCR under the version tag. Tag builds do not deploy and do not move `latest`.
+4. Point the Render services at the version tag, and write the release notes on GitHub Releases.
+
+Rollback means redeploying the previous version tag. The step-by-step process is in [docs/operations/release-runbook.md](docs/operations/release-runbook.md).
+
+---
+
 ## Documentation
 
 | Topic | Document |
@@ -240,9 +355,11 @@ The full index is in [docs/README.md](docs/README.md).
 
 ---
 
-## Contributing
+## Contributing, conduct and security
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md). It covers local setup, the checks to run, branch naming, Conventional Commit messages and the pull request template. AI coding agents also follow [AGENTS.md](AGENTS.md).
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) covers local setup, the checks to run, branch naming, Conventional Commit messages and the pull request template. AI coding agents also follow [AGENTS.md](AGENTS.md).
+- **Code of conduct:** everyone taking part follows [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+- **Security:** report vulnerabilities privately as described in [SECURITY.md](SECURITY.md), never in a public issue.
 
 ---
 
