@@ -5,17 +5,17 @@ Developer and CI helper scripts. Run them from the repository root.
 | Script | Purpose | Typical use |
 |---|---|---|
 | `smoke.py` | End-to-end smoke test of the core loop: health, citizen registers and reports an incident, a dispatcher verifies it, and it appears on the public map without personal data. Strict: any unexpected response fails the run. | `python scripts/smoke.py --base-url http://localhost:8000` (also `make smoke`); CI runs it against a local API and CD against staging |
-| `seed_reset.py` | Safely clears operational data and re-applies the baseline seeds. Refuses cloud databases unless forced. | `make seed-reset` (see `docs/testing.md` section 5) |
-| `check_env_docs.py` | Fails when code reads an environment variable that `docs/env-variables.md` does not document. | CI backend job |
+| `seed_reset.py` | Safely clears operational data and re-applies the baseline seeds. Refuses cloud databases unless forced. | `make seed-reset` (see `docs/quality/testing.md` section 5) |
+| `check_env_docs.py` | Fails when code reads an environment variable that `docs/architecture/env-variables.md` does not document. | CI backend job |
 | `check_no_demo_data.sh` | Fails when demo or mock data markers appear in tracked files. | CI frontend job |
 | `sync_boundaries.py` | Checks and synchronizes Gujarat administrative boundaries. | `make sync-geo` |
-| `explain_queries.py` | Runs `EXPLAIN (ANALYZE, BUFFERS)` on the public-map and team-recommendation queries. | See "When to add an index" in `docs/load-test.md` |
+| `explain_queries.py` | Runs `EXPLAIN (ANALYZE, BUFFERS)` on the public-map and team-recommendation queries. | See "When to add an index" in `docs/quality/load-test.md` |
 | `evaluate_team_recommendations.py` | Review sheet for tuning the team-recommendation ranking. | Run by hand |
 | `scenario_run.py` | Automated cyclone scenario (S3-01) over HTTP: citizen report, verification, recommendation, dispatch, field acknowledgement, progress and completion, resolution, closure and the public map. Repeats with `--runs`. Creates real records, so use staging. | `python scripts/scenario_run.py --base-url <staging> --runs 3` |
-| `load_test.py` | Light load test (S3-13): p50/p95/p99 of the public map, optionally report submits on staging. | `python scripts/load_test.py --base-url <staging> --requests 200 --concurrency 5`; results in `docs/load-test.md` |
-| `db_backup.py` | `pg_dump` backup and guarded `pg_restore` (S3-12). Restores only into a `_restore` or `_test` database unless `--force`. Needs the PostgreSQL 16 client tools. | `python scripts/db_backup.py backup`; see `docs/runbook-migration.md` Step 1 |
-| `generate_er_diagram.py` | Regenerates `docs/er-diagram.md` (Mermaid) from the migrations; `--check` fails when it is out of date. | Run after adding a migration |
-| `ai-dev.py` | Orchestrator for the AI-assisted development workflow. | See `docs/AI_WORKFLOW.md` |
+| `load_test.py` | Light load test (S3-13): p50/p95/p99 of the public map, optionally report submits on staging. | `python scripts/load_test.py --base-url <staging> --requests 200 --concurrency 5`; results in `docs/quality/load-test.md` |
+| `db_backup.py` | `pg_dump` backup and guarded `pg_restore` (S3-12). Restores only into a `_restore` or `_test` database unless `--force`. Needs the PostgreSQL 16 client tools. | `python scripts/db_backup.py backup`; see `docs/operations/runbook-migration.md` Step 1 |
+| `generate_er_diagram.py` | Regenerates `docs/architecture/er-diagram.md` (Mermaid) from the migrations; `--check` fails when it is out of date. | Run after adding a migration |
+| `ai-dev.py` | Orchestrator for the AI-assisted development workflow. | See `docs/guides/AI_WORKFLOW.md` |
 
 ## Smoke test configuration
 

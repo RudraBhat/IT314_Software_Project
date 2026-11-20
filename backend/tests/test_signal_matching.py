@@ -1,4 +1,4 @@
-"""Related-signal suggestions (docs/signal-matching.md): heuristic, advisory, read-only.
+"""Related-signal suggestions (docs/architecture/signal-matching.md): heuristic, advisory, read-only.
 
 Covers:
 - Pure rules (no database): wording, label agreement, thresholds, ranking order, no-chaining groups.

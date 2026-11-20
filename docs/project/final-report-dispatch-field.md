@@ -1,7 +1,7 @@
 # Final report section: dispatch, field and public map API (S3-16)
 
 Author: Nisarg. Part of the final report assembled by Zalak in [final-report.md](final-report.md) (section 6).
-Written against `main` on 14 Nov 2026. Request and response shapes are in [api_contracts.md](api_contracts.md)
+Written against `main` on 14 Nov 2026. Request and response shapes are in [api_contracts.md](../architecture/api_contracts.md)
 sections 1, 3, 5 and 6; this section explains how the pieces behave and what is real or simulated.
 
 ## What is real and what is simulated
@@ -64,7 +64,7 @@ sections 1, 3, 5 and 6; this section explains how the pieces behave and what is 
 
 `scripts/explain_queries.py` runs `EXPLAIN (ANALYZE, BUFFERS)` on the public-map and recommendation queries. No
 index was added: add one by migration only if a plan on the staging database shows a sequential scan on a large
-table. Shlok's load test measured the public map at p95 633 ms over 200 requests ([load-test.md](load-test.md)).
+table. Shlok's load test measured the public map at p95 633 ms over 200 requests ([load-test.md](../quality/load-test.md)).
 
 ## Tests
 

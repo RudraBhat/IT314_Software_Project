@@ -5,7 +5,7 @@
  * There is NO offline/demo fallback here: when the backend fails the caller receives `error` and
  * must show an error state - never invented data.
  *
- * Contracts: docs/api_contracts.md sections 1, 2.3 and 2.4.
+ * Contracts: docs/architecture/api_contracts.md sections 1, 2.3 and 2.4.
  */
 
 export interface ApiOptions {

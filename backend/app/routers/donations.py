@@ -1,4 +1,4 @@
-"""Donations and payments (docs/api_contracts.md section 7). Owner: Shlok.
+"""Donations and payments (docs/architecture/api_contracts.md section 7). Owner: Shlok.
 
 Flow: create an order (PENDING) -> the gateway confirms the payment through the browser callback
 (POST /donations/{id}/verify) and/or the server-to-server webhook

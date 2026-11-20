@@ -54,7 +54,7 @@ flowchart TD
         TriageAI["drch-ai-triage /triage<br/>rules baseline, optional trained model"]
         DisasterClassifier["IndicBERT /predict<br/>multilingual disaster class"]
         TextAI["Optional English Text Classifier<br/>/analyze-text (advisory; event-held-out baseline)"]
-        VisionAI["PyTorch Vision Microservice<br/>ai-workers/model (timm backbone)"]
+        VisionAI["PyTorch Vision Microservice<br/>models/image_classifier (timm backbone)"]
     end
 
     CitizenUI --> VercelProxy
@@ -97,14 +97,22 @@ IT314_Software_Project/
 │   │   └── ingest-cron.yml     # 15-minute staging ingestion trigger
 │   ├── CODEOWNERS              # Pull request review assignment rules
 │   └── PULL_REQUEST_TEMPLATE.md# Team PR template with verification checklist
-├── ai-workers/                 # Standalone AI workers and model evaluation
-│   ├── text_model/             # English crisis-text dataset, training and inference
-│   ├── model/                  # Deep learning image classifier microservice & test harness
-│   │   ├── app.py              # PyTorch/timm image triage service
-│   │   ├── train_disaster_types.py # Training pipeline
-│   │   └── test_api_on_split.py    # Per-class recall and F1 evaluation harness
-│   ├── Dockerfile              # Container specification for AI microservice
-│   └── worker.py               # Background consumer stub
+├── ai-workers/                 # Advisory AI triage service; folder scope: docs/ai/folder-scope.md
+│   ├── triage_service.py       # FastAPI entry point: /triage, /analyze-text, /health
+│   ├── rules.py                # Keyword and points triage rules (drch-triage-v1-rules)
+│   ├── service/                # Runtime helpers: scenario model, English text analysis, optional LLM
+│   ├── artifacts/              # Local trained artifacts the service loads (ignored by Git)
+│   ├── eval/                   # Offline baselines and inter-annotator agreement
+│   ├── data/                   # Team text datasets and prompt-injection fixtures
+│   ├── tests/                  # Service tests (CI)
+│   └── Dockerfile              # Container for the triage service
+├── models/                     # Every ML model: training, research, deployment apps; never in the triage image
+│   ├── text_classifier/        # Multilingual IndicBERT classifier (deployed) and MuRIL (not deployed)
+│   ├── image_classifier/       # ConvNeXt-Tiny disaster photo classifier (deployed)
+│   └── text_model/             # English TF-IDF text model for /analyze-text (served by ai-workers)
+│       ├── train/              # Data download and training
+│       ├── testing/            # Training tests (CI)
+│       └── humaid/             # HumAID BERTweet research experiment (offline only)
 ├── backend/                    # Core Python / FastAPI Backend application
 │   ├── app/
 │   │   ├── routers/            # API routing layer
@@ -157,11 +165,14 @@ IT314_Software_Project/
 │   │   └── test_units.py       # Non-DB unit tests & /api/v1/health commit verification
 │   ├── Dockerfile              # Production multi-stage runner for FastAPI
 │   └── main.py                 # Primary FastAPI application entrypoint & lifespan
-├── docs/                       # Project documentation
-│   ├── api_contracts.md        # Detailed REST API specification
-│   ├── ARCHITECTURE.md         # This document
-│   ├── env-variables.md        # Complete environment variables register
-│   └── testing.md              # Test execution & PostGIS container setup guide
+├── docs/                       # Project documentation; index: docs/README.md
+│   ├── architecture/           # This document, API contracts, env variables, ER diagram, signal matching
+│   ├── ai/                     # AI docs: models.md, text-model.md, folder-scope.md, model card, triage rules
+│   │   └── reports/            # Saved evaluation results, one folder per model
+│   ├── guides/                 # Citizen, field, dispatcher and payment guides, AI agent workflow
+│   ├── operations/             # Release and migration runbooks, ingestion sources
+│   ├── quality/                # Test suite reference, load test, security review, defects
+│   └── project/                # Final report, demo script, future features, sprints
 ├── frontend/                   # Next.js 16 / React 19 / Tailwind CSS Web Application
 │   ├── src/
 │   │   ├── app/                # Next.js App Router pages and proxy endpoints
@@ -234,27 +245,30 @@ IT314_Software_Project/
   - Each role has its own area: Disaster Management (`DISASTER_MGMT`) works in `/dm`, with navigation filtered by permission; Application Management (`APP_MGMT`) uses the administration console at `/admin` (account directory, invitations, audit log and system status); field responders use `/field`; citizens use `/citizen/dashboard`. A signed-in visitor of another role is redirected to their own area (`homeFor(role)` in `lib/session.ts`), and `/dashboard` sends each role there too. Administrators still have no operational access: the backend answers 403 on every `/api/v1/dm`, `/api/v1/field`, `/api/v1/me` and `/api/v1/incidents` route (`test_admin_has_no_operational_access`).
   - Route protection has three layers. `proxy.ts` sends visitors with no session cookie to `/login` before anything is rendered; each workspace layout (`/dm`, `/field`) asks the backend who the user is (`currentUser()`), redirects to `/login` when nobody is signed in and to the user's own home (`homeFor(role)`) when the role is wrong; the backend re-checks role, MFA and permission on every API call. The BFF proxies (`/api/dm`, `/api/field`, `/api/invitations`, `/api/citizen`) answer 401 JSON without a session and forward nothing else. Static JavaScript bundles of staff pages are public like any Next.js asset but contain no data; all data comes from guarded API calls.
   - Uses server-side API proxy routes (`/api/dm/[...path]` and `/api/citizen/[...path]`) to securely forward requests to the FastAPI backend while managing session cookies.
-- **Session state ([`frontend/src/components/auth/SessionProvider.tsx`](../frontend/src/components/auth/SessionProvider.tsx)):**
+- **Session state ([`frontend/src/components/auth/SessionProvider.tsx`](../../frontend/src/components/auth/SessionProvider.tsx)):**
   - The root layout mounts one `SessionProvider`. `useSession()` gives any component the signed-in state (`authenticated`, `role`, `name`) from `GET /api/session` without its own request; the provider stays mounted across client navigation, re-checks quietly after each route change and shows a placeholder only before the first answer, so the header does not flicker between pages.
 
 ### 4.3 AI Workers & Models Architecture
 
-- **Backend AI boundary ([`backend/app/services/ai_provider.py`](../backend/app/services/ai_provider.py)):**
+- **Backend AI boundary ([`backend/app/services/ai_provider.py`](../../backend/app/services/ai_provider.py)):**
   - Calls the triage service at `AI_TRIAGE_URL` (`HttpTriageProvider`); without it, or when the call fails, the result is `UNAVAILABLE` and staff triage manually. The backend has no classifier of its own.
   - Removes emails, phone numbers and id numbers before sending, then validates every answer (`apply_guardrails`): invalid output becomes `UNSAFE_OUTPUT`, unsupported scenarios are out of scope, confidence below `AI_LOW_CONFIDENCE_THRESHOLD` becomes `LOW_CONFIDENCE`.
   - Results are advisory, stored in `ai_recommendations`, and never alter an incident; the human decision is recorded separately.
-- **Triage service ([`ai-workers/triage_service.py`](../ai-workers/triage_service.py)):**
-  - `POST /triage` answers with the keyword and points rules ([docs/ai/triage-rules.md](ai/triage-rules.md)); when `TRIAGE_MODEL_DIR` holds a checked trained scenario model (`service/scenario_model.py`) its scenario and confidence are used instead, and priority still follows the rules. `GET /health` reports which engine is active.
-  - The optional LLM second opinion (`service/llm.py`) is off by default. Model card and evaluation: [docs/ai/model-card.md](ai/model-card.md), [docs/ai/evaluation-report.md](ai/evaluation-report.md).
+- **Triage service ([`ai-workers/triage_service.py`](../../ai-workers/triage_service.py)):**
+  - `POST /triage` answers with the keyword and points rules ([docs/ai/triage-rules.md](../ai/triage-rules.md)); when `TRIAGE_MODEL_DIR` holds a checked trained scenario model (`service/scenario_model.py`) its scenario and confidence are used instead, and priority still follows the rules. `GET /health` reports which engine is active.
+  - The optional LLM second opinion (`service/llm.py`) is off by default. Model card and evaluation: [docs/ai/model-card.md](../ai/model-card.md), [docs/ai/evaluation-report.md](../ai/evaluation-report.md).
 - **Ingested-text disaster classifier:** The ingestion worker sends PII-scrubbed text from new GNEWS/BLUESKY signals to `DISASTER_CLASSIFIER_URL` (`POST /predict`). It stores the raw class, disaster flag, confidence, and probabilities in the signal's `ai_details`; `Non-Disaster` is marked false. This stage does not assign priority or make incident/dispatch decisions. The configured endpoint is staging-only in `render.yaml`; live signal sources remain disabled unless explicitly enabled.
-- **English Text Analysis ([`ai-workers/text_model/`](../ai-workers/text_model/)):**
+  - Its code is [`models/text_classifier/`](../../models/text_classifier/) (IndicBERT training, ONNX export, deployment app and API test); data, results and the MuRIL comparison are in [docs/ai/models.md](../ai/models.md).
+- **English Text Analysis (trained in [`models/text_model/`](../../models/text_model/), served by [`ai-workers/service/text_analysis.py`](../../ai-workers/service/text_analysis.py)):**
   - Optional `/analyze-text` endpoint trained on an openly licensed, event-held-out English crisis-message corpus.
   - Predicts disaster relevance, help request/offer, direct reports, and available humanitarian information categories.
   - Does not replace `/triage` and does not infer the operational scenario, priority, location, or event time because the training labels do not support those outputs.
   - Requires a separately supplied local model artifact; ingestion is not connected to it yet.
-- **Standalone Vision Model Service ([`ai-workers/model/app.py`](file:///c:/Users/shahs/OneDrive/Desktop/My%20Folder/DAIICT/Sem5/Software/IT314_Software_Project/ai-workers/model/app.py)):**
-  - Microservice utilizing a `timm` PyTorch backbone for classifying disaster imagery (`fire`, `flood`, `hurricane`, `other_disaster`).
-  - Evaluated on test splits via [`test_api_on_split.py`](file:///c:/Users/shahs/OneDrive/Desktop/My%20Folder/DAIICT/Sem5/Software/IT314_Software_Project/ai-workers/model/test_api_on_split.py) with class-specific review thresholds.
+  - Training, evaluation and limits: [docs/ai/text-model.md](../ai/text-model.md).
+- **Standalone Vision Model Service ([`models/image_classifier/`](../../models/image_classifier/)):**
+  - Separate from `ai-workers/`: its own dependencies and process. The backend reaches it only through `AI_IMAGE_SERVICE_URL`.
+  - Microservice utilizing a `timm` PyTorch backbone for classifying disaster imagery; training, deployment app and API test harness are in `train/`, `deployment/` and `testing/`. Results: [docs/ai/models.md](../ai/models.md).
+- **Folder scope:** what each `ai-workers/` and `models/` folder is for, and where new work goes: [docs/ai/folder-scope.md](../ai/folder-scope.md).
 
 ---
 
@@ -331,8 +345,8 @@ To maintain factual engineering clarity, capabilities in the repository are cata
 | **Team Recommendation Engine** | **Implemented (Real)** | PostGIS proximity sorting, capability scoring, tested in `test_recommendations.py` |
 | **Internal Ingestion Runner** | **Implemented (Real)** | Advisory lock protected `/api/v1/internal/ingest/run` & cron workflow |
 | **Advisory Text AI Triage** | **Implemented (Real), rules baseline** | `drch-ai-triage` `/triage` keyword rules behind backend guardrails (`app.services.ai_provider`); a trained scenario model plugs in through `TRIAGE_MODEL_DIR` once S2-05 delivers one |
-| **English Crisis Text Model** | **Experimental / Optional** | Real-data event-held-out baseline at `ai-workers/text_model`; separate `/analyze-text` endpoint, not connected to ingestion |
-| **Image Disaster Classifier** | **Prototype / Isolated** | PyTorch service in `ai-workers/model/app.py`, evaluated offline on split data; not deployed for this release, so photo analysis answers `503 AI_PHOTO_UNAVAILABLE` |
+| **English Crisis Text Model** | **Experimental / Optional** | Real-data event-held-out baseline trained in `models/text_model`, served by `ai-workers/service/text_analysis.py`; separate `/analyze-text` endpoint, not connected to ingestion |
+| **Image Disaster Classifier** | **Prototype / Isolated** | PyTorch service in `models/image_classifier/deployment/app.py`, evaluated offline on split data; not deployed for this release, so photo analysis answers `503 AI_PHOTO_UNAVAILABLE` |
 | **Citizen Photo Storage** | **Implemented (Real), database** | Bytes in PostgreSQL `evidence_blobs` (migration 11), metadata and moderation in `evidence_files`; Cloudinary is planned later (see "Photo storage" in section 8) |
 | **Payment Gateway Integration** | **Simulated (Sandbox)** | Sandbox `MockGateway` only; live Razorpay/Stripe integration is planned |
 | **External Alert & Signal Ingestion** | **Implemented (Real feeds) + Replay** | SACHET CAP adapters (`app/services/ingest/`) run on the scheduler and the `ingest-cron.yml` workflow; the Bluesky and GNEWS text sources remain opt-in (`BLUESKY_SEARCH_ENABLED`, `NEWS_RSS_ENABLED`); new social/news text is sent to the configured multilingual disaster classifier, bounded to 50 signals per run; fallback alerts stay labelled `is_fallback = TRUE` |
@@ -359,13 +373,13 @@ flowchart LR
 
 | Concern | How it is handled | Reference |
 |---|---|---|
-| Hosting | Neon (database), Render free web services for the backend and the AI triage service (`render.yaml`), a separate Render staging backend `drch-backend-latest` (`https://drch-backend-latest.onrender.com`) next to the production backend `it314-software-project-backend1`, both defined in `render.yaml`, Vercel (frontend and the BFF proxies) | `render.yaml`, [release-runbook.md](release-runbook.md) §1 |
+| Hosting | Neon (database), Render free web services for the backend and the AI triage service (`render.yaml`), a separate Render staging backend `drch-backend-latest` (`https://drch-backend-latest.onrender.com`) next to the production backend `it314-software-project-backend1`, both defined in `render.yaml`, Vercel (frontend and the BFF proxies) | `render.yaml`, [release-runbook.md](../operations/release-runbook.md) §1 |
 | Configuration and secrets | Every secret is entered by Siddh in the Render, Vercel and GitHub consoles; the repository lists names only | [env-variables.md](env-variables.md) |
-| Migrations | Forward-only SQL files applied by `python -m app.migrate` (also at backend start-up) under an advisory lock; a Neon branch is taken before each release | [runbook-migration.md](runbook-migration.md) |
+| Migrations | Forward-only SQL files applied by `python -m app.migrate` (also at backend start-up) under an advisory lock; a Neon branch is taken before each release | [runbook-migration.md](../operations/runbook-migration.md) |
 | Continuous deployment | `cd.yml` runs only on `main` or a release tag (a release tag must point at a commit on `main`); the `main` branch ruleset already requires a pull request with the `Pipeline Status / Quality Gate` check green and the branch up to date, so CD does not re-run CI. CD compares each commit with the last CD run that succeeded (not just its parent), so a run cancelled by a newer merge, or one that failed, does not lose its changes. Vercel starts without waiting for any image build, and each Render job waits only for its own image. A merge to `main` publishes the changed images: when the merged tree equals the pull request head, CD retags the image CI already built and scanned (`ci-<head sha>` to `latest` and `sha-<short>`) instead of rebuilding it, and falls back to a normal build otherwise. It then deploys the backend image for that commit to staging, waits for its `GIT_SHA` on `/api/v1/health` and runs the smoke test there. Production (Render) deploys only if that passes, then waits for the same `GIT_SHA`. Vercel and the AI triage service deploy by their own hooks. A deploy whose hook secret is missing is shown as skipped, not successful. A newer push cancels an older CD run | `.github/workflows/cd.yml` |
-| Releases and rollback | A `vX.Y.Z` / `vX.Y.Z-rcN` tag builds all images from that commit with the version as the image tag; releases are deployed and rolled back by pointing Render at a version (or `sha-`) tag | [release-runbook.md](release-runbook.md) §2, §4 |
-| Cold start | Render free instances sleep; `ingest-cron.yml` wakes the backend every 15 minutes; open `/api/v1/health` before a demo | [release-runbook.md](release-runbook.md) §1 |
+| Releases and rollback | A `vX.Y.Z` / `vX.Y.Z-rcN` tag builds all images from that commit with the version as the image tag; releases are deployed and rolled back by pointing Render at a version (or `sha-`) tag | [release-runbook.md](../operations/release-runbook.md) §2, §4 |
+| Cold start | Render free instances sleep; `ingest-cron.yml` wakes the backend every 15 minutes; open `/api/v1/health` before a demo | [release-runbook.md](../operations/release-runbook.md) §1 |
 | Fallback hosting | `docker-compose.prod.yml` runs the same images (PostGIS, backend, frontend, AI workers) on any Docker host; it needs an explicit `IMAGE_TAG` (a release or `sha-` tag, never `latest`), binds the app ports to localhost behind a TLS reverse proxy, and refuses to start when a required secret is missing | `docker-compose.prod.yml` |
-| Photo storage | **Decision (14 Nov 2026): keep citizen photos in the database for this release.** Bytes live in `evidence_blobs` (at most 5 photos of 5 MB per report), so they are covered by the same Neon branch and `scripts/db_backup.py` backup as the rest of the data, deleted with the report or account, and served only through the authenticated citizen and moderator endpoints. No storage service, bucket or extra secret is needed on Render. **Later: Cloudinary.** When storage size or load makes it worth it, upload new photos to a private (authenticated) Cloudinary folder, record it in `evidence_files.storage_key` as `cloudinary:<public id>` (today every row is `db:<evidence id>`, so the prefix tells the two apart and both can be served during the move), serve them through short-lived signed URLs from the same endpoints, copy the existing `evidence_blobs` rows once, and only then drop the bytes. That change needs `CLOUDINARY_URL` on Render and an update to `docs/env-variables.md`; it is not started | `backend/app/routers/citizen.py`, `backend/app/routers/dm/moderation.py`, migration 11 |
-| Backups | Neon branches before releases; `pg_dump` / `pg_restore` for a portable copy | [runbook-migration.md](runbook-migration.md) |
-| Demo and rehearsal | Roles, script, on-stage fallbacks and rehearsal log | [demo-script.md](demo-script.md) |
+| Photo storage | **Decision (14 Nov 2026): keep citizen photos in the database for this release.** Bytes live in `evidence_blobs` (at most 5 photos of 5 MB per report), so they are covered by the same Neon branch and `scripts/db_backup.py` backup as the rest of the data, deleted with the report or account, and served only through the authenticated citizen and moderator endpoints. No storage service, bucket or extra secret is needed on Render. **Later: Cloudinary.** When storage size or load makes it worth it, upload new photos to a private (authenticated) Cloudinary folder, record it in `evidence_files.storage_key` as `cloudinary:<public id>` (today every row is `db:<evidence id>`, so the prefix tells the two apart and both can be served during the move), serve them through short-lived signed URLs from the same endpoints, copy the existing `evidence_blobs` rows once, and only then drop the bytes. That change needs `CLOUDINARY_URL` on Render and an update to `docs/architecture/env-variables.md`; it is not started | `backend/app/routers/citizen.py`, `backend/app/routers/dm/moderation.py`, migration 11 |
+| Backups | Neon branches before releases; `pg_dump` / `pg_restore` for a portable copy | [runbook-migration.md](../operations/runbook-migration.md) |
+| Demo and rehearsal | Roles, script, on-stage fallbacks and rehearsal log | [demo-script.md](../project/demo-script.md) |

@@ -1,7 +1,7 @@
 # Load test (S3-13)
 
 Owner: Shlok (script and runs); Nisarg reads EXPLAIN for the same queries and proposes an index only if a
-plan shows the need. Script: [`scripts/load_test.py`](../scripts/load_test.py).
+plan shows the need. Script: [`scripts/load_test.py`](../../scripts/load_test.py).
 
 ## How to run
 

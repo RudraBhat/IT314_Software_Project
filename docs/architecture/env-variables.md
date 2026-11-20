@@ -30,7 +30,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `AI_TRIAGE_TOKEN` (S) | no | - | Bearer token sent to the triage service; set the same value on `ai-workers`. |
 | `DISASTER_CLASSIFIER_URL` | no | - | Optional multilingual classifier URL for newly ingested `GNEWS`/`BLUESKY` signals. Set the real URL only in the local `.env` and the deployed service's environment, never in committed files. The service exposes `POST /predict`, accepts `{"text":"..."}`, and requires no token. If unset, ingestion retains the existing `AI_TRIAGE_URL` prelabel path. |
 | `AI_LOW_CONFIDENCE_THRESHOLD` | no | `0.6` | Below this a suggestion is `LOW_CONFIDENCE`. |
-| `AI_IMAGE_SERVICE_URL` | no | - | Base URL of the disaster image classifier (`ai-workers/model`, `POST /predict`), for example `http://localhost:8002` when started with `uvicorn app:app --port 8002` (it must not point at the backend's own port 8000). Unset = photo analysis returns `AI_PHOTO_UNAVAILABLE` (503). |
+| `AI_IMAGE_SERVICE_URL` | no | - | Base URL of the disaster image classifier (`models/image_classifier/deployment`, `POST /predict`; the hosted copy is described in `docs/ai/models.md`), for example `http://localhost:8002` when started from that folder with `uvicorn app:app --port 8002` (it must not point at the backend's own port 8000). Unset = photo analysis returns `AI_PHOTO_UNAVAILABLE` (503). |
 | `GOOGLE_MAPS_API_KEY` (S) | no | - | Optional geocoder; falls back to OpenStreetMap Nominatim. |
 | `BOUNDARY_SYNC_ENABLED` | no | `true` | Enable the periodic boundary sync worker. |
 | `BOUNDARY_SYNC_INTERVAL_HOURS` | no | `720` | Minimum hours between upstream syncs. |
@@ -67,7 +67,7 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
-| `TEXT_MODEL_DIR` | no | `ai-workers/text_model/artifacts` | Directory holding `model.joblib` (and `metadata.json`) for `POST /analyze-text`. The endpoint returns 503 when it is missing, incompatible, or its SHA-256 does not match `metadata.json`. |
+| `TEXT_MODEL_DIR` | no | `ai-workers/artifacts/text_analysis` | Directory holding `model.joblib` (and `metadata.json`) for `POST /analyze-text`. `python train.py` (run from `models/text_model/train/`) writes them to `models/text_model/artifacts`; point this variable there or copy them to the default. The endpoint returns 503 when it is missing, incompatible, or its SHA-256 does not match `metadata.json`. |
 
 ## Frontend (Next.js)
 
@@ -90,6 +90,23 @@ When `APP_ENV` is `staging` or `production` the backend refuses to start unless 
 | `LLM_API_KEY` (S) | if enabled | Provider key (not needed for `ollama`). Set in the hosting environment only, never in git. |
 | `LLM_MODEL` | no | Overrides the provider's default model. |
 | `OLLAMA_URL` | no | Base URL for `ollama` (default `http://localhost:11434`). |
+
+## Model services (`models/*/deployment/`, hosted separately)
+
+Both services read their configuration from the environment. Both model repositories are public, so neither service needs `HF_TOKEN`.
+
+| Variable | Service | Required | Default | Purpose |
+|---|---|---|---|---|
+| `PYTHON_VERSION` | both | yes on Render | - | `3.11.11`; also pinned in each `deployment/.python-version`. |
+| `HF_MODEL_REPO` | text classifier | **yes** | - | Public Hugging Face repository with the ONNX INT8 files. The service refuses to start without it. |
+| `HF_REVISION` | text classifier | no | `main` | Repository revision to download. |
+| `MAX_LENGTH` | text classifier | no | `160` | Tokenizer length; must match the training `--max-length`. |
+| `MODEL_DIR` | text classifier | no | system temp folder + `indicbert_model` | Where the model files are downloaded at startup. |
+| `HF_MODEL_REPO_ID` | image classifier | **yes** | - | Public Hugging Face repository with the checkpoint. The service refuses to start without it. |
+| `HF_MODEL_FILENAME` | image classifier | no | `best_model.pt` | Checkpoint file name in that repository. |
+| `HF_MODEL_REVISION` | image classifier | no | default branch | Repository revision to download. |
+| `HF_TOKEN` (S) | `models/text_classifier/train/export_onnx_int8.py --upload-repo` only | - | Write token for uploading an exported model. Set it locally for that command only, never on a deployed service. |
+| `DISASTER_DATA_ROOT` | image classifier training | `data_disaster_types` | Local dataset folder for `train/`. |
 
 ## Database container
 
@@ -128,7 +145,7 @@ Entered by Siddh under repository or GitHub environment settings as indicated be
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `cd.yml` | Build arguments for the frontend container image (public values embedded in the browser bundle). Set them under Settings > Secrets and variables > Actions > Variables; leave unset if Vercel builds the frontend. |
 | `CD_SKIP_ALLOWED` | `cd.yml` (job `deploy-summary`) | Optional comma-separated list of CD components that may be skipped on purpose: `frontend`, `staging` (staging deploy and smoke test), `backend` (production Render deploy), `ai` (AI triage deploy). Leave it unset in a fully configured repository: any expected deployment that was skipped (usually a missing hook or URL secret) or failed then fails the run, so a green CD run always means everything the change needed was deployed. |
 
-**Render services.** `render.yaml` defines three services: `drch-backend-latest` (staging, `https://drch-backend-latest.onrender.com`, deployed first and smoke-tested; this is `STAGING_BACKEND_URL`), `it314-software-project-backend1` (production, `https://it314-software-project-backend1.onrender.com`, deployed only after the smoke test passed; this is `PROD_BACKEND_URL`) and `drch-ai-triage`. Setup steps: [release-runbook.md](release-runbook.md), "Staging service and secrets". Give the two backends separate databases, `JWT_SECRET` and `MFA_ENCRYPTION_KEY` values. If you run only one backend, point both hook and URL secret pairs at it and put `staging` in `CD_SKIP_ALLOWED`, or accept that its staging smoke gate and production deploy then hit the same service.
+**Render services.** `render.yaml` defines three services: `drch-backend-latest` (staging, `https://drch-backend-latest.onrender.com`, deployed first and smoke-tested; this is `STAGING_BACKEND_URL`), `it314-software-project-backend1` (production, `https://it314-software-project-backend1.onrender.com`, deployed only after the smoke test passed; this is `PROD_BACKEND_URL`) and `drch-ai-triage`. Setup steps: [release-runbook.md](../operations/release-runbook.md), "Staging service and secrets". Give the two backends separate databases, `JWT_SECRET` and `MFA_ENCRYPTION_KEY` values. If you run only one backend, point both hook and URL secret pairs at it and put `staging` in `CD_SKIP_ALLOWED`, or accept that its staging smoke gate and production deploy then hit the same service.
 
 `GITHUB_TOKEN` is provided by GitHub and publishes the images to GHCR.
 

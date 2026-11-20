@@ -1,6 +1,6 @@
 # Release Runbook
 
-Owner: Siddh. Secret values are entered by the owner in the hosting consoles only; this file lists names, never values (see [env-variables.md](env-variables.md)).
+Owner: Siddh. Secret values are entered by the owner in the hosting consoles only; this file lists names, never values (see [env-variables.md](../architecture/env-variables.md)).
 
 ## 1. Production-like deployment
 
@@ -13,10 +13,10 @@ Owner: Siddh. Secret values are entered by the owner in the hosting consoles onl
 | Frontend | Vercel | `NEXT_PUBLIC_API_URL` pointing at the Render backend |
 | Fallback | `docker-compose.prod.yml` on any Docker host | `.env` file with the required keys and `IMAGE_TAG` set to a release (`vX.Y.Z`) or commit (`sha-<short>`) tag; compose refuses to start when one is missing. App ports bind to localhost, so run a TLS reverse proxy in front |
 
-GitHub Actions secrets used by the workflows are listed in [env-variables.md](env-variables.md#github-actions-secrets-cicd).
+GitHub Actions secrets used by the workflows are listed in [env-variables.md](../architecture/env-variables.md#github-actions-secrets-cicd).
 
 Citizen photos are stored in the database (`evidence_blobs`), so there is no storage service to deploy; Cloudinary is
-planned later ([ARCHITECTURE.md](ARCHITECTURE.md) section 8, "Photo storage"). The image classifier is not deployed
+planned later ([ARCHITECTURE.md](../architecture/ARCHITECTURE.md) section 8, "Photo storage"). The image classifier is not deployed
 for this release: leave `AI_IMAGE_SERVICE_URL` unset and photo analysis answers `503 AI_PHOTO_UNAVAILABLE`.
 
 ### Staging service and secrets (D-02)
@@ -48,9 +48,9 @@ build `54007f9`. What is left is configuration in the consoles (values never go 
 4. **GitHub, environment `production`:** `PROD_BACKEND_URL` is `https://it314-software-project-backend1.onrender.com`
    and `RENDER_DEPLOY_HOOK` is that service's hook (the scheduled `ingest-cron.yml` also reads `PROD_BACKEND_URL`).
 5. Run CD once (`gh workflow run cd.yml --ref main`, or merge a pull request) and check that the **Deployment Summary**
-   shows staging, smoke and production as deployed. Then D-01 and D-02 can be closed in `docs/defect-list.md`.
+   shows staging, smoke and production as deployed. Then D-01 and D-02 can be closed in `docs/quality/defect-list.md`.
 
-Reading a CD run: the last job, **Deployment Summary**, compares what the change needed (frontend, backend, AI triage) with what was actually deployed and fails the run if an expected deployment was skipped or failed. A missing hook or URL secret therefore shows as a red run with the component named in the summary table, not as a green run that deployed nothing. Skipping a component on purpose is declared in the repository variable `CD_SKIP_ALLOWED` (see [env-variables.md](env-variables.md#github-actions-secrets-cicd)).
+Reading a CD run: the last job, **Deployment Summary**, compares what the change needed (frontend, backend, AI triage) with what was actually deployed and fails the run if an expected deployment was skipped or failed. A missing hook or URL secret therefore shows as a red run with the component named in the summary table, not as a green run that deployed nothing. Skipping a component on purpose is declared in the repository variable `CD_SKIP_ALLOWED` (see [env-variables.md](../architecture/env-variables.md#github-actions-secrets-cicd)).
 
 Order: (1) create the Neon branch `backup-pre-<tag>` (see [runbook-migration.md](runbook-migration.md) Step 1); (2) apply migrations with `python -m app.migrate` against the production-like database; (3) set Render variables, deploy the backend, wait for `/api/v1/health`; (4) set Vercel variables and deploy the frontend; (5) create staff accounts with `python -m app.cli create-staff`; (6) run `scripts/smoke.py` against the backend.
 
@@ -119,7 +119,7 @@ Run it once on **staging** before the freeze, never on production. Part A needs 
 
 ## 3. Rehearsals
 
-Roles, the step-by-step script, on-stage fallbacks and the rehearsal log are in [demo-script.md](demo-script.md) (sections 1, 3, 4 and 7). Run it twice. Each run:
+Roles, the step-by-step script, on-stage fallbacks and the rehearsal log are in [demo-script.md](../project/demo-script.md) (sections 1, 3, 4 and 7). Run it twice. Each run:
 
 - [ ] Staging is warm and `/api/v1/health` is green
 - [ ] Citizen reports an incident (cyclone, industrial fire or urban flooding scenario)
@@ -134,7 +134,7 @@ Record the problems found in the defect list that Dhruv triages (S3-17).
 ## 4. Freeze, tag and release
 
 1. Merge freeze announced; only P0 fixes (as approved in S3-17) merge afterwards.
-2. CI green on the release pull requests (the `main` ruleset requires the Quality Gate check) and the release tag points at a commit on `main` (CD refuses other tags); pip-audit, npm audit and Trivy now fail CI on high or critical findings, so review any ignored or accepted findings, update the findings log and fill in the "Freeze evidence" table in [security-review.md](security-review.md).
+2. CI green on the release pull requests (the `main` ruleset requires the Quality Gate check) and the release tag points at a commit on `main` (CD refuses other tags); pip-audit, npm audit and Trivy now fail CI on high or critical findings, so review any ignored or accepted findings, update the findings log and fill in the "Freeze evidence" table in [security-review.md](../quality/security-review.md).
 3. Create the release tag (maintainer action, not automated): `git tag -a vX.Y.Z-rc1 -m "Release candidate 1"` then `git push origin vX.Y.Z-rc1`.
 4. The tag push makes `cd.yml` build all three images from the tagged commit and publish them as `vX.Y.Z-rc1`. When the run is green, deploy that build: in Render set `it314-software-project-backend1` (and staging `drch-backend-latest`) to `…/drch_backend:vX.Y.Z-rc1` and `drch-ai-triage` to `…/drch_ai_workers:vX.Y.Z-rc1` and redeploy; deploy the tagged commit on Vercel. Then run `scripts/smoke.py` and confirm `/api/v1/health` reports the tagged commit's `GIT_SHA`.
 5. If smoke fails, roll back per section 2 and log the cause.

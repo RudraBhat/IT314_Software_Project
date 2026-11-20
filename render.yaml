@@ -7,11 +7,11 @@
 # The two backend names match the services that already exist in Render, so a Blueprint sync updates them
 # instead of creating new ones; if a service was renamed in the dashboard, change the name here to match.
 # Citizen photos are stored in the database (evidence_blobs, migration 11), so no storage service or
-# bucket is needed; moving them to Cloudinary is planned later (docs/ARCHITECTURE.md, "Photo storage").
+# bucket is needed; moving them to Cloudinary is planned later (docs/architecture/ARCHITECTURE.md, "Photo storage").
 # Give staging its own database (for example a separate Neon branch) and its own JWT_SECRET and
 # MFA_ENCRYPTION_KEY, so a token or staff login from one environment never works on the other.
 # Only keys without a built-in default are listed. Every `sync: false` key is entered in the Render
-# dashboard; see docs/env-variables.md for the rest (SMTP_PORT, INGEST_INTERVAL_SECONDS,
+# dashboard; see docs/architecture/env-variables.md for the rest (SMTP_PORT, INGEST_INTERVAL_SECONDS,
 # NEWS_RSS_ENABLED and BLUESKY_SEARCH_ENABLED all default correctly).
 services:
   - type: web

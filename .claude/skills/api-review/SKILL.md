@@ -21,7 +21,7 @@ Review REST endpoints against DRCH API design standards and SRS specifications:
   ```
 - **Idempotency:** Verify sensitive write operations support `Idempotency-Key` headers where appropriate.
 - **Status Codes:** Ensure correct HTTP semantics (`201` for creation, `204` for no-content mutations, `409` for resource conflicts, `422` for validation errors).
-- **Documentation Parity:** Verify new or modified routes match `docs/api_contracts.md`.
+- **Documentation Parity:** Verify new or modified routes match `docs/architecture/api_contracts.md`.
 
 ## 2. Output
 Provide endpoint path, HTTP method, schema validation status, and contract consistency score.

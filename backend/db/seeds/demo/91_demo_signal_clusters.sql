@@ -1,4 +1,4 @@
--- DEVELOPMENT ONLY: SYNTHETIC sample alerts for trying "related alerts" (docs/signal-matching.md).
+-- DEVELOPMENT ONLY: SYNTHETIC sample alerts for trying "related alerts" (docs/architecture/signal-matching.md).
 -- Every row is invented, marked is_simulated = TRUE and prefixed "SYNTHETIC SAMPLE"; none is a real post
 -- and none contains personal information. Re-runnable: rows are keyed by (source, source_uid).
 -- Timestamps are relative to the first time this seed runs.

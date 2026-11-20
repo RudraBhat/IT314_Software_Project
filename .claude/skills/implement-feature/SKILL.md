@@ -9,7 +9,7 @@ Follow this structured workflow to implement features safely within DRCH:
 
 ## 1. Requirements & Architectural Scope
 - Review the user's feature specification.
-- Check `docs/ARCHITECTURE.md` and `docs/api_contracts.md` to identify affected layers:
+- Check `docs/architecture/ARCHITECTURE.md` and `docs/architecture/api_contracts.md` to identify affected layers:
   - Frontend (`frontend/src/app/`, `frontend/src/components/`)
   - Backend API (`backend/app/routers/`, `backend/app/services/`)
   - Database schema (`backend/db/migrations/`)

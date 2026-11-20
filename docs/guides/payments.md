@@ -2,7 +2,7 @@
 
 This guide documents how donations move from a disaster relief campaign to an official receipt, every way a donation can end, the lazy expiry mechanism, how late captures work, what DM staff see in oversight, and what the sandbox gateway does and does not prove.
 
-For API schema specifications, see [`docs/api_contracts.md`](api_contracts.md) sections 7.4 and 7.5.
+For API schema specifications, see [`docs/architecture/api_contracts.md`](../architecture/api_contracts.md) sections 7.4 and 7.5.
 
 ---
 
@@ -10,7 +10,7 @@ For API schema specifications, see [`docs/api_contracts.md`](api_contracts.md) s
 
 * **Only the server confirms.** A donation transitions to `CONFIRMED` only after the backend verifies a cryptographic gateway signature: either via the client verification callback (`POST /api/v1/donations/{id}/verify`) or via an authentic gateway webhook (`POST /api/v1/payments/webhook/{gateway}`). Browser client claims of "success" are never trusted.
 * **One official receipt.** An official receipt number (`REC-YYYY-NNNNNN` or `RCP-...`) is issued exactly once, inside the same database transaction that marks the donation `CONFIRMED`. Re-verifications or repeated webhooks are idempotent and return the existing receipt.
-* **Every ending is recorded and audited.** State transitions go through [`backend/app/services/donation_endings.py`](../backend/app/services/donation_endings.py) and write tamper-evident rows to the audit log.
+* **Every ending is recorded and audited.** State transitions go through [`backend/app/services/donation_endings.py`](../../backend/app/services/donation_endings.py) and write tamper-evident rows to the audit log.
 * **A confirmed donation never changes status.** Cancelling a confirmed donation is refused (`409 DONATION_ALREADY_CONFIRMED`), and late failure events are ignored.
 * **Captured money is never dropped.** If a payment gateway actually captures funds for an order that was marked `FAILED` (e.g. late network reconciliation after the donor abandoned or the order expired), a valid capture callback or webhook still transitions the order to `CONFIRMED` and issues a valid receipt.
 
@@ -28,11 +28,11 @@ A donation starts as `PENDING` when created. It ends in one of three terminal st
 | **FAILED (Expired)** | Order unpaid after `PENDING_TTL` (30 minutes) | `EXPIRED` | Marks order failed on next access; records `DONATION_EXPIRED`. |
 
 ### Lazy Expiry Architecture
-Unlike legacy background workers that sweep databases periodically, expiration is implemented **lazily** in [`backend/app/services/donation_endings.py`](../backend/app/services/donation_endings.py):
+Unlike legacy background workers that sweep databases periodically, expiration is implemented **lazily** in [`backend/app/services/donation_endings.py`](../../backend/app/services/donation_endings.py):
 * `expire_stale_donations(conn)` is called automatically whenever donations are created, read, or summarized.
 * The timeout is governed by `PENDING_TTL = timedelta(minutes=30)` (accessible via `ttl_minutes()`).
 * Database partial index `idx_donations_pending_created` ensures zero-cost evaluation during scans.
-* Schema constraints in [`backend/db/migrations/13_donation_endings.sql`](../backend/db/migrations/13_donation_endings.sql) (`chk_donation_failure_reason`) enforce that only `FAILED` rows may hold a failure reason.
+* Schema constraints in [`backend/db/migrations/13_donation_endings.sql`](../../backend/db/migrations/13_donation_endings.sql) (`chk_donation_failure_reason`) enforce that only `FAILED` rows may hold a failure reason.
 
 ### Late Capture Guarantee
 If a donor closes the checkout window or experiences a network delay, the server may mark the order `ABANDONED` or `EXPIRED`. However, if the bank or gateway subsequently captures the money, refusing the webhook would leave the donor charged without a receipt. DRCH handles this gracefully:
@@ -45,8 +45,8 @@ If a donor closes the checkout window or experiences a network delay, the server
 ## 3. Citizen & DM Interfaces
 
 ### Citizen Donation & Receipts View
-* **Donate Checkout:** [`frontend/src/app/donate/page.tsx`](../frontend/src/app/donate/page.tsx) provides the contribution flow, allows cancellation, handles errors, and displays sandbox warnings.
-* **My Donations & Receipts:** [`frontend/src/app/my-donations/page.tsx`](../frontend/src/app/my-donations/page.tsx) consumes `GET /api/v1/me/donations` via the Next.js citizen BFF proxy:
+* **Donate Checkout:** [`frontend/src/app/donate/page.tsx`](../../frontend/src/app/donate/page.tsx) provides the contribution flow, allows cancellation, handles errors, and displays sandbox warnings.
+* **My Donations & Receipts:** [`frontend/src/app/my-donations/page.tsx`](../../frontend/src/app/my-donations/page.tsx) consumes `GET /api/v1/me/donations` via the Next.js citizen BFF proxy:
   * Lists paginated donation history with live status badges.
   * For `CONFIRMED`: displays official receipt number, issue timestamp, and a browser Print / Save button.
   * For `PENDING`: indicates gateway confirmation is pending and that unpaid orders expire in 30 minutes.
@@ -74,5 +74,5 @@ The default local and test gateway is `MockGateway` (`PAYMENT_GATEWAY=mock`):
 ## 5. Verification & Automated Tests
 
 All donation behavior is verified by automated test suites:
-* **Backend Suite:** [`backend/tests/test_donation_endings.py`](../backend/tests/test_donation_endings.py) validates cancel idempotency, lazy expiration sweeps, signature verification, late capture recovery, and DM oversight failure breakdowns against PostgreSQL.
-* **Frontend E2E Suite:** [`frontend/e2e/donation-receipts.spec.ts`](../frontend/e2e/donation-receipts.spec.ts) validates empty states, confirmed receipt presentation, and failure reason copy using Playwright.
+* **Backend Suite:** [`backend/tests/test_donation_endings.py`](../../backend/tests/test_donation_endings.py) validates cancel idempotency, lazy expiration sweeps, signature verification, late capture recovery, and DM oversight failure breakdowns against PostgreSQL.
+* **Frontend E2E Suite:** [`frontend/e2e/donation-receipts.spec.ts`](../../frontend/e2e/donation-receipts.spec.ts) validates empty states, confirmed receipt presentation, and failure reason copy using Playwright.

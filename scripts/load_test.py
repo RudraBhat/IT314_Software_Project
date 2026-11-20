@@ -10,7 +10,7 @@ load check for a free-tier deployment, not a stress test: keep the request count
 
 The public map run only reads (GET /api/v1/public/incidents). --report-submits registers one throwaway
 citizen and creates real SUBMITTED incidents, so run it only against staging, never production.
-Record the p95 of the public map run in docs/load-test.md.
+Record the p95 of the public map run in docs/quality/load-test.md.
 """
 
 from __future__ import annotations

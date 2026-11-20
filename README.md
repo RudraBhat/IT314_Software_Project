@@ -122,7 +122,7 @@ Health check endpoints:
 
 ### Ingestion sources
 
-The backend polls the configured SACHET CAP feed every 10 minutes. It also replays team-authored social-style samples into the dispatcher signal queue; replay items are sanitised and clearly marked simulated. Only unexpired alerts from official sources are returned by the public alerts API. Ingested signals never become incidents or public alerts without a human dispatcher workflow. See [the source-access memo](docs/ingestion-sources.md) for access, caching, attribution and deployment checks.
+The backend polls the configured SACHET CAP feed every 10 minutes. It also replays team-authored social-style samples into the dispatcher signal queue; replay items are sanitised and clearly marked simulated. Only unexpired alerts from official sources are returned by the public alerts API. Ingested signals never become incidents or public alerts without a human dispatcher workflow. See [the source-access memo](docs/operations/ingestion-sources.md) for access, caching, attribution and deployment checks.
 
 ---
 

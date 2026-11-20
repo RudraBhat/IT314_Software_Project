@@ -42,15 +42,16 @@ def tmp_repo(tmp_path: Path) -> Path:
     (tmp_path / ".ai" / "pipeline").mkdir(parents=True, exist_ok=True)
     (tmp_path / ".agents" / "rules").mkdir(parents=True, exist_ok=True)
     (tmp_path / ".claude" / "skills").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "architecture").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "guides").mkdir(parents=True, exist_ok=True)
     (tmp_path / "backend" / "tests").mkdir(parents=True, exist_ok=True)
     (tmp_path / "frontend").mkdir(parents=True, exist_ok=True)
 
     # Core repo files
     (tmp_path / "AGENTS.md").write_text("# AGENTS\nInspect first.", encoding="utf-8")
     (tmp_path / "CLAUDE.md").write_text("# CLAUDE\n@AGENTS.md", encoding="utf-8")
-    (tmp_path / "docs" / "ARCHITECTURE.md").write_text("# DRCH Architecture\nNeon PostGIS.", encoding="utf-8")
-    (tmp_path / "docs" / "AI_WORKFLOW.md").write_text("# AI Workflow", encoding="utf-8")
+    (tmp_path / "docs" / "architecture" / "ARCHITECTURE.md").write_text("# DRCH Architecture\nNeon PostGIS.", encoding="utf-8")
+    (tmp_path / "docs" / "guides" / "AI_WORKFLOW.md").write_text("# AI Workflow", encoding="utf-8")
 
     # Antigravity rules
     for rule_name in ("architecture.md", "backend-database.md", "frontend.md", "security.md"):

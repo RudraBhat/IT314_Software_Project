@@ -26,10 +26,10 @@ dispatches, escalates and closes.
 
 - **Stack:** FastAPI backend, PostgreSQL 16 with PostGIS on Neon, Next.js 16 (React 19) frontend with a
   backend-for-frontend proxy and an httpOnly session cookie, a separate FastAPI AI service, Leaflet maps.
-  See [ARCHITECTURE.md](ARCHITECTURE.md).
+  See [ARCHITECTURE.md](../architecture/ARCHITECTURE.md).
 - **Hosting:** Render (backend staging, backend production, AI triage, images from GHCR), Vercel (frontend),
   Neon (database), GitHub Actions (CI, CD, ingestion cron). Defined in `render.yaml`, `.github/workflows/`,
-  [release-runbook.md](release-runbook.md) and [env-variables.md](env-variables.md).
+  [release-runbook.md](../operations/release-runbook.md) and [env-variables.md](../architecture/env-variables.md).
 - **State on 14 Nov 2026:** the frontend answers on Vercel; the backend at
   `it314-software-project-backend1.onrender.com` answers `/api/v1/health` with `database: ok` and runs build
   `54007f9`, which is behind `main`. The staging backend `drch-backend-latest.onrender.com` answers the same
@@ -51,13 +51,13 @@ invitations, signal matching, evidence blobs, payment webhook events, donation e
 immutability; verify it with `python -m app.cli verify-audit`. Reference data is seeded in every environment; demo
 incidents only when `APP_ENV=development`.
 
-**ER diagram:** [er-diagram.md](er-diagram.md) — 32 tables and 51 foreign-key relationships, generated from the
+**ER diagram:** [er-diagram.md](../architecture/er-diagram.md) — 32 tables and 51 foreign-key relationships, generated from the
 migrations by `python scripts/generate_er_diagram.py`. Re-run it after any new migration; `--check` fails when the
 diagram is out of date.
 
 ## 4. API (owners: Zalak for citizen and public, Nisarg for dispatch and field, Shlok for payments and signals)
 
-[api_contracts.md](api_contracts.md) lists every endpoint, its authentication and the standard error shape
+[api_contracts.md](../architecture/api_contracts.md) lists every endpoint, its authentication and the standard error shape
 `{error:{code,message,details}}`. Route groups: `auth` (staff login with MFA, citizen register and login, Google
 sign-in, invitations, password reset), `citizen` and `/me/*`, `public`, `field`, `donations` and the payment
 webhook, `internal` (token-guarded ingestion), and `dm/*` (incidents, dispatches, resources, recommendations,
@@ -69,15 +69,15 @@ Citizen registration and login, incident reporting with an idempotency key and G
 readable labels, replying to an information request, optional photo evidence, withdrawal requests, account
 deletion and email copies. The public map is locked to Gujarat with a district filter and an alerts layer. Field
 teams see only their own team's dispatches and report acknowledgement, progress, team requests and completion.
-Screens are described in [frontend-citizen-field-guide.md](frontend-citizen-field-guide.md) and
-[frontend-dispatcher-public-guide.md](frontend-dispatcher-public-guide.md).
+Screens are described in [frontend-citizen-field-guide.md](../guides/frontend-citizen-field-guide.md) and
+[frontend-dispatcher-public-guide.md](../guides/frontend-dispatcher-public-guide.md).
 
 ## 6. Dispatch, recommendations and signals (owners: Nisarg, Shlok)
 
 Verification, rejection, requests for information, priority and closure with an optimistic-concurrency version;
 row-locked resource reservation; automatic escalation of unacknowledged dispatches; ranked team recommendations
 with reasons that never create a dispatch; team-request decisions; a signals queue with promote and dismiss; and
-advisory related-signal suggestions ([signal-matching.md](signal-matching.md)). The detailed dispatch and field API
+advisory related-signal suggestions ([signal-matching.md](../architecture/signal-matching.md)). The detailed dispatch and field API
 section is Nisarg's [final-report-dispatch-field.md](final-report-dispatch-field.md).
 
 **Duplicate grouping (S2-07):** `GET /dm/incidents/{id}/duplicates` still finds candidates with the scenario, time
@@ -97,21 +97,21 @@ Every path now ends on the server: the donor's cancel (`POST /donations/{id}/can
 `payment.failed` webhook (GATEWAY_DECLINED) or 30 minutes without a verified payment (EXPIRED) all end as `FAILED`
 with the reason recorded and audited. A verified payment of the right amount that arrives later still confirms the
 donation, so captured money is never lost and nothing is confirmed without verification. See
-[payment-gateway-findings.md](payment-gateway-findings.md).
+[payment-gateway-findings.md](../quality/payment-gateway-findings.md).
 
 **Load test (S3-13):** 200 public-map requests at concurrency 5 against the deployed backend gave **p95 633 ms**
-(p50 475 ms, no errors) from a client in India to Render's Ohio region ([load-test.md](load-test.md)).
+(p50 475 ms, no errors) from a client in India to Render's Ohio region ([load-test.md](../quality/load-test.md)).
 **Backups (S3-12):** `scripts/db_backup.py` takes a `pg_dump` backup and restores only into a `_restore` or `_test`
-database unless forced ([runbook-migration.md](runbook-migration.md)).
+database unless forced ([runbook-migration.md](../operations/runbook-migration.md)).
 
 ## 8. Ingestion, signals and AI (owners: Rudra, Neeti, Dhruvil, Zalak)
 
-**Ingestion** ([ingestion-sources.md](ingestion-sources.md)): a SACHET (Gujarat feed) adapter, a replay
+**Ingestion** ([ingestion-sources.md](../operations/ingestion-sources.md)): a SACHET (Gujarat feed) adapter, a replay
 source, optional Google News and Bluesky text signals (off by default), a ten-minute scheduler, a token-guarded
 trigger for the GitHub cron, a Poll-now action and a health panel. Signal text is sanitised, language-detected
 and stored with its source and simulated flag; nothing becomes an incident without a human promoting it.
 
-**AI** ([ai/text-label-guideline.md](ai/text-label-guideline.md), [ai/text-dataset-sources.md](ai/text-dataset-sources.md)):
+**AI** ([ai/text-label-guideline.md](../ai/text-label-guideline.md), [ai/text-dataset-sources.md](../ai/text-dataset-sources.md)):
 `/triage` runs a rules baseline with guardrails and a human decision is recorded. Measured so far:
 
 | Model | Result | Limit |
@@ -139,14 +139,14 @@ guide. Browser requests go through BFF proxies that attach the session token and
 | Automated tests | 818 backend tests collected; 8 Playwright e2e specs (citizen reply, three scenarios, language selector, alerts, password reset, layout); AI-service tests; all run in CI |
 | Smoke test | `scripts/smoke.py` (register, report, verify, public map) is run by CI against a local stack and by CD against staging |
 | Scenario test (S3-01) | `scripts/scenario_run.py` drives the cyclone scenario from citizen report to closure over HTTP and can repeat it (`--runs 3`) against staging |
-| Load test (S3-13) | [load-test.md](load-test.md) |
-| Security | role matrix, public and `/me` data checks, BFF CSRF checks, blocking scans: [security-review.md](security-review.md) |
+| Load test (S3-13) | [load-test.md](../quality/load-test.md) |
+| Security | role matrix, public and `/me` data checks, BFF CSRF checks, blocking scans: [security-review.md](../quality/security-review.md) |
 | Rehearsals and demo script | [demo-script.md](demo-script.md) (log still empty) |
-| Defects | [defect-list.md](defect-list.md) |
+| Defects | [defect-list.md](../quality/defect-list.md) |
 
 ## 11. Known limits and future work
 
-See [future-features.md](future-features.md) and the open items in [defect-list.md](defect-list.md): no model on
+See [future-features.md](future-features.md) and the open items in [defect-list.md](../quality/defect-list.md): no model on
 our three scenarios, no hosted image service, untuned duplicate-scoring weights, and no recorded 24-hour ingestion
 soak.
 

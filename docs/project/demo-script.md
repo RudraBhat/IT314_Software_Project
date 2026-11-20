@@ -1,7 +1,7 @@
 # ResQ — Final Demo Script
 
 **Version:** 2.0 (replaces the earlier demo script) · **Owner:** Siddh (S2-15, S3-15) · **Draft from the scenario test:** Dhruv
-**Environment:** Render staging backend + Vercel frontend (fallback: `docker-compose.prod.yml`, see [release-runbook.md](release-runbook.md))
+**Environment:** Render staging backend + Vercel frontend (fallback: `docker-compose.prod.yml`, see [release-runbook.md](../operations/release-runbook.md))
 
 The demo follows one cyclone incident from a citizen report to closure, with the ingestion, AI,
 field and donation parts played by the people who built them. Every step names the screen, the API

@@ -2,7 +2,7 @@
 
 /**
  * Account flows that run before a session exists: password reset, invitation setup and Google
- * sign-in (docs/api_contracts.md section 2).
+ * sign-in (docs/architecture/api_contracts.md section 2).
  *
  * These are Next.js server actions (backend-for-frontend), like app/login/actions.ts: the browser
  * only ever talks to its own origin and the server calls the backend at API_URL. That keeps the

@@ -45,7 +45,7 @@ Start with **Razorpay** for integration:
 2. Our `RazorpayGateway` stub (`backend/app/payments/razorpay_gateway.py`) already maps to Razorpay's order-create API shape.
 3. `MockGateway` keeps CI green until Siddh wires in the real keys.
 
-When Siddh opens the account and the adapter is wired into the donation routes, the only env vars needed are below (commented out in `.env.example`, documented in `docs/env-variables.md`):
+When Siddh opens the account and the adapter is wired into the donation routes, the only env vars needed are below (commented out in `.env.example`, documented in `docs/architecture/env-variables.md`):
 
 ```
 PAYMENT_GATEWAY=RAZORPAY

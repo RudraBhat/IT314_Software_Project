@@ -38,7 +38,7 @@ Perform these steps on **staging** first before executing on production.
    longer needed: they contain personal data.
 
 ### Step 2: Secret Rotation & Environment Configuration
-Set or update the required environment variables across the deployment targets (see [docs/env-variables.md](file:///docs/env-variables.md)):
+Set or update the required environment variables across the deployment targets (see [docs/architecture/env-variables.md](file:///docs/env-variables.md)):
 
 | Environment Variable | Required Target | Instructions |
 |---|---|---|

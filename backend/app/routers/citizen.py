@@ -1,6 +1,6 @@
 """Citizen incident reporting and tracking (NU-FR-03..07).
 
-Contract: docs/api_contracts.md sections 2.3 and 2.4.
+Contract: docs/architecture/api_contracts.md sections 2.3 and 2.4.
 Every query is scoped to the authenticated citizen (reporter_id); another
 citizen's incident is reported as 404 so its existence is never revealed.
 """
@@ -115,7 +115,7 @@ def create_incident(
     principal: Citizen,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=100)] = None,
 ):
-    # Required (docs/api_contracts.md s.2.3): without a key, every client retry of the same
+    # Required (docs/architecture/api_contracts.md s.2.3): without a key, every client retry of the same
     # emergency would create another report. Same rule and error code as POST /donations.
     if not idempotency_key or not idempotency_key.strip():
         raise ApiError(422, "IDEMPOTENCY_KEY_REQUIRED", "The Idempotency-Key header is required")

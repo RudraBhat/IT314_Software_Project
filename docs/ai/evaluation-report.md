@@ -32,10 +32,10 @@ read from the CI job **Backend / Migrations, Triggers & Test Suite**.
 
 | Model | Data and split | Result | Source |
 |---|---|---|---|
-| `resq-english-crisis-text-v1` (TF-IDF + logistic regression) | Appen disaster messages, event-held-out (train Haiti and news, validate Pakistan, test Sandy) | relevance accuracy 0.897; "not related" recall only 0.24; scenario, urgency and location heads `NOT_TRAINED` | `ai-workers/text_model/reports/evaluation.json` |
-| TF-IDF reference on HumAID | HumAID events, event-held-out | macro-F1 0.565, accuracy 0.669 | `ai-workers/text_model/reports/humaid_tfidf_evaluation.json` |
-| BERTweet on HumAID (research only) | same split | macro-F1 0.695, accuracy 0.815 | `ai-workers/text_model/reports/humaid_transformer_evaluation.json` |
-| ConvNeXt-Tiny image classifier | 3,195 test images, 7 classes | accuracy 0.839, macro-F1 0.815; weakest `other_disaster` and `hurricane` | `ai-workers/model/Results/README_model_check.md` |
+| `resq-english-crisis-text-v1` (TF-IDF + logistic regression) | Appen disaster messages, event-held-out (train Haiti and news, validate Pakistan, test Sandy) | relevance accuracy 0.897; "not related" recall only 0.24; scenario, urgency and location heads `NOT_TRAINED` | `docs/ai/reports/text_model/evaluation.json` |
+| TF-IDF reference on HumAID | HumAID events, event-held-out | macro-F1 0.565, accuracy 0.669 | `docs/ai/reports/text_model/humaid_tfidf_evaluation.json` |
+| BERTweet on HumAID (research only) | same split | macro-F1 0.695, accuracy 0.815 | `docs/ai/reports/text_model/humaid_transformer_evaluation.json` |
+| ConvNeXt-Tiny image classifier | 3,195 test images, 7 classes | accuracy 0.839, macro-F1 0.815; weakest `other_disaster` and `hurricane` | `docs/ai/image-classifier-model-check.md` |
 
 None of these predicts our three scenarios, none was scored on Gujarat text, and HumAID is licensed for
 non-commercial research (CC BY-NC-SA), so weights derived from it are not deployed without a rights review. They
