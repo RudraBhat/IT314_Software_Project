@@ -453,16 +453,21 @@ export function PublicMap() {
           </>
           )}
           <div className={`${panel} flex gap-1 p-1 text-xs`} role="group" aria-label="Base map">
-            {(["streets", "humanitarian"] as const).map((layer) => (
+            {(
+              [
+                ["streets", "Streets"],
+                ["humanitarian", "Humanitarian"],
+              ] as const
+            ).map(([layer, text]) => (
               <button
                 key={layer}
                 onClick={() => setActiveBaseLayer(layer)}
                 aria-pressed={activeBaseLayer === layer}
-                className={`rounded-lg px-2.5 py-1 font-semibold capitalize transition ${
+                className={`rounded-lg px-2.5 py-1 font-semibold transition ${
                   activeBaseLayer === layer ? "bg-[#0c4a75] text-white" : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
-                {layer}
+                {text}
               </button>
             ))}
           </div>
