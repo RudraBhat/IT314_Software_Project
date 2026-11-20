@@ -10,9 +10,10 @@ export interface SessionInfo {
   citizen?: boolean;
   role: string | null;
   name: string | null;
+  email?: string | null;
 }
 
-export const SIGNED_OUT: SessionInfo = { authenticated: false, dm: false, citizen: false, role: null, name: null };
+export const SIGNED_OUT: SessionInfo = { authenticated: false, dm: false, citizen: false, role: null, name: null, email: null };
 
 type SessionState = {
   /** null until the first check answers. */

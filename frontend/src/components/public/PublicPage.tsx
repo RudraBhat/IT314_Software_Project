@@ -2,10 +2,21 @@ import { UnifiedSiteHeader } from "../navigation/UnifiedSiteHeader";
 import type { ReactNode } from "react";
 
 /** Shared shell for the public (no-login) informational pages. */
-export function PublicPage({ title, intro, children }: { title: string; intro: string; children: ReactNode }) {
+export function PublicPage({
+  title,
+  intro,
+  activeHref,
+  children,
+}: {
+  title: string;
+  intro: string;
+  /** This page's path, so the header highlights it. */
+  activeHref?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
-      <UnifiedSiteHeader />
+      <UnifiedSiteHeader activeHref={activeHref} />
       <main className="mx-auto max-w-4xl px-4 py-8">
         <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
         <p className="mt-2 text-slate-600">{intro}</p>

@@ -85,7 +85,7 @@ export default async function SafetyPage() {
     loadPublished<PublishedUpdate>("updates"),
   ]);
   return (
-    <PublicPage title="Safety guidance" intro="Basic guidance for the hazards most likely in Gujarat. Always follow instructions from local authorities first.">
+    <PublicPage activeHref="/safety" title="Safety guidance" intro="Basic guidance for the hazards most likely in Gujarat. Always follow instructions from local authorities first.">
       {updates && updates.length > 0 && (
         <Section title="Verified updates from Gujarat dispatchers">
           {updates.map((u) => (

@@ -51,7 +51,7 @@ export function ScenarioWalkthrough() {
             role="tab"
             aria-selected={scenario === s}
             onClick={() => setScenario(s)}
-            className={cx("rounded-full px-3 py-1 text-xs", scenario === s ? "bg-sky-500/15 font-semibold text-sky-300" : "text-muted hover:bg-surface-muted")}
+            className={cx("rounded-full px-3 py-1 text-xs", scenario === s ? "bg-sky-500/15 font-semibold text-sky-700" : "text-muted hover:bg-surface-muted")}
           >
             {scenarioLabel[s]}
           </button>

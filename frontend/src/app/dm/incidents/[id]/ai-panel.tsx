@@ -367,10 +367,10 @@ function PhotoAnalyseSection({ incidentId }: { incidentId: string }) {
             </span>
           </div>
           {result.is_out_of_scope && (
-            <p className="text-amber-500">This disaster type is not one of the three supported scenarios. Verify manually.</p>
+            <p className="text-amber-700">This disaster type is not one of the three supported scenarios. Verify manually.</p>
           )}
           {result.needs_review && (
-            <p className="text-amber-500">Confidence below threshold — human review advised.</p>
+            <p className="text-amber-700">Confidence below threshold — human review advised.</p>
           )}
           <p className="text-[11px] text-muted">{result.advisory_notice}</p>
           <div className="pt-1 text-right">

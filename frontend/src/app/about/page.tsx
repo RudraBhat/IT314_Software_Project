@@ -8,6 +8,7 @@ export const metadata: Metadata = { title: "About · ResQ Gujarat" };
 export default function AboutPage() {
   return (
     <PublicPage
+      activeHref="/about"
       title="About ResQ"
       intro="A disaster response coordination platform for Gujarat that connects citizens, dispatchers and field teams."
     >

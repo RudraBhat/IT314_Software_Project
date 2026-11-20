@@ -95,6 +95,7 @@ export function SiteHeader({
   children,
   sticky = true,
   maxWidth = "max-w-7xl",
+  layer = "z-[1000]",
 }: {
   subtitle?: string;
   brandHref?: string;
@@ -103,10 +104,12 @@ export function SiteHeader({
   children?: ReactNode;
   sticky?: boolean;
   maxWidth?: string;
+  /** Stacking order. Workspaces with their own drawers pass a lower one (for example "z-30") so drawers cover the bar. */
+  layer?: string;
 }) {
   return (
     <header
-      className={`${sticky ? "sticky top-0" : ""} z-[1000] shrink-0 border-b border-[#093554] bg-[#0c4a75] font-brand text-white shadow-md`}
+      className={`${sticky ? "sticky top-0" : ""} ${layer} shrink-0 border-b border-[#093554] bg-[#0c4a75] font-brand text-white shadow-md`}
     >
       <div className={`mx-auto flex h-14 w-full ${maxWidth} items-center gap-3 px-4 sm:px-6`}>
         {leading}
@@ -126,17 +129,22 @@ export function SiteHeader({
 export const HEADER_CONTROL =
   "h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300";
 
-/** Shared pill-style nav link for headers. */
+/**
+ * Shared pill-style nav link for headers. `active` marks the page you are on (highlighted and
+ * announced with aria-current), so every link keeps its place in the bar on every page.
+ */
 export function NavLink({
   href,
   children,
   hideBelow,
   variant = "default",
+  active = false,
 }: {
   href: string;
   children: ReactNode;
   hideBelow?: "sm" | "md" | "lg";
   variant?: "default" | "primary" | "success";
+  active?: boolean;
 }) {
   const hide = hideBelow === "sm" ? "hidden sm:inline-flex" : hideBelow === "md" ? "hidden md:inline-flex" : hideBelow === "lg" ? "hidden lg:inline-flex" : "inline-flex";
   const tone =
@@ -144,13 +152,66 @@ export function NavLink({
       ? "bg-red-600 hover:bg-red-500"
       : variant === "success"
         ? "bg-emerald-600 hover:bg-emerald-500"
-        : "bg-white/10 hover:bg-white/20";
+        : active
+          ? "bg-white text-[#0c4a75] shadow-sm"
+          : "bg-white/10 hover:bg-white/20";
+  const ring = active && variant !== "default" ? "ring-2 ring-white/80" : "";
   return (
     <Link
       href={href}
-      className={`${HEADER_CONTROL} ${hide} ${tone} text-white`}
+      aria-current={active ? "page" : undefined}
+      className={`${HEADER_CONTROL} ${hide} ${tone} ${ring} ${active && variant === "default" ? "" : "text-white"}`}
     >
       {children}
     </Link>
+  );
+}
+
+/** Thin divider between groups of header links. */
+export function NavDivider({ hideBelow = "lg" }: { hideBelow?: "sm" | "lg" }) {
+  return <span aria-hidden className={`${hideBelow === "sm" ? "hidden sm:block" : "hidden lg:block"} mx-1 h-6 w-px bg-white/20`} />;
+}
+
+/**
+ * Signed-in person and Sign out, the same in every header (the administration style): the name in bold
+ * with a smaller line under it (email or role), then a round Sign out button. `signOut` may be a server
+ * action or a client handler.
+ */
+export function HeaderAccount({
+  name,
+  detail,
+  signOut,
+}: {
+  name: string;
+  /** A line of text (email, role) or a small control such as the permissions menu. */
+  detail?: ReactNode;
+  signOut: () => void | Promise<void>;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-3">
+      <div className="hidden max-w-[220px] text-right sm:block">
+        <p className="truncate text-sm font-semibold leading-tight text-white">{name}</p>
+        {detail &&
+          (typeof detail === "string" ? (
+            <p className="truncate text-[10px] text-sky-200/80">{detail}</p>
+          ) : (
+            <div className="flex justify-end">{detail}</div>
+          ))}
+      </div>
+      <form action={signOut}>
+        <button className="cursor-pointer rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300">
+          Sign out
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/** Small context chip shown next to the brand (for example the workspace a staff member is in). */
+export function HeaderChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="hidden rounded-full border border-sky-300/40 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-100 md:inline">
+      {children}
+    </span>
   );
 }

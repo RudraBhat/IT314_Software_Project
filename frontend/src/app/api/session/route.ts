@@ -40,6 +40,8 @@ export async function GET() {
       citizen,
       role: user?.role ?? null,
       name: user ? user.full_name : null,
+      // The person's own address, shown under their name in the header. Never anyone else's.
+      email: user ? user.email : null,
     },
     { headers: { "cache-control": "no-store" } }
   );

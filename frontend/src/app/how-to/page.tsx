@@ -14,7 +14,7 @@ const Steps = ({ items }: { items: string[] }) => (
 
 export default function HowToPage() {
   return (
-    <PublicPage title="How to use ResQ" intro="Step-by-step guides for the three ways people use the platform.">
+    <PublicPage activeHref="/how-to" title="How to use ResQ" intro="Step-by-step guides for the three ways people use the platform.">
       <Section title="Citizens: register, report, track">
         <Steps
           items={[

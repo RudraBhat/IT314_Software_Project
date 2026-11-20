@@ -231,7 +231,7 @@ export default function SignalsPage() {
                       </a>
                     )}
                     {sig.is_simulated && (
-                      <span className="mt-1 inline-block rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-mono text-amber-500">
+                      <span className="mt-1 inline-block rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-mono text-amber-700">
                         SIMULATED
                       </span>
                     )}

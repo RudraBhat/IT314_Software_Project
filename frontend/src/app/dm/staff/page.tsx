@@ -18,6 +18,7 @@ import { PendingInvitations } from "@/components/staff/PendingInvitations";
 import { PermissionEditor } from "@/components/staff/PermissionEditor";
 import { api, useQuery } from "@/lib/api";
 import { useStaff } from "../shell";
+import { PermissionChips } from "@/components/staff/PermissionChips";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -237,14 +238,8 @@ export default function StaffManagementPage() {
                       {m.status !== "ACTIVE" && <Badge tone="medium">{m.status}</Badge>}
                     </div>
                     <p className="text-xs text-muted mt-0.5">{m.email}{m.designation ? ` · ${m.designation}` : ""}</p>
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {m.permissions.length === 0 ? (
-                        <span className="text-[11px] text-muted italic">No permissions assigned</span>
-                      ) : (
-                        m.permissions.map((p) => (
-                          <Badge key={p} tone="info">{p}</Badge>
-                        ))
-                      )}
+                    <div className="mt-1.5">
+                      <PermissionChips permissions={m.permissions} />
                     </div>
                     <p className="mt-1 text-[11px] text-muted">
                       Last login: {m.last_login_at ? new Date(m.last_login_at).toLocaleString() : "Never"}
