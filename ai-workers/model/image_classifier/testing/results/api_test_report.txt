@@ -1,0 +1,46 @@
+Image Classifier API Test Report
+==================================
+API base URL: http://127.0.0.1:8000
+Test split TSV: D:\Study\Python\Project\New folder\data_disaster_types\data_disaster_types\consolidated_disaster_types_test_final.tsv
+Images attempted: 3195
+Successful predictions: 3192
+Failed predictions: 3
+Total elapsed time: 400.02 seconds
+Average time per attempted image: 0.13 seconds
+
+Metrics on successful API responses only
+------------------------------------------
+Accuracy: 0.8396
+Macro-F1: 0.8160
+Weighted-F1: 0.8374
+
+Per-class classification report:
+                precision    recall  f1-score   support
+
+    earthquake       0.84      0.87      0.85       404
+          fire       0.90      0.93      0.91       280
+         flood       0.87      0.88      0.87       599
+     hurricane       0.74      0.70      0.72       352
+     landslide       0.85      0.88      0.86       265
+  not_disaster       0.89      0.91      0.90       990
+other_disaster       0.63      0.56      0.59       302
+
+      accuracy                           0.84      3192
+     macro avg       0.82      0.82      0.82      3192
+  weighted avg       0.84      0.84      0.84      3192
+
+Confusion matrix (rows=true labels, columns=predicted labels):
+[[352   2   1  10   6  12  21]
+ [  3 259   3   5   1   5   4]
+ [  1   2 526  29  11  24   6]
+ [  9   4  36 245   7  24  27]
+ [  9   4   6   7 232   5   2]
+ [ 14   4  18   9   9 898  38]
+ [ 33  13  15  24   6  43 168]]
+Class label order: ['earthquake', 'fire', 'flood', 'hurricane', 'landslide', 'not_disaster', 'other_disaster']
+
+API latency (successful predictions)
+------------------------------------
+Mean: 124.91 ms
+Median: 117.58 ms
+P95: 177.51 ms

@@ -1,0 +1,12 @@
+# Training + ONNX export (text classifier)
+torch
+transformers>=4.45,<5
+accelerate>=0.26
+sentencepiece
+scikit-learn
+pandas
+numpy
+matplotlib
+huggingface_hub
+onnx
+onnxruntime

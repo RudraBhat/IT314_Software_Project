@@ -1,0 +1,513 @@
+﻿text,label,language,style,seed_id,augmented,noise_ops,data_origin
+"disaster management par avata athvadiye workshop che, regitsration no link bio ma 🙏",Non-Disaster,gu_roman,hard_negative,117,1,typo|emoji,provided_test_data
+"bhukmap pachi ujna makan ma tirado padi, society ma engineer bolavyo che 😮‍💨",Earthquake,gu_roman,civic,24,1,typo|emoji,provided_test_data
+"kal ke exam ne to bhukamp la diya, KUCH samajh hi nahi aaya 😭",Non-Disaster,hinglish,metaphor,106,1,shout,provided_test_data
+"સુરતમાં ધોધમાર વરસાદથી પાણી ભરાયા, નીચાણવાળા વિસ્તારોમાં ઘરોમાં પાણી ઘૂસ્યા, NDRFની ટીમો તૈનાત 😭",Flood,gu,news,35,1,no_end_punct|emoji,provided_test_data
+"Dam ke gate khole gaye downstream wale gaon me alert, log upar jagah chale jao https://t.co/zt32NLqO 😰",Flood,hinglish,official,46,1,drop_comma|url|emoji,provided_test_data
+"nadi nu level danger mark thi upar, gam khali karavi rahya che, NDRF aavi gai che",Flood,gu_roman,official,50,0,,provided_test_data
+cyclone weak hoakr depresison ban gaya par heavy rain abhi bhi chal rahi hai,Cyclone,hinglish,news,76,1,typo|lower|no_end_punct|drop_comma,provided_test_data
+"bandar par 9 number nu isgnal lagavyu, flight ane train raddh #Cyclone",Cyclone,gu_roman,news,81,1,typo|lower|hashtag,provided_test_data
+"Earthquake ke jhatke feel hue Delhii NCR me, magnitude 4.4, koi nuksaan ki khabar nahi https://t.co/tJ5J4x6m 😡",Earthquake,hinglish,news,15,1,elongate|url|emoji,provided_test_data
+"ટ્રાફિકમાં તોફાન મચ્યું છે આજે, ઓફિસ પહોંચતા બે કલાક લાગ્યા",Non-Disaster,gu,metaphor,104,0,,provided_test_data
+તમને આંચકો અનુભવાયો? અમારે ત્યાં તો દીવાલ પરનો ફોટો પડી ગયો #ભૂકંપ 🔥,Earthquake,gu,eyewitness,13,1,hashtag|emoji,provided_test_data
+"कच्छ में सुबह-सुबह भूकंप के झटके, लोग घरों से बाहर भागे, तीव्रता 4.2 दर्ज",Earthquake,hi,news,0,0,,provided_test_data
+"kl tv par earthquake ni documentary joi, kudrat kamal chee yaar",Non-Disaster,gu_roman,hard_negative,116,1,variant|elongate|lower|no_end_punct,provided_test_data
+"dam na darvaja kholya, nadi kinara na gam ma alert, loko upar ni jagya e jaao",Flood,gu_roman,official,53,0,,provided_test_data
+झटके महसूस हुए क्या आपको? हमारे यहां तो दीवार पर लगी फोटो गिर गई #Earthquake 😰,Earthquake,hi,eyewitness,6,1,hashtag|emoji,provided_test_data
+"तेज हवा से पेड़ उखड़ गए, लाइट के खंभे गिरे, रात भर से लाइट गायब है 😔 #चक्रवात 😟",Cyclone,hi,eyewitness,58,1,codemix|chandrabindu|emoji,provided_test_data
+કાલની પરીક્ષાએ તો ભૂકંપ લાવી દીધો કંઈ સમજાયું જ નહીં 😭,Non-Disaster,gu,metaphor,99,1,drop_comma,provided_test_data
+"bhukamp pachi juna makan ma tirado padi, society ma engineer bolavyo che",Earthquake,gu_roman,civic,24,0,,provided_test_data
+"disaster management pe next week workshop hai, registration ka link bio me",Non-Disaster,hinglish,hard_negative,110,0,,provided_test_data
+"kal ke exam ne to bhukamp la diya, kuch samajh hi nahin aaya 😭 😰",Non-Disaster,hinglish,metaphor,106,1,variant|lower|emoji,provided_test_data
+"સુરતમાં ધોધમાર વરસાદથી પાણી ભરાયા, નીચાણવાળા વિસ્તારોમાં ઘરોમાં પાણી ઘૂસ્યા, NDRFની ટીમો તૈનાત",Flood,gu,news,35,0,,provided_test_data
+"ब्रेकिंग: कच्छ में सुबह-सुबह भूकंप के झटके, लोग घरों से बाहर भागे, तीव्रता 4.2 दर्ज 😟",Earthquake,hi,news,0,1,no_end_punct|breaking|emoji,provided_test_data
+"yaar hamna j bhukamp avyo? paankoh hali rahyo hato, badha niceh aavi gaya 😰",Earthquake,gu_roman,eyewitness,21,1,typo|elongate|lower,provided_test_data
+"આજની મેચમાં તોફાની બેટિંગ, 18 ઓવરમાં જ ટાર્ગેટ પૂરો 🔥 #મૂડ 😮‍💨",Non-Disaster,gu,plain,105,1,hashtag|emoji,provided_test_data
+"Floorida me hurricane ki wajah se madnatory evacuation, flights cancel, NHC ne Cat 4 batyaa https://t.co/xwbQZ8i5 😡",Cyclone,hinglish,news,86,1,typo|elongate|url|emoji,provided_test_data
+"relief camp ma khavana packet ane kora kapda joiye che, dm kro jo heeelp kari shako to?? #Floods 😭",Flood,gu_roman,help,54,1,variant|elongate|lower|punct_burst|hashtag|emoji,provided_test_data
+"Breaking: dam na darvaja kholya, nadi kinara na gam maa alert, loko upar ni jagya e jaao!! https://t.co/q5JzjuxZ",Flood,gu_roman,official,53,1,variant|lower|punct_burst|breaking|url,provided_test_data
+"baarish ho rahi hai, chai pakode ready, aaj ki chhutti asfal ☔ 😰",Non-Disaster,hinglish,plain,107,1,typo|no_end_punct|emoji,provided_test_data
+"kal tv par eartqhuake ni documentary joi, kudrat kamal che yar!! #Mood 😟",Non-Disaster,gu_roman,hard_negative,116,1,variant|typo|lower|punct_burst|hashtag|emoji,provided_test_data
+"RT @newsdesk_live: vavazodu aaje sanje dariyaakthe tratkshe, machhimaro ne dariyo na khedva ni chetavani, red alert jaehr #vavazodu 🔥",Cyclone,gu_roman,official,77,1,typo|lower|no_end_punct|rt|hashtag|emoji,provided_test_data
+"cyclone aaj saham tak coast se takrayega fishermen ko waaps bulaya gaya, red alert jaari 😭",Cyclone,hinglish,official,70,1,typo|drop_comma|emoji,provided_test_data
+"nadi nu level danger mark thi upar, gam khali karavi rahya che, NDRF aavi gai che 🙏",Flood,gu_roman,official,50,1,emoji,provided_test_data
+"ब्रेकिंग: कच्छ में सुबह-सुबह भूकंप के झटके, लोग घरों से बाहर भागे, तीव्रता 4.2 दर्ज!! #Earthquake 😟",Earthquake,hi,news,0,1,punct_burst|breaking|hashtag|emoji,provided_test_data
+"disaster management pe next week WORKSHOP he, registration ka link bio me",Non-Disaster,hinglish,hard_negative,110,1,variant|shout,provided_test_data
+"વાવાઝોડું આજે સાંજે દરિયાકાંઠે ત્રાટકશે, માછીમારોને દરિયો ન ખેડવાની ચેતવણી, રેડ એલર્ટ જાહેર",Cyclone,gu,official,63,0,,provided_test_data
+"dariya nu raudra swaroop, nucha moja kinara no rasot tani gaya #vavazodu 😮‍💨",Cyclone,gu_roman,eyewitness,82,1,typo|lower|hashtag|emoji,provided_test_data
+"હમણાં જ ધરતી ધ્રૂજી! પંખો હલતો હતો, આખું બિલ્ડિંગ ખાલી થઈ ગયું 😰",Earthquake,gu,eyewitness,8,0,,provided_test_data
+"kutch ma savare bhukamp na aanchka richter scale par 4.3, nukshan na koi samachar nathi",Earthquake,gu_roman,news,22,1,drop_comma,provided_test_data
+"ભારે પવનથી ઝાડ ઉખડી ગયા, લાઈટના થાંભલા પડ્યા, આખી રાતથી લાઈટ નથી 😔 #વાવાઝોડું 😟",Cyclone,gu,eyewitness,65,1,codemix|emoji,provided_test_data
+"kal TV pe earthquakes ki documentary dekhi, anture kamaal hai yaar",Non-Disaster,hinglish,hard_negative,109,1,typo|no_end_punct,provided_test_data
+"nadi ka level danger mark se upar gaon khali karwa rahe h, NDRF aa gayii hai",Flood,hinglish,official,43,1,variant|elongate|no_end_punct|drop_comma,provided_test_data
+"વરસાદ પડે છે, ચા અને ભજિયાં તૈયાર, આજની રજા સફળ ☔",Non-Disaster,gu,plain,100,0,,provided_test_data
+"mera inbox baadh ban gaya hai, 300 unread mails, Monday se dar lag raha hai!! #chai",Non-Disaster,hinglish,metaphor,108,1,punct_burst|hashtag,provided_test_data
+"samundar ka gussa dekho, lerhen road bahakar le gayi #cyclone",Cyclone,hinglish,eyewitness,75,1,typo,provided_test_data
+"coastal villages se 1 alkh log shift kiye shelter ready hain, pls apne gharwalon ko bhi alert karo #CycloneAlert 🤦",Cyclone,hinglish,help,71,1,variant|typo|drop_comma|hashtag|emoji,provided_test_data
+"વાવાઝોડું આજે સાંજે દરિયાકાંઠે ત્રાટકશે, માછીમારોને દરિયો ન ખેડવાની ચેતવણી, રેડ alert જાહેર https://t.co/HkCUVIhh",Cyclone,gu,official,63,1,codemix|no_end_punct|url,provided_test_data
+आज के मैच में तूफानी बल्लेबाजी 18 ओवर में ही टारगेट पूरा 🔥 #Weekend,Non-Disaster,hi,plain,98,1,no_end_punct|drop_comma|hashtag,provided_test_data
+"raate be vagye aanchka aavya, chorkao radva lagya, have usdhi niche j ubha chiyeee...",Earthquake,gu_roman,eyewitness,23,1,typo|elongate|punct_burst,provided_test_data
+NCS के मुताबिक झटकों का केंद्र जमीन से 10 किमी नीचे था किसी नुकसान की खबर नहीं #Earthquake,Earthquake,hi,official,2,1,chandrabindu|no_end_punct|drop_comma|hashtag,provided_test_data
+"varsad pade se, chai ane bhajiya taiyar, aaj ni raja safal ☔ #chai",Non-Disaster,gu_roman,plain,114,1,variant|lower|hashtag,provided_test_data
+"समंदर का रौद्र रूप, ऊंची लहरें किनारे की सड़क बहा ले गईं",Cyclone,hi,eyewitness,61,0,,provided_test_data
+"ભૂકંપ પછી જૂના મકાનોમાં તિરાડો પડી, તંત્રે તપાસના આદેશ આપ્યા",Earthquake,gu,news,11,0,,provided_test_data
+"US me hurricane aaya hai cousin ka ghr Tmapa me hai, 2 din se phone nahi lag raha 😟",Cyclone,hinglish,eyewitness,87,1,variant|typo|drop_comma,provided_test_data
+"aaj ke macth me toofaaani batting, 18 over me hi taregt khatam 🔥 🤦",Non-Disaster,hinglish,plain,112,1,typo|elongate|lower|no_end_punct|emoji,provided_test_data
+"US me hurricane aaya hai, cousin ka ghar Tampa me hai, 2 din se phone nahi lag raha 😟",Cyclone,hinglish,eyewitness,87,0,,provided_test_data
+"relief camp ma khavana packet anee kora kapda joiye che, DM karo jo help kari shako to @newsdesk_live 🤦",Flood,gu_roman,help,54,1,variant|no_end_punct|mention|emoji,provided_test_data
+"अमेरिका के फ्लोरिडा में हरिकेन का कहर, लाखों लोगों को सुरक्षित जगह भेजा गया, लाइट गुल?! https://t.co/gZchBhpR 😟",Cyclone,hi,news,84,1,codemix|punct_burst|url|emoji,provided_test_data
+"havaman vibhag no alert: ati gambhir vavazodu, 130 kmph ni zadpe pavan fukashe",Cyclone,gu_roman,official,80,0,,provided_test_data
+"कैटेगरी 4 का हरिकेन तट से टकराया, तूफानी लहरों से कई इलाके डूबे https://t.co/ZgShhgmm 😟",Cyclone,hi,news,85,1,url|emoji,provided_test_data
+"samundar ka gsusa dekho, lehren roooad bahakar le gayi #cyclone #Cyclone 🙏",Cyclone,hinglish,eyewitness,75,1,typo|elongate|hashtag|emoji,provided_test_data
+"રાહત કેમ્પમાં ખાવાના પેકેટ અને કોરાં કપડાંની જરૂર છે, help કરી શકો તો સંપર્ક કરો #GujaratRains 😭",Flood,gu,help,40,1,codemix|hashtag|emoji,provided_test_data
+"કચ્છમાં વહેલી સવારે ભૂકંપના આંચકા લોકો ઘરની બહાર દોડી આવ્યા, રિક્ટર સ્કેલ પર 4.1ની તીવ્રતા https://t.co/lKPoh3pK",Earthquake,gu,news,7,1,drop_comma|url,provided_test_data
+"Surat ma varsad e tabahi machavi, ghra ma kamar sudih pani, koi boat moklo pls 🙏 #SuratRains",Flood,gu_roman,help,49,1,variant|typo,provided_test_data
+"पानी उतरने के बाद हर तरफ कीचड़ फसल बर्बाद, किसान बेहाल",Flood,hi,eyewitness,34,1,no_end_punct|drop_comma,provided_test_data
+"vavazodu nabalu padi ne depression ma pheravayu, pan ghana jilla ma bhare varsad chalu",Cyclone,gu_roman,news,83,0,,provided_test_data
+"BREAKING: port pe signal no. 9 alga diya, flights aur TRAINS cancle 🔥",Cyclone,hinglish,news,74,1,typo|shout|breaking|emoji,provided_test_data
+RT @newsdesk_live: cyclone weak hokar depression ban gaya par heavy rain aaabhii bhi chal rahi hai https://t.co/2fRN2Bqp #Cyclone,Cyclone,hinglish,news,76,1,variant|elongate|lower|url|rt|hashtag,provided_test_data
+"अमेरिका के फ्लोरिडा में हरिकेन का कहर, लाखों लोगों को सुरक्षित जगह भेजा गया, लाइट गुल https://t.co/TKu39v3w",Cyclone,hi,news,84,1,codemix|no_end_punct|url,provided_test_data
+"relief camp me khane ke packets aur sukhe kapde chahiye, DM karo agar help kar sakte ho #Waterlogging",Flood,hinglish,help,47,1,hashtag,provided_test_data
+"मेरा इनबॉक्स बाढ़ बन गया है, 300 अनरीड मेल, सोमवार से डर लग रहा है",Non-Disaster,hi,metaphor,94,0,,provided_test_data
+"RT @newsdesk_live: ब्रेकिंग: मलबे में दबे लोगों को निकालने का काम जारी, NDRF की टीम मौके पर पहुंची https://t.co/C2eY1gOH #भूकंप 🔥",Earthquake,hi,news,5,1,chandrabindu|no_end_punct|breaking|url|rt|hashtag|emoji,provided_test_data
+"रात 2 बजे झटके आए, बच्चे रोने लगे, पूरी बिल्डिंग नीचे खड़ी है #भूकंप",Earthquake,hi,eyewitness,3,1,chandrabindu|hashtag,provided_test_data
+"raat ko 2 baje ghar hil gaya, bachche ro rahe the, ab tak neeche khade hain",Earthquake,hinglish,eyewitness,16,0,,provided_test_data
+RT @newsdesk_live: હવામાન વિભાગનું એલર્ટ: અતિ ગંભીર ચક્રવાતી વાવાઝોડું 130 કિમી પ્રતિ કલાકની ઝડપે પવન ફૂંકાશે 🔥,Cyclone,gu,official,66,1,drop_comma|rt|emoji,provided_test_data
+"pehla lagyu truck gayo hashe, pachi khabaar padi ke dharti dhruji 😭 #bhukamp",Earthquake,gu_roman,eyewitness,25,1,elongate,provided_test_data
+"तीन दिन से लगातार बारिश, roads नदी बन गईं, ट्रेनें रद्द, schools की holiday 🙏",Flood,hi,eyewitness,32,1,codemix|emoji,provided_test_data
+भूकंप के बाद पुरानी इमारतों में दरारें प्रशासन ने जांच के आदेश दिए,Earthquake,hi,news,4,1,drop_comma,provided_test_data
+વાવાઝોડું નબળું પડીને ડિપ્રેશનમાં ફેરવાયું પણ અનેક જિલ્લામાં ભારે વરસાદ ચાલુ,Cyclone,gu,news,69,1,no_end_punct|drop_comma,provided_test_data
+"આજની મેચમાં તોફાની બેટિંગ, 18 ઓવરમાં જ ટાર્ગેટ પૂરો 🔥 😟",Non-Disaster,gu,plain,105,1,emoji,provided_test_data
+"सूरत में भारी बारिश से जलभराव, निचले इलाकों में घरों में घुसा water, NDRF की टीमें तैनात?? 😰",Flood,hi,news,28,1,codemix|punct_burst|emoji,provided_test_data
+"aaj ke mtach me toofani batting, 18 over me hi TARGET khatam 🔥??",Non-Disaster,hinglish,plain,112,1,typo|shout|punct_burst,provided_test_data
+"હવામાન વિભાગનું એલર્ટ: અતિ ગંભીર ચક્રવાતી વાવાઝોડું, 130 કિમી પ્રતિ કલાકની ઝડપે પવન ફૂંકાશે",Cyclone,gu,official,66,0,,provided_test_data
+"આપત્તિ વ્યવસ્થાપન પર આવતા અઠવાડિયે વર્કશોપ, નોંધણી માટે લિંક જુઓ",Non-Disaster,gu,hard_negative,103,0,,provided_test_data
+"ત્રણ દિવસથી સતત વરસાદ, રસ્તા નદી બની ગયા, ટ્રેનો રદ, schools માં રજા 😭",Flood,gu,eyewitness,39,1,codemix|emoji,provided_test_data
+"बारिश हो रही है चाय और पकौड़े तैयार, आज की holiday सफल ☔ #मूड",Non-Disaster,hi,plain,93,1,codemix|drop_comma|hashtag,provided_test_data
+"dariya nu rauudra swaroop, uncha moja kinara no rasto tani gaya",Cyclone,gu_roman,eyewitness,82,1,elongate,provided_test_data
+"dariyakantah na gam maa thi 1 lakh lokoo nu sthalantar, ashray shtano taiyar",Cyclone,gu_roman,news,78,1,variant|typo|elongate,provided_test_data
+"Florida me hurricane ki wajah se mandatory evacuation, flights cancel, NHC ne Cat 4 btaaya #Hurricane",Cyclone,hinglish,news,86,1,typo|hashtag,provided_test_data
+"traffic ma toofan machyu chhe aaje, office pahonchta be kalak algya... 😡",Non-Disaster,gu_roman,metaphor,118,1,variant|typo|punct_burst|emoji,provided_test_data
+झटके महसूस हुए क्या आपको? हमारे यहां तो दीवार पर लगी फोटो गिर गई,Earthquake,hi,eyewitness,6,0,,provided_test_data
+"kal na eaxm e to bhukamp lavi didho, kai samjayu j anhi 😭 #chai 😮‍💨",Non-Disaster,gu_roman,metaphor,113,1,variant|typo|no_end_punct|hashtag|emoji,provided_test_data
+"દરિયાકાંઠાના ગામોમાંથી 1 લાખ લોકોનું સ્થળાંતર, આશ્રય સ્થાનો તૈયાર https://t.co/8sJ7F3Yi 😡",Cyclone,gu,news,64,1,url|emoji,provided_test_data
+havaman vibahg no alert: ati gambhir vavazodu 130 kmhp ni zadpe pavan fukashe,Cyclone,gu_roman,official,80,1,typo|drop_comma,provided_test_data
+"સુરતમાં ધોધમાર વરસાદથી પાણી ભરાયા, નીચાણવાળા વિસ્તારોમાં ઘરોમાં પાણી ઘૂસ્યા, NDRFની ટીમો તૈનાત #GujaratRains",Flood,gu,news,35,1,no_end_punct|hashtag,provided_test_data
+IMD का अलर्ट: अति गंभीर चक्रवाती तूफान 130 किमी प्रति घंटे तक की रफ्तार से हवाएं चलेंगी?! #CycloneAlert,Cyclone,hi,official,59,1,chandrabindu|punct_burst|drop_comma|hashtag,provided_test_data
+"BREAKING: port pe signal no. 9 alga diya, filghts aur trains cancel",Cyclone,hinglish,news,74,1,typo|lower|breaking,provided_test_data
+"relief camp maa khavaan packet ane kora kapda joiye che, DM kro jo help akri shako to @districtcollector",Flood,gu_roman,help,54,1,variant|typo|no_end_punct|mention,provided_test_data
+"kal ke exam ne to bhukamp la diya, kuch samajh hi nahi aaya 😭",Non-Disaster,hinglish,metaphor,106,0,,provided_test_data
+"varsda pade chhe, chai ane bhajiya taiyar, aaj ni raja sfaal ☔",Non-Disaster,gu_roman,plain,114,1,variant|typo|no_end_punct,provided_test_data
+"ઘરમાં કમર સુધી પાણી ભરાઈ ગયા છે, બાળકો અને વડીલો છત પર બેઠા છે, help મોકલો 🙏 @newsdesk_live #GujaratRains",Flood,gu,help,37,1,codemix|no_end_punct|mention|hashtag,provided_test_data
+"કચ્છમાં વહેલી સવારે ભૂકંપના આંચકા, લોકો ઘરની બહાર દોડી આવ્યા, રિક્ટર સ્કેલ પર 4.1ની તીવ્રતા?? https://t.co/MIgHFive #Bhukamp",Earthquake,gu,news,7,1,punct_burst|url|hashtag,provided_test_data
+"घर में कमर तक पानी भर गया है बच्चों और बुजुर्गों को छत पर बैठा रखा है, कोई help भेजो 🙏 @municipalcorp",Flood,hi,help,30,1,codemix|no_end_punct|drop_comma|mention,provided_test_data
+RT @newsdesk_live: hurricane landfall ke baad lakho ghr bina bijli ke storm surge ne coast tabah kar diya,Cyclone,hinglish,news,88,1,variant|drop_comma|rt,provided_test_data
+"relief camp me khane ke packets aur sukhe kapde chahiye, DM karo agar help kar sakte ho",Flood,hinglish,help,47,0,,provided_test_data
+"रात 2 बजे झटके आए बच्चे रोने लगे, पूरी बिल्डिंग नीचे खड़ी है",Earthquake,hi,eyewitness,3,1,chandrabindu|drop_comma,provided_test_data
+"बारिश हो रही है, चाय और पकौड़े तैयार, आज की छुट्टी सफल ☔",Non-Disaster,hi,plain,93,0,,provided_test_data
+"RT @newsdesk_live: બ્રેકિંગ: કેટેગરી 4નું હરિકેન દરિયાકાંઠે ત્રાટક્યું, તોફાની મોજાંથી અનેક વિસ્તારો ડૂબ્યા https://t.co/xddqW8Qj 🤦",Cyclone,gu,news,90,1,breaking|url|rt|emoji,provided_test_data
+"तेज हवा से पेड़ उखड़ गए, बिजली के खंभे गिरे, रात भर से लाइट गायब है 😔 #चक्रवात",Cyclone,hi,eyewitness,58,0,,provided_test_data
+"kutch ma savare bhukamp na aanchka, richter scaale par 4.3, nukshan na koi samahcar anthi 😰",Earthquake,gu_roman,news,22,1,typo|elongate|no_end_punct|emoji,provided_test_data
+"RT @newsdesk_live: malbe me log phase hn, NDRF pahunch gayi hai, please afwah mat failao",Earthquake,hinglish,news,20,1,variant|shout|no_end_punct|rt,provided_test_data
+आपदा प्रबंधन पर अगले हफ्ते कार्यशाला पंजीकरण के लिए लिंक देखें... #मूड,Non-Disaster,hi,hard_negative,96,1,chandrabindu|punct_burst|drop_comma|hashtag,provided_test_data
+BREAKING: hurricane landfall ke baad lakho ghar binaaa bijli ke storm surge ne coast tabah kar diay!! https://t.co/SSgLl5yC 😟,Cyclone,hinglish,news,88,1,typo|elongate|punct_burst|drop_comma|breaking|url|emoji,provided_test_data
+"ભૂકંપ કેવી રીતે આવે છે, કાલે ટીવી પર ડોક્યુમેન્ટરી જોઈ, કુદરત કમાલ છે",Non-Disaster,gu,hard_negative,102,0,,provided_test_data
+"pehle laga turck gaya hoga, phir samajh aaya ye zameen hil rahi hai 😭 #earthquake #Earthquake 😟",Earthquake,hinglish,eyewitness,18,1,typo|hashtag|emoji,provided_test_data
+"ઘરમાં કમર સુધી પાણી ભરાઈ ગયા છે બાળકો અને વડીલો છત પર બેઠા છે, મદદ મોકલો 🙏... @newsdesk_live #પૂર",Flood,gu,help,37,1,punct_burst|drop_comma|mention|hashtag,provided_test_data
+"વરસાદ પડે છે, ચા અને ભજિયાં તૈયાર, આજની holiday સફળ ☔ #Weekend",Non-Disaster,gu,plain,100,1,codemix|hashtag,provided_test_data
+"vaavzodu aje sanje dariyakathe tratkshe machhimaro ne adriyo na kheedva ni chetavani, red alert jaher #vavazodu",Cyclone,gu_roman,official,77,1,variant|typo|elongate|drop_comma|hashtag,provided_test_data
+"RT @newsdesk_live: bandar par 9 number nu signal lagavyu, flight anee train raddh https://t.co/urO7OlGo",Cyclone,gu_roman,news,81,1,variant|lower|url|rt,provided_test_data
+"raate be vagye aanchka aavya, chokrao radva lagya, have sudhi niche j ubha chiye",Earthquake,gu_roman,eyewitness,23,0,,provided_test_data
+"आपदा प्रबंधन पर अगले हफ्ते कार्यशाला, पंजीकरण के लिए लिंक देखें #मूड",Non-Disaster,hi,hard_negative,96,1,chandrabindu|no_end_punct|hashtag,provided_test_data
+"पानी उतरने के बाद हर तरफ कीचड़, फसल बर्बाद, किसान बेहाल!!!",Flood,hi,eyewitness,34,1,chandrabindu|punct_burst,provided_test_data
+"raate be vagye aanchka aavya, cohkrao ravda lagya, have sudhi niche j ubha chiye",Earthquake,gu_roman,eyewitness,23,1,typo,provided_test_data
+"મારા ઇનબોક્સમાં પૂર આવ્યું છે, 300 અનરીડ મેઇલ, સોમવારનો ડર લાગે છે #Weekend",Non-Disaster,gu,metaphor,101,1,hashtag,provided_test_data
+"આજની મેચમાં તોફાની બેટિંગ, 18 ઓવરમાં જ ટાર્ગેટ પૂરો 🔥",Non-Disaster,gu,plain,105,0,,provided_test_data
+"3 divas thi varsad rokato nathi, arsta nadi bani gaya, office e WFH aapyu",Flood,gu_roman,eyewitness,51,1,typo,provided_test_data
+"disaster management par aavta athvadiye workshop che, registration no link bio ma #chai",Non-Disaster,gu_roman,hard_negative,117,1,lower|hashtag,provided_test_data
+તમને આંચકો અનુભવાયો? અમારે ત્યાં તો દીવાલ પરનો ફોટો પડી ગયો #Bhukamp 😮‍💨,Earthquake,gu,eyewitness,13,1,hashtag|emoji,provided_test_data
+"Earthquake ke jhatke feel hue Delhi NCR me magnitude 4.4, koi nuksaan ki khaaabar nahi https://t.co/AEAw3Cjk",Earthquake,hinglish,news,15,1,elongate|drop_comma|url,provided_test_data
+"नदी का जलस्तर खतरे के निशान से ऊपर, गांवों को खाली कराने का काम शुरू... https://t.co/UhArQEPc 😡",Flood,hi,official,29,1,punct_burst|url|emoji,provided_test_data
+"MALBE me log phase hain NRDF pahunch gayi hai, please afwah mat faiialo #Earthquake",Earthquake,hinglish,news,20,1,variant|typo|elongate|shout|drop_comma|hashtag,provided_test_data
+"Floirda ma hurricane no kahar lakho lkoo nu evacuation, light gul?! https://t.co/11BnNRwK #Hurricane 🙏",Cyclone,gu_roman,news,91,1,typo|punct_burst|drop_comma|url|hashtag|emoji,provided_test_data
+"सूरत में भारी बारिश से जलभराव, निचले इलाकों में घरों में घुसा पानी, NDRF की टीमें तैनात",Flood,hi,news,28,0,,provided_test_data
+બંદર પર 9 નંબરનું સિગ્નલ લગાવાયું ફ્લાઇટ અને ટ્રેનો રદ https://t.co/U5MBn3ih,Cyclone,gu,news,67,1,drop_comma|url,provided_test_data
+"भूकंप के बाद पुरानी इमारतों में दरारें, प्रशासन ने जांच के आदेश दिए",Earthquake,hi,news,4,0,,provided_test_data
+"बंदरगाह पर 9 नंबर का सिग्नल लगाया गया, उड़ानें और ट्रेनें रद्द",Cyclone,hi,news,60,0,,provided_test_data
+"Florida ma hurricane no kahar lakho loko nu evacuation, ilght gul https://t.co/uSjjud5M",Cyclone,gu_roman,news,91,1,typo|drop_comma|url,provided_test_data
+"bhare pavan thi zad ukhdi gaya, light na thambha padya, aakhi raat thi light nathi 😔 #vavazodu",Cyclone,gu_roman,eyewitness,79,0,,provided_test_data
+"Florida me hurricane ki awjah se mnadatory evacuation, flights cancel, NHC ne Cat 4 bataya",Cyclone,hinglish,news,86,1,typo,provided_test_data
+"कल की परीक्षा ने तो भूकंप ला दिया, कुछ समझ ही नहीं आया 😭 #मूड",Non-Disaster,hi,metaphor,92,1,no_end_punct|hashtag,provided_test_data
+"कच्छ में सुबह-सुबह भूकंप के झटके, लोग घरों से बाहर भागे, तीव्रता 4.2 दर्ज #भूकंप",Earthquake,hi,news,0,1,hashtag,provided_test_data
+cyclone weak hokar depression ban gaya par heavy rain abhii bhi chal rahi hai?! 🔥,Cyclone,hinglish,news,76,1,variant|punct_burst|emoji,provided_test_data
+"NCS के मुताबिक झटकों का केंद्र जमीन से 10 किमी नीचे था, किसी नुकसान की खबर नहीं",Earthquake,hi,official,2,0,,provided_test_data
+"IMD का अलर्ट: अति गंभीर चक्रवाती तूफान, 130 किमी प्रति घंटे तक की रफ्तार से हवाएं चलेंगी",Cyclone,hi,official,59,0,,provided_test_data
+કાટમાળમાં દબાયેલા લોકોને બહાર કાઢવાની કામગીરી ચાલુ NDRFની ટીમ પહોંચી #Bhukamp,Earthquake,gu,news,12,1,drop_comma|hashtag,provided_test_data
+"રાત્રે બે વાગ્યે આંચકા આવ્યા, બધા રસ્તા પર આવી ગયા, ઊંઘ ઉડી ગઈ #Bhukamp",Earthquake,gu,eyewitness,10,1,no_end_punct|hashtag,provided_test_data
+"ભૂકંપ કેવી રીતે આવે છે, કાલે ટીવી પર ડોક્યુમેન્ટરી જોઈ, કુદરત કમાલ છે #Weekend",Non-Disaster,gu,hard_negative,102,1,no_end_punct|hashtag,provided_test_data
+"घर में कमर तक पानी भर गया है, बच्चों और बुजुर्गों को छत पर बैठा रखा है, कोई help भेजो 🙏 #Floods",Flood,hi,help,30,1,codemix|hashtag,provided_test_data
+"ब्रेकिंग: बांध के गेट खोले गए, नदी किनारे के गांवों में अलर्ट जारी https://t.co/BsrdFtCd #बाढ़",Flood,hi,official,31,1,breaking|url|hashtag,provided_test_data
+"बंदरगाह पर 9 नंबर का सिग्नल लगाया गया, उड़ानें और ट्रेनें रद्द https://t.co/VOwOc8Qy",Cyclone,hi,news,60,1,chandrabindu|url,provided_test_data
+"vavazodu aje asnje dariyakathe tratkshe, machihmaro ne dariyo na khedva ni chetavani, red alert jaher 😰",Cyclone,gu_roman,official,77,1,variant|typo|emoji,provided_test_data
+બંદર પર 9 નંબરનું સિગ્નલ લગાવાયું ફ્લાઇટ અને trains રદ?? 🤦,Cyclone,gu,news,67,1,codemix|punct_burst|drop_comma|emoji,provided_test_data
+"घर में कमर तक पानी भर गया है, बच्चों और बुजुर्गों को छत पर बैठा रखा है, कोई मदद भेजो 🙏",Flood,hi,help,30,0,,provided_test_data
+"florida ma hurricane no kahar lakho loko nu evacuation, light gul #Hurricane",Cyclone,gu_roman,news,91,1,lower|no_end_punct|drop_comma|hashtag,provided_test_data
+"Surat ma varsad e tabahi machavi, ghar ma kamar sudhi pani, koi boat moklo please 🙏 #SuratRains",Flood,gu_roman,help,49,0,,provided_test_data
+"घर में कमर तक water भर गया है, बच्चों और बुजुर्गों को छत पर बैठा रखा है, कोई मदद भेजो 🙏?? @districtcollector 🥲",Flood,hi,help,30,1,codemix|chandrabindu|punct_burst|mention|emoji,provided_test_data
+"હવામાન વિભાગનું alert: અતિ ગંભીર ચક્રવાતી વાવાઝોડું, 130 કિમી પ્રતિ કલાકની ઝડપે પવન ફૂંકાશે",Cyclone,gu,official,66,1,codemix,provided_test_data
+"kutch maa asvare buhkamp na aanchka, richter scale par 4.3, nukshan na koi samachar nathi https://t.co/NCP3CrHe 😟",Earthquake,gu_roman,news,22,1,variant|typo|url|emoji,provided_test_data
+"तटीय इलाकों से 1 लाख लोगों को सुरक्षित जगहों पर पहुंचाया गया, राहत शिविर तैयार #चक्रवात",Cyclone,hi,news,57,1,chandrabindu|hashtag,provided_test_data
+"ત્રણ દિવસથી સતત વરસાદ, roads નદી બની ગયા, trains રદ, શાળાઓમાં holiday",Flood,gu,eyewitness,39,1,codemix|no_end_punct,provided_test_data
+"દરિયાનું રૌદ્ર સ્વરૂપ, ઊંચા મોજાં કિનારાનો રસ્તો તાણી ગયા?! #CycloneAlert 😰",Cyclone,gu,eyewitness,68,1,punct_burst|hashtag|emoji,provided_test_data
+"ડેમના દરવાજા ખોલાયા, નદી કાંઠાના ગામોમાં એલર્ટ જાહેર",Flood,gu,official,38,0,,provided_test_data
+"bhai abhi bhukamp aaya kya?? fan hil raha tha, sb loog neehce aa gaey 😰 #bhukamp 🔥",Earthquake,hinglish,eyewitness,14,1,variant|typo|elongate|hashtag|emoji,provided_test_data
+"paani utarne ke baad sab jagah keechad fasal barbaad, kisan ro rhaa hai",Flood,hinglish,eyewitness,48,1,typo|drop_comma,provided_test_data
+"Florida ma hurricane no kahar, lakho loko nu evacuation, light gul",Cyclone,gu_roman,news,91,0,,provided_test_data
+"RT @newsdesk_live: ડેમના દરવાજા ખોલાયા, નદી કાંઠાના ગામોમાં alert જાહેર 🥲",Flood,gu,official,38,1,codemix|no_end_punct|rt|emoji,provided_test_data
+"bhukamp ke baad purani building me cracks, society wale engineer bula rahe hain",Earthquake,hinglish,civic,17,0,,provided_test_data
+"ત્રણ દિવસથી સતત વરસાદ, roads નદી બની ગયા, trains રદ, શાળાઓમાં holiday!!!",Flood,gu,eyewitness,39,1,codemix|punct_burst,provided_test_data
+"आपदा प्रबंधन पर अगले हफ्ते कार्यशाला, पंजीकरण के लिए लिंक देखें",Non-Disaster,hi,hard_negative,96,0,,provided_test_data
+"अभी अभी ज़मीन हिली!! पंखा झूल रहा था, सब बाहर आ गए 😨 #भूकंप #Earthquake",Earthquake,hi,eyewitness,1,1,hashtag,provided_test_data
+"baarish ho rahi hai, chai pakode ready, aj ki chhutti safal ☔ 🤦",Non-Disaster,hinglish,plain,107,1,variant|no_end_punct|emoji,provided_test_data
+"tantra ne kyare sharam aavshe, darr vaaarse same waterlogging, gutter kyare saaf thashe?? 😡 @municipalcorp",Flood,gu_roman,civic,52,1,elongate|mention,provided_test_data
+"ભૂકંપ કેવી રીતે આવે છે કાલે ટીવી પર ડોક્યુમેન્ટરી જોઈ, કુદરત કમાલ છે 🙏",Non-Disaster,gu,hard_negative,102,1,drop_comma|emoji,provided_test_data
+"traffic me toofan mach gaya aaj, office pahunchne me 2 ghante lage",Non-Disaster,hinglish,metaphor,111,0,,provided_test_data
+"traffic ma toofan machyu chee aaje, office phaonchta be kalak lagya",Non-Disaster,gu_roman,metaphor,118,1,typo|elongate|lower,provided_test_data
+"દરિયાનું રૌદ્ર સ્વરૂપ, ઊંચા મોજાં કિનારાનો રસ્તો તાણી ગયા 😡",Cyclone,gu,eyewitness,68,1,emoji,provided_test_data
+"ભૂકંપ કેવી રીતે આવે છે કાલે ટીવી પર ડોક્યુમેન્ટરી જોઈ, કુદરત કમાલ છે",Non-Disaster,gu,hard_negative,102,1,drop_comma,provided_test_data
+"आज के मैच में तूफानी बल्लेबाजी, 18 ओवर में ही टारगेट पूरा 🔥",Non-Disaster,hi,plain,98,0,,provided_test_data
+"વાવાઝોડું આજે સાંજે દરિયાકાંઠે ત્રાટકશે, માછીમારોને દરિયો ન ખેડવાની ચેતવણી, રેડ એલર્ટ જાહેર https://t.co/ihslQFzi #વાવાઝોડું",Cyclone,gu,official,63,1,url|hashtag,provided_test_data
+"अमेरिका के फ्लोरिडा में हरिकेन का कहर, लाखों लोगों को सुरक्षित जगह भेजा गया, बिजली गुल",Cyclone,hi,news,84,0,,provided_test_data
+"aftershock pachhi pachhi aavta j rahe che, lift vaparsho nhi, pagthiya thi utro @municipalcorp #bhukamp",Earthquake,gu_roman,help,26,1,variant|lower|mention|hashtag,provided_test_data
+"BMC ko kab sharam aayegi, har saal wahi waterlogging, drain saaf kab hoga?? 😡 @newsdesk_live #Waterlogging",Flood,hinglish,civic,45,1,no_end_punct|mention|hashtag,provided_test_data
+"IMD का अलर्ट: अति गंभीर चक्रवाती तूफान, 130 किमी प्रति घंटे तक की रफ्तार से हवाएं चलेंगी 😭",Cyclone,hi,official,59,1,emoji,provided_test_data
+વાવાઝોડું નબળું પડીને ડિપ્રેશનમાં ફેરવાયું પણ અનેક જિલ્લામાં ભારે વરસાદ ચાલુ https://t.co/wtx0AHkD #વાવાઝોડું 😮‍💨,Cyclone,gu,news,69,1,drop_comma|url|hashtag|emoji,provided_test_data
+"relief cmap me khane ke packets aur sukhe kadpe chahiye, dm kro agar help kar sakte ho #Floods",Flood,hinglish,help,47,1,variant|typo|lower|hashtag,provided_test_data
+"maara inbox ma pur aavuy che, 300 unread mail, Monday no dar lage chhe 🙏",Non-Disaster,gu_roman,metaphor,115,1,variant|typo|emoji,provided_test_data
+"BREAKING: imd ne very seevere cyclonic stomr ka alert diya, 130 kmph ki speed se ahwa chalegi 😡",Cyclone,hinglish,official,73,1,typo|elongate|lower|breaking|emoji,provided_test_data
+"cyclone aaj shaam tak coast se takrayega, fishermen ko wapas bulaya gaya, red aaalert jaari https://t.co/Ta1acw5l #CycloneAlert 😮‍💨",Cyclone,hinglish,official,70,1,elongate|lower|url|hashtag|emoji,provided_test_data
+"અમેરિકાના ફ્લોરિડામાં હરિકેનનો કહેર, લાખો લોકોનું સ્થળાંતર, વીજળી ગુલ",Cyclone,gu,news,89,0,,provided_test_data
+"hawa itni tez hai ki ped ukhad gaye, raat se light nahi hai, phone 8% 😔 #cyclone",Cyclone,hinglish,eyewitness,72,0,,provided_test_data
+"ब्रेकिंग: भूकंप के बाद पुरानी इमारतों में दरारें, प्रशासन ने जांच के आदेश दिए #Earthquake",Earthquake,hi,news,4,1,breaking|hashtag,provided_test_data
+"malbe me log phase hain, NRDF pahunch gayi hai, please afwah mat failao?! 😭",Earthquake,hinglish,news,20,1,typo|punct_burst|emoji,provided_test_data
+"mera inbox baadh ban gaya h, 300 unread mails, monday se dar lag raha hai",Non-Disaster,hinglish,metaphor,108,1,variant|typo|lower|no_end_punct,provided_test_data
+"નદીની સપાટી ભયજનક સપાટીથી ઉપર, ગામો ખાલી કરાવવાની કામગીરી શરૂ",Flood,gu,official,36,0,,provided_test_data
+"SAMUNDAR ka gussa dekho, lehren road bahakar le gayi #cyclone #Cyclone",Cyclone,hinglish,eyewitness,75,1,shout|hashtag,provided_test_data
+RT @newsdesk_live: ભૂકંપનું કેન્દ્ર ભચાઉ પાસે હતું જાનમાલને નુકસાનના કોઈ સમાચાર નથી!! https://t.co/aVNqTIAa,Earthquake,gu,official,9,1,punct_burst|drop_comma|url|rt,provided_test_data
+"katmal ma dabayela loko ne kadhva ndrf ni team aavi gai che, afvaho na fellavsho #Earthquake 😡",Earthquake,gu_roman,news,27,1,lower|hashtag|emoji,provided_test_data
+"कल की परीक्षा ने तो भूकंप ला दिया, कुछ समझ ही नहीं आया 😭??",Non-Disaster,hi,metaphor,92,1,punct_burst,provided_test_data
+"मेरा इनबॉक्स बाढ़ बन गया है, 300 अनरीड मेल, सोमवार से डर लग रहा है #Weekend",Non-Disaster,hi,metaphor,94,1,hashtag,provided_test_data
+"કેટેગરી 4નું હરિકેન દરિયાકાંઠે ત્રાટક્યું, તોફાની મોજાંથી અનેક વિસ્તારો ડૂબ્યા",Cyclone,gu,news,90,0,,provided_test_data
+"ब्रेकिंग: कैटेगरी 4 का हरिकेन तट से टकराया, तूफानी लहरों से कई इलाके डूबे #हरिकेन",Cyclone,hi,news,85,1,chandrabindu|no_end_punct|breaking|hashtag,provided_test_data
+"dam na darvaja kholya, naid kinara na gam ma alert, loko upar ni jgaya e jaao??",Flood,gu_roman,official,53,1,typo|lower|punct_burst,provided_test_data
+"3 divas thi varsad rokato nahi, arsta nadi abni gaya, office e WFH aapyu #Floods 😰",Flood,gu_roman,eyewitness,51,1,variant|typo|hashtag|emoji,provided_test_data
+"કાટમાળમાં દબાયેલા લોકોને બહાર કાઢવાની કામગીરી ચાલુ, NDRFની ટીમ પહોંચી #Bhukamp 😮‍💨",Earthquake,gu,news,12,1,no_end_punct|hashtag|emoji,provided_test_data
+"ट्रैफिक में तूफान मचा है आज, ऑफिस पहुंचने में दो घंटे लग गए #मूड",Non-Disaster,hi,metaphor,97,1,no_end_punct|hashtag,provided_test_data
+"tanrta ne kyare sharma aavshe, darr varse same waterlogging, gutter kyare saaf thashe?? 😡 #GujaratRains",Flood,gu_roman,civic,52,1,typo|hashtag,provided_test_data
+"ट्रैफिक में तूफान मचा है आज, ऑफिस पहुंचने में दो घंटे लग गए?? #मूड",Non-Disaster,hi,metaphor,97,1,punct_burst|hashtag,provided_test_data
+"Breaking: dariyakantha na gam ma thi 1 lakh loko nu sthalantar, ashray sthaon taiyar",Cyclone,gu_roman,news,78,1,typo|breaking,provided_test_data
+"મારા ઇનબોક્સમાં પૂર આવ્યું છે, 300 અનરીડ મેઇલ, સોમવારનો ડર લાગે છે 🙏",Non-Disaster,gu,metaphor,101,1,emoji,provided_test_data
+તમને આંચકો અનુભવાયો? અમારે ત્યાં તો દીવાલ પરનો ફોટો પડી ગયો,Earthquake,gu,eyewitness,13,0,,provided_test_data
+"હમણાં જ ધરતી ધ્રૂજી! પંખો હલતો હતો, આખું બિલ્ડિંગ ખાલી થઈ ગયું 😰 #ભૂકંપ",Earthquake,gu,eyewitness,8,1,no_end_punct|hashtag,provided_test_data
+"coastal villages se 1 lakh log shift kiye, shelter ready hain, please apne gharwalon ko bhi alert karo",Cyclone,hinglish,help,71,0,,provided_test_data
+"सूरत में भारी बारिश से जलभराव, निचले इलाकों में घरों में घुसा पानी, NDRF की टीमें तैनात https://t.co/lRtva1Jy 🤦",Flood,hi,news,28,1,no_end_punct|url|emoji,provided_test_data
+"yaar hamna j bhukamp avyo? pankho hali rahyo hato, badha niche aavi gaya 😰",Earthquake,gu_roman,eyewitness,21,0,,provided_test_data
+"ડેમના દરવાજા ખોલાયા, નદી કાંઠાના ગામોમાં alert જાહેર",Flood,gu,official,38,1,codemix|no_end_punct,provided_test_data
+bandar par 9 number nu signal lagavyu flight ane train raddh https://t.co/L6SRr30C #Cyclone,Cyclone,gu_roman,news,81,1,no_end_punct|drop_comma|url|hashtag,provided_test_data
+"Breaking: katmal maa dabayela loko ne kadhva NDRF ni team aaaavi gai che, afvaho na fellavsho https://t.co/LerNHu9G 😭",Earthquake,gu_roman,news,27,1,variant|elongate|breaking|url|emoji,provided_test_data
+"varsad pade che, chai ane bhajiya taiyar, aaj ni raja safal ☔",Non-Disaster,gu_roman,plain,114,0,,provided_test_data
+"નદીની સપાટી ભયજનક સપાટીથી ઉપર, ગામો ખાલી કરાવવાની કામગીરી શરૂ #GujaratRains 😮‍💨",Flood,gu,official,36,1,hashtag|emoji,provided_test_data
+"kal ke exam ne to bhuakmp la diya, kuch samajh hi nai aaya 😭 😟",Non-Disaster,hinglish,metaphor,106,1,variant|typo|lower|emoji,provided_test_data
+"aftershock pachhi pachhi aavta j rahe che, lift vaparsho nhi, pagthiya thi utro 😰",Earthquake,gu_roman,help,26,1,variant|lower|emoji,provided_test_data
+"bro abhi bhukamp aaya kyaa?? fan hil raha tha, sab log neeeeche aa gaye 😰...",Earthquake,hinglish,eyewitness,14,1,variant|elongate|lower|punct_burst,provided_test_data
+"havaman vibhag no alert: ati gambhir vavazodu, 130 kmph ni zadpe pavan fukashe #Cyclone",Cyclone,gu_roman,official,80,1,hashtag,provided_test_data
+"समंदर का रौद्र रूप, ऊंची लहरें किनारे की सड़क बहा ले गईं #चक्रवात 😭",Cyclone,hi,eyewitness,61,1,hashtag|emoji,provided_test_data
+"pani osarya pachhi badhe kadav-kichad, paak nishfal, kheduto pareshan!!!",Flood,gu_roman,eyewitness,55,1,variant|elongate|punct_burst,provided_test_data
+"ભારે પવનથી ઝાડ ઉખડી ગયા, લાઈટના થાંભલા પડ્યા, આખી રાતથી લાઈટ નથી 😔 #વાવાઝોડું",Cyclone,gu,eyewitness,65,1,codemix,provided_test_data
+"nadi ka level danegr mark se upar, gaon khali karwa rahe hain, NDRF aa gayi hai https://t.co/5n6Grem7",Flood,hinglish,official,43,1,typo|url,provided_test_data
+"राहत शिविर में खाने के पैकेट और सूखे कपड़ों की जरूरत है, जो help कर सकें संपर्क करें #बाढ़ 😡",Flood,hi,help,33,1,codemix|chandrabindu|hashtag|emoji,provided_test_data
+"વરસાદ પડે છે, ચા અને ભજિયાં તૈયાર, આજની રજા સફળ ☔... #Weekend 🤦",Non-Disaster,gu,plain,100,1,punct_burst|hashtag|emoji,provided_test_data
+"Dam ke gate khole gaye, dowsntream wale gaon me alert, log upar ajgah chale jao",Flood,hinglish,official,46,1,typo|no_end_punct,provided_test_data
+"port pe signal no. 9 laga diya, flights aur trains cancel",Cyclone,hinglish,news,74,0,,provided_test_data
+"હમણાં જ ધરતી ધ્રૂજી! પંખો હલતો હતો, આખું બિલ્ડિંગ ખાલી થઈ ગયું 😰 🔥",Earthquake,gu,eyewitness,8,1,emoji,provided_test_data
+"Surat me barish ne tabahi macha di, ghar me kamar tak paani, koi boat bhejo please 🙏 #SuratRains",Flood,hinglish,help,42,0,,provided_test_data
+"બ્રેકિંગ: કેટેગરી 4નું હરિકેન દરિયાકાંઠે ત્રાટક્યું, તોફાની મોજાંથી અનેક વિસ્તારો ડૂબ્યા",Cyclone,gu,news,90,1,no_end_punct|breaking,provided_test_data
+तटीय इलाकों से 1 लाख लोगों को सुरक्षित जगहों पर पहुंचाया गया राहत शिविर तैयार #चक्रवात,Cyclone,hi,news,57,1,chandrabindu|no_end_punct|drop_comma|hashtag,provided_test_data
+"hurricane landfall ke baad lakho ghar bina bijli ke, storm surge ne coast tabah kar diya",Cyclone,hinglish,news,88,0,,provided_test_data
+"ભૂકંપનું કેન્દ્ર ભચાઉ પાસે હતું, જાનમાલને નુકસાનના કોઈ સમાચાર નથી https://t.co/ht3X13np",Earthquake,gu,official,9,1,url,provided_test_data
+"traffic me toofan mach gaya aaj, office pahuncnhe me 2 ghnate lage",Non-Disaster,hinglish,metaphor,111,1,typo,provided_test_data
+"bhukamp ke baad purani building me cracks, society wale engineer buula rahe hain @districtcollector #bhukamp 😭",Earthquake,hinglish,civic,17,1,elongate|mention|hashtag|emoji,provided_test_data
+"સુરતમાં ધોધમાર વરસાદથી પાણી ભરાયા, નીચાણવાળા વિસ્તારોમાં ઘરોમાં પાણી ઘૂસ્યા, NDRFની ટીમો તૈનાત https://t.co/B6nBvbdF",Flood,gu,news,35,1,url,provided_test_data
+"bhrae pavan thi zad ukhdi gaya, light na thambha padya, aakhi raat thi lgiht nathi 😔 #vavazodu",Cyclone,gu_roman,eyewitness,79,1,typo,provided_test_data
+"tantra ne kyare sharam aavshe, darr varse same waterlogging, gutter kyare saaf thashe?? 😡",Flood,gu_roman,civic,52,0,,provided_test_data
+"चक्रवात आज शाम तट से टकराएगा, मछुआरों को समुद्र में न जाने की चेतावनी, रेड अलर्ट जारी #चक्रवात",Cyclone,hi,official,56,1,no_end_punct|hashtag,provided_test_data
+"bhukamp pachi juna makan ma tirado padi, society ma engineer bolavyo chhe @districtcollector 🔥",Earthquake,gu_roman,civic,24,1,variant|mention|emoji,provided_test_data
+"चक्रवात आज शाम तट से टकराएगा, मछुआरों को समुद्र में न जाने की चेतावनी, रेड अलर्ट जारी",Cyclone,hi,official,56,0,,provided_test_data
+"raat ko 2 baje ghar hil gaya BACHCHE ro rahe the, ab tak neeche khade hain 🔥",Earthquake,hinglish,eyewitness,16,1,shout|drop_comma|emoji,provided_test_data
+"વાવાઝોડું આજે સાંજે દરિયાકાંઠે ત્રાટકશે, માછીમારોને દરિયો ન ખેડવાની ચેતવણી, રેડ alert જાહેર https://t.co/waiY7FEQ",Cyclone,gu,official,63,1,codemix|no_end_punct|url,provided_test_data
+"रात 2 बजे झटके आए बच्चे रोने लगे, पूरी बिल्डिंग नीचे खड़ी है #भूकंप 🥲",Earthquake,hi,eyewitness,3,1,drop_comma|hashtag|emoji,provided_test_data
+"3 divas thi varsad rokato nathi, rasta nadi bani gaya, office e wfh aapyu",Flood,gu_roman,eyewitness,51,1,lower|no_end_punct,provided_test_data
+"traffic ma toofan machyu che aaje, office pahonchta be kalak lagya",Non-Disaster,gu_roman,metaphor,118,0,,provided_test_data
+"तीन दिन से लगातार बारिश, सड़कें नदी बन गईं, ट्रेनें रद्द, स्कूलों की छुट्टी",Flood,hi,eyewitness,32,0,,provided_test_data
+तूफान कमजोर पड़कर डिप्रेशन में बदला पर कई जिलों में भारी बारिश जारी https://t.co/uCq1GNLL #CycloneAlert,Cyclone,hi,news,62,1,no_end_punct|drop_comma|url|hashtag,provided_test_data
+"ભારે પવનથી ઝાડ ઉખડી ગયા, વીજળીના થાંભલા પડ્યા, આખી રાતથી લાઈટ નથી 😔 #વાવાઝોડું 🥲",Cyclone,gu,eyewitness,65,1,emoji,provided_test_data
+"Earthquake ke jhatke feel hue Delhi NCR me, magnitude 4.4, koi nuksaan ki khabar nahi",Earthquake,hinglish,news,15,0,,provided_test_data
+"2nd aftershock abhi abhii, lift maaat use karo, seedhiyon se neeche aao",Earthquake,hinglish,help,19,1,variant|elongate,provided_test_data
+"રાહત કેમ્પમાં ખાવાના પેકેટ અને કોરાં કપડાંની જરૂર છે, મદદ કરી શકો તો સંપર્ક કરો",Flood,gu,help,40,0,,provided_test_data
+"BMC ko kab sharam aayegi, har saal wahi waterlogging, drain saaf kaab hoga?? 😡",Flood,hinglish,civic,45,1,elongate,provided_test_data
+"BMC ko kab sharam aayegi, har saal wahi waterlogging, drain saaf kab hoga?? 😡",Flood,hinglish,civic,45,0,,provided_test_data
+"3 din se barish urki nhi road andi ban gaya, officeee se wfh diya #Waterlogging 🙏",Flood,hinglish,eyewitness,44,1,variant|typo|elongate|lower|drop_comma|hashtag|emoji,provided_test_data
+"cyclone aaj shaam tak coast se takrayega fishermen ko wapsa bulaya gaya, red alert jaari #Cyclone 🙏",Cyclone,hinglish,official,70,1,variant|typo|no_end_punct|drop_comma|hashtag|emoji,provided_test_data
+"malbe me log phase hain, NDRF pahunch gayi hai, please afwah mat failao",Earthquake,hinglish,news,20,0,,provided_test_data
+ट्रैफिक में तूफान मचा है आज ऑफिस पहुंचने में दो घंटे लग गए??,Non-Disaster,hi,metaphor,97,1,punct_burst|drop_comma,provided_test_data
+"RT @newsdesk_live: तूफान कमजोर पड़कर डिप्रेशन में बदला, पर कई जिलों में भारी बारिश जारी #CycloneAlert",Cyclone,hi,news,62,1,chandrabindu|rt|hashtag,provided_test_data
+"Surat me barish ne tabahi macha di, ghar me kamar tak paani, koi boat bhejo please 🙏 #SuratRains #Floods",Flood,hinglish,help,42,1,hashtag,provided_test_data
+"कैटेगरी 4 का हरिकेन तट से टकराया, तूफानी लहरों से कई इलाके डूबे",Cyclone,hi,news,85,0,,provided_test_data
+"traffic me toofan mach gaya aaj, office pahunchne me 2 ghante lage #Mood",Non-Disaster,hinglish,metaphor,111,1,hashtag,provided_test_data
+"मलबे में दबे लोगों को निकालने का काम जारी, NDRF की टीम मौके पर पहुंची",Earthquake,hi,news,5,0,,provided_test_data
+"dariyakantha na gam ma thi 1 lakh loko nu sthalantar, ashray sthano taiyar",Cyclone,gu_roman,news,78,0,,provided_test_data
+"तेज हवा से पेड़ उखड़ गए, लाइट के खंभे गिरे, रात भर से लाइट गायब है 😔 #चक्रवात",Cyclone,hi,eyewitness,58,1,codemix|chandrabindu,provided_test_data
+"varsad pade chhe, chai ane bhajiya taiyar, aaj ni raja safal ☔",Non-Disaster,gu_roman,plain,114,1,variant,provided_test_data
+"कल की परीक्षा ने तो भूकंप ला दिया, कुछ समझ ही नहीं आया 😭",Non-Disaster,hi,metaphor,92,0,,provided_test_data
+"raate be vagye aanchka aavya, chokrao radva LAGYA, have sudhi niche j ubha chiye #Earthquake 😟",Earthquake,gu_roman,eyewitness,23,1,shout|no_end_punct|hashtag|emoji,provided_test_data
+"us me hurricane aaya hai, cousin ka ghra tampa me hai, 2 din se phone nai lag raha 😟 #Hurricane",Cyclone,hinglish,eyewitness,87,1,variant|typo|lower|hashtag,provided_test_data
+"દરિયાનું રૌદ્ર સ્વરૂપ, ઊંચા મોજાં કિનારાનો રસ્તો તાણી ગયા",Cyclone,gu,eyewitness,68,0,,provided_test_data
+"तूफान कमजोर पड़कर डिप्रेशन में बदला, पर कई जिलों में भारी बारिश जारी",Cyclone,hi,news,62,0,,provided_test_data
+"રાહત કેમ્પમાં ખાવાના પેકેટ અને કોરાં કપડાંની જરૂર છે, મદદ કરી શકો તો સંપર્ક કરો 😟",Flood,gu,help,40,1,emoji,provided_test_data
+"બ્રેકિંગ: કાટમાળમાં દબાયેલા લોકોને બહાર કાઢવાની કામગીરી ચાલુ, NDRFની ટીમ પહોંચી #Bhukamp",Earthquake,gu,news,12,1,breaking|hashtag,provided_test_data
+"ભારે પવનથી ઝાડ ઉખડી ગયા, વીજળીના થાંભલા પડ્યા, આખી રાતથી લાઈટ નથી 😔 #વાવાઝોડું",Cyclone,gu,eyewitness,65,0,,provided_test_data
+"paani utarne ke baaaad sab jagah keechad, fasal barbaad, kisan ro raha hai 😰",Flood,hinglish,eyewitness,48,1,elongate|no_end_punct|emoji,provided_test_data
+"नदी का जलस्तर खतरे के निशान से ऊपर, गांवों को खाली कराने का काम शुरू https://t.co/EAiHoIPv",Flood,hi,official,29,1,url,provided_test_data
+"surat ma varsad e tabahi machavi, ghr ma kamar sudhi pani, koiii boat moklo please 🙏 #suratrains #Floods",Flood,gu_roman,help,49,1,variant|elongate|lower|hashtag,provided_test_data
+"ઘરમાં કમર સુધી પાણી ભરાઈ ગયા છે બાળકો અને વડીલો છત પર બેઠા છે, help મોકલો 🙏",Flood,gu,help,37,1,codemix|drop_comma,provided_test_data
+"samundar ka gussa dekho, lehren road bahakar le gayi #cyclone",Cyclone,hinglish,eyewitness,75,0,,provided_test_data
+તમને આંચકો અનુભવાયો? અમારે ત્યાં તો દીવાલ પરનો ફોટો પડી ગયો #Bhukamp,Earthquake,gu,eyewitness,13,1,drop_comma|hashtag,provided_test_data
+"Dam ke gate khole gaye, downstream wale gaon me alert, log upar jagah chale jao",Flood,hinglish,official,46,0,,provided_test_data
+"hawa inti tez hai ki ped ukhad gaye, rat se light nhi he, phone 8% 😔 #cyclone",Cyclone,hinglish,eyewitness,72,1,variant|typo,provided_test_data
+"surat ma varsad e tabahi machavi, ghr maa kamar suhdi pani, koi boat moklo please 🙏 #suratrains @newsdesk_live #GujaratRains",Flood,gu_roman,help,49,1,variant|typo|lower|mention|hashtag,provided_test_data
+હમણાં જ ધરતી ધ્રૂજી! પંખો હલતો હતો આખું બિલ્ડિંગ ખાલી થઈ ગયું 😰 #ભૂકંપ 😮‍💨,Earthquake,gu,eyewitness,8,1,no_end_punct|drop_comma|hashtag|emoji,provided_test_data
+"अभी अभी ज़मीन हिली!! पंखा झूल रहा था, सब बाहर आ गए 😨 #भूकंप",Earthquake,hi,eyewitness,1,0,,provided_test_data
+"ब्रेकिंग: IMD का alert: अति गंभीर चक्रवाती तूफान, 130 किमी प्रति घंटे तक की रफ्तार से हवाएं चलेंगी 😮‍💨",Cyclone,hi,official,59,1,codemix|breaking|emoji,provided_test_data
+ટ્રાફિકમાં તોફાન મચ્યું છે આજે ઓફિસ પહોંચતા બે કલાક લાગ્યા 😰,Non-Disaster,gu,metaphor,104,1,drop_comma|emoji,provided_test_data
+"water उतरने के बाद हर तरफ कीचड़, फसल बर्बाद, किसान बेहाल",Flood,hi,eyewitness,34,1,codemix,provided_test_data
+"disaster management pe next week workshop hai, registration ka link bio me #chai",Non-Disaster,hinglish,hard_negative,110,1,lower|no_end_punct|hashtag,provided_test_data
+"નદીની સપાટી ભયજનક સપાટીથી ઉપર, ગામો ખાલી કરાવવાની કામગીરી શરૂ 😮‍💨",Flood,gu,official,36,1,emoji,provided_test_data
+"બ્રેકિંગ: કચ્છમાં વહેલી સવારે ભૂકંપના આંચકા, લોકો ઘરની બહાર દોડી આવ્યા, રિક્ટર સ્કેલ પર 4.1ની તીવ્રતા",Earthquake,gu,news,7,1,breaking,provided_test_data
+yaar hamna j bhukamp avyo? pankho hali rahyo hato badha niche aavi gaya 😰...,Earthquake,gu_roman,eyewitness,21,1,lower|punct_burst|drop_comma,provided_test_data
+"तीन दिन से लगातार बारिश roads नदी बन गईं, ट्रेनें रद्द, स्कूलों की छुट्टी",Flood,hi,eyewitness,32,1,codemix|chandrabindu|drop_comma,provided_test_data
+"dariya nu raudra swaroop, uncha moja kinara no rasto tani gaya #vavazodu",Cyclone,gu_roman,eyewitness,82,1,hashtag,provided_test_data
+બ્રેકિંગ: બંદર પર 9 નંબરનું સિગ્નલ લગાવાયું ફ્લાઇટ અને trains રદ https://t.co/KGBavh1R #વાવાઝોડું,Cyclone,gu,news,67,1,codemix|no_end_punct|drop_comma|breaking|url|hashtag,provided_test_data
+"disaster management par aavta athvadiye workshop che, registration no link bio ma",Non-Disaster,gu_roman,hard_negative,117,0,,provided_test_data
+"paani utarne ke baad sab jagah keechad, fasal barbaad, kisan ro raha hai",Flood,hinglish,eyewitness,48,0,,provided_test_data
+"NCS के मुताबिक झटकों का केंद्र जमीन से 10 किमी नीचे था, किसी नुकसान की खबर नहीं 🔥",Earthquake,hi,official,2,1,emoji,provided_test_data
+"pehle laga truck gaya hoga, phir samajh aaya ye zameen hil rahi hai 😭 #earthquake",Earthquake,hinglish,eyewitness,18,0,,provided_test_data
+"kal na exam e to bhukamp lavi didho, kai samjayu j nahi 😭",Non-Disaster,gu_roman,metaphor,113,0,,provided_test_data
+"भूकंप कैसे आता है, कल टीवी पर डॉक्यूमेंट्री देखी, प्रकृति कमाल है",Non-Disaster,hi,hard_negative,95,0,,provided_test_data
+"राहत शिविर में खाने के पैकेट और सूखे कपड़ों की जरूरत है, जो मदद कर सकें संपर्क करें",Flood,hi,help,33,0,,provided_test_data
+"હવામાન વિભાગનું alert: અતિ ગંભીર ચક્રવાતી વાવાઝોડું, 130 કિમી પ્રતિ કલાકની ઝડપે પવન ફૂંકાશે https://t.co/Oj5qOpx4 😮‍💨",Cyclone,gu,official,66,1,codemix|url|emoji,provided_test_data
+વાવાઝોડું નબળું પડીને ડિપ્રેશનમાં ફેરવાયું પણ અનેક જિલ્લામાં ભારે વરસાદ ચાલુ #વાવાઝોડું,Cyclone,gu,news,69,1,drop_comma|hashtag,provided_test_data
+"aftershock pachhi pachhi aavta j rahe che, lift vaparsho nahi, pagthiya thi utro",Earthquake,gu_roman,help,26,0,,provided_test_data
+"katmal ma dabayela loko ne kadhva NDRF ni team aavi gai che, afvaho na fellavsho",Earthquake,gu_roman,news,27,0,,provided_test_data
+"દરિયાનું રૌદ્ર સ્વરૂપ, ઊંચા મોજાં કિનારાનો રસ્તો તાણી ગયા #CycloneAlert 🔥",Cyclone,gu,eyewitness,68,1,hashtag|emoji,provided_test_data
+"aftesrhock pachhi apchhi aavta j rahe se, lift vaparshoo nahi, pagthiya thi utro #bhukamp",Earthquake,gu_roman,help,26,1,variant|typo|elongate|hashtag,provided_test_data
+"Surat me barsih ne tabahi macha di, ghar me kamar tak paani, koooi boat bhejo please 🙏 #SuratRains 😡",Flood,hinglish,help,42,1,typo|elongate|emoji,provided_test_data
+"ब्रेकिंग: NCS के मुताबिक झटकों का केंद्र जमीन से 10 किमी नीचे था, किसी नुकसान की खबर नहीं?! 🥲",Earthquake,hi,official,2,1,punct_burst|breaking|emoji,provided_test_data
+"बंदरगाह पर 9 नंबर का सिग्नल लगाया गया, उड़ानें और ट्रेनें रद्द https://t.co/OSWe9DyF",Cyclone,hi,news,60,1,url,provided_test_data
+ब्रेकिंग: तटीय इलाकों से 1 लाख लोगों को सुरक्षित जगहों पर पहुंचाया गया राहत शिविर तैयार,Cyclone,hi,news,57,1,drop_comma|breaking,provided_test_data
+"अमेरिका के फ्लोरिडा में हरिकेन का कहर लाखों लोगों को सुरक्षित जगह भेजा गया, लाइट गुल",Cyclone,hi,news,84,1,codemix|chandrabindu|drop_comma,provided_test_data
+"bhai abhi bhukamp aaya kya?? fan hil raha tha, sab log neeche aa gaye 😰",Earthquake,hinglish,eyewitness,14,0,,provided_test_data
+"BREAKING: nadi ka level danger mark se upar, gaoon khali karwa rahe hain, NDRF aa gayi hai https://t.co/BEmLtST1 #Waterlogging",Flood,hinglish,official,43,1,elongate|breaking|url|hashtag,provided_test_data
+"अभी अभी ज़मीन हिली!! पंखा झूल रहा था, सब बाहर आ गए 😨 #भूकंप 😮‍💨",Earthquake,hi,eyewitness,1,1,emoji,provided_test_data
+"નદીની સપાટી ભયજનક સપાટીથી ઉપર, ગામો ખાલી કરાવવાની કામગીરી શરૂ https://t.co/4KbFpiAM",Flood,gu,official,36,1,url,provided_test_data
+"ट्रैफिक में तूफान मचा है आज, ऑफिस पहुंचने में दो घंटे लग गए",Non-Disaster,hi,metaphor,97,0,,provided_test_data
+"bhare pavan thi zad kuhdi gaya, light na thambha padya, aakhi raat thi light nahi 😔 #vavazodu #Cyclone",Cyclone,gu_roman,eyewitness,79,1,variant|typo|hashtag,provided_test_data
+"અમેરિકાના ફ્લોરિડામાં હરિકેનનો કહેર, લાખો લોકોનું સ્થળાંતર, વીજળી ગુલ... 😡",Cyclone,gu,news,89,1,punct_burst|emoji,provided_test_data
+"kal TV par earthquake ni documentary joi, kudrat kamal che yaar",Non-Disaster,gu_roman,hard_negative,116,0,,provided_test_data
+"aaj ke match me toofani batting, 18 over me hi target khatam 🔥",Non-Disaster,hinglish,plain,112,0,,provided_test_data
+"मेरा इनबॉक्स बाढ़ बन गया है, 300 अनरीड मेल, सोमवार से डर लग रहा है #मूड",Non-Disaster,hi,metaphor,94,1,chandrabindu|no_end_punct|hashtag,provided_test_data
+"traffic maa otofan machyu se aje, office pahonchta be kalak laagya",Non-Disaster,gu_roman,metaphor,118,1,variant|typo|elongate|lower,provided_test_data
+relief camp me khane ke packets aur sukhe kapdeee chahiye dm kro agar help kar sakte ho,Flood,hinglish,help,47,1,variant|elongate|lower|drop_comma,provided_test_data
+"pehla lagyu truck gayo hashe, pachi khabar padi ke dharti dhruji 😭 #bhukamp #Earthquake 🔥",Earthquake,gu_roman,eyewitness,25,1,hashtag|emoji,provided_test_data
+kl TV par aerthquake ni documentary joi kudrat kamal che yaar 🔥,Non-Disaster,gu_roman,hard_negative,116,1,variant|typo|drop_comma|emoji,provided_test_data
+RT @newsdesk_live: मलबे में दबे लोगों को निकालने का काम जारी NDRF की टीम मौके पर पहुंची,Earthquake,hi,news,5,1,drop_comma|rt,provided_test_data
+"चक्रवात आज शाम तट से टकराएगा, मछुआरों को समुद्र में न जाने की चेतावनी, रेड alert जारी #चक्रवात",Cyclone,hi,official,56,1,codemix|chandrabindu|no_end_punct|hashtag,provided_test_data
+"pehle laga truck gaya hoga, phir samajh aaya ye zameen hiiil rahi hai 😭 #earthquake #bhukamp 😰",Earthquake,hinglish,eyewitness,18,1,elongate|hashtag|emoji,provided_test_data
+"bhare pavan thi zad ukhdi gaya, light na thambha padya, aaaakhi raat thi light nathi 😔 #vavazodu 😡",Cyclone,gu_roman,eyewitness,79,1,elongate|lower|emoji,provided_test_data
+"ब्रेकिंग: चक्रवात आज शाम तट से टकराएगा, मछुआरों को समुद्र में न जाने की चेतावनी, रेड अलर्ट जारी https://t.co/eLMK8uNW #CycloneAlert",Cyclone,hi,official,56,1,chandrabindu|breaking|url|hashtag,provided_test_data
+"કેટેગરી 4નું હરિકેન દરિયાકાંઠે ત્રાટક્યું, તોફાની મોજાંથી અનેક વિસ્તારો ડૂબ્યા https://t.co/MsvP8O7F #હરિકેન",Cyclone,gu,news,90,1,url|hashtag,provided_test_data
+"3 din se barish ruki nai, orad nadi ban gaya, fofice se WFH diya",Flood,hinglish,eyewitness,44,1,variant|typo,provided_test_data
+"yaar hamna j bhukamp avyo? pankho hali rahyo hato, badha niche aavi gaya 😰 🤦",Earthquake,gu_roman,eyewitness,21,1,variant|emoji,provided_test_data
+"આપત્તિ વ્યવસ્થાપન પર આવતા અઠવાડિયે વર્કશોપ, નોંધણી માટે લિંક જુઓ 🙏",Non-Disaster,gu,hard_negative,103,1,emoji,provided_test_data
+"रात 2 बजे झटके आए, बच्चे रोने लगे, पूरी बिल्डिंग नीचे खड़ी है",Earthquake,hi,eyewitness,3,0,,provided_test_data
+Breaking: vavazodu nabalu padi ne depression ma pheravayu pan ghana jilla ma bhare varsad chalu 😭,Cyclone,gu_roman,news,83,1,variant|drop_comma|breaking|emoji,provided_test_data
+"કાલની પરીક્ષાએ તો ભૂકંપ લાવી દીધો, કંઈ સમજાયું જ નહીં 😭",Non-Disaster,gu,metaphor,99,0,,provided_test_data
+"3 din se barish ruki nahi, road nadi ban gaya, office se WFH diya",Flood,hinglish,eyewitness,44,0,,provided_test_data
+"પાણી ઓસર્યા પછી બધે કાદવ-કીચડ, પાક નિષ્ફળ, ખેડૂતો પરેશાન",Flood,gu,eyewitness,41,0,,provided_test_data
+"bhukamp pachhi junaaa makan ma tirado padi, society ma engineer bolavyo che?? #bhukamp",Earthquake,gu_roman,civic,24,1,variant|elongate|punct_burst|hashtag,provided_test_data
+"baarish ho rahi hai, chai pakode ready, aaj ki chhutti asfal ☔",Non-Disaster,hinglish,plain,107,1,typo|no_end_punct,provided_test_data
+"disatser management par aavta athvadiiiye workshop che, registration no link bio maa",Non-Disaster,gu_roman,hard_negative,117,1,variant|typo|elongate,provided_test_data
+"relief camp ma khavana packet ane kora kapda joiye che, DM karo jo help kari shako to",Flood,gu_roman,help,54,0,,provided_test_data
+"tantra ne kyare sharam aavshe, daarr varse same waterlogging, gutter kyare saaf thashe?? 😡 😮‍💨",Flood,gu_roman,civic,52,1,typo|elongate|emoji,provided_test_data
+ब्रेकिंग: कैटेगरी 4 का हरिकेन तट से टकराया तूफानी लहरों से कई इलाके डूबे #Hurricane,Cyclone,hi,news,85,1,drop_comma|breaking|hashtag,provided_test_data
+"bhaii abhi bhukamp aaya kyaa?? fan hiil raha tha, sab logg neeche aa gaye 😰 😟",Earthquake,hinglish,eyewitness,14,1,variant|elongate|lower|no_end_punct|emoji,provided_test_data
+"ભૂકંપ પછી જૂના મકાનોમાં તિરાડો પડી, તંત્રે તપાસના આદેશ આપ્યા https://t.co/eVvFQ0ub #Bhukamp 😟",Earthquake,gu,news,11,1,no_end_punct|url|hashtag|emoji,provided_test_data
+"आज के मैच में तूफानी बल्लेबाजी, 18 ओवर में ही टारगेट पूरा 🔥!!",Non-Disaster,hi,plain,98,1,chandrabindu|punct_burst,provided_test_data
+"US me hurricaen aaya hai, cousin ka ghr TAMPA me hai, 2 din se phone nahi lag raha 😟",Cyclone,hinglish,eyewitness,87,1,variant|typo|shout|no_end_punct,provided_test_data
+"પાણી ઓસર્યા પછી બધે કાદવ-કીચડ, પાક નિષ્ફળ, ખેડૂતો પરેશાન 😭",Flood,gu,eyewitness,41,1,emoji,provided_test_data
+"pani osarya pachi badhe kadav-kichad, pak nishfal, kheduto pareshan",Flood,gu_roman,eyewitness,55,0,,provided_test_data
+"पानी उतरने के बाद हर तरफ कीचड़, फसल बर्बाद, किसान बेहाल",Flood,hi,eyewitness,34,0,,provided_test_data
+"ભૂકંપનું કેન્દ્ર ભચાઉ પાસે હતું, જાનમાલને નુકસાનના કોઈ સમાચાર નથી",Earthquake,gu,official,9,0,,provided_test_data
+"बांध के गेट खोले गए, नदी किनारे के गांवों में अलर्ट जारी",Flood,hi,official,31,0,,provided_test_data
+"बांध के गेट खोले गए, नदी किनारे के गांवों में अलर्ट जारी 🔥",Flood,hi,official,31,1,emoji,provided_test_data
+"kal tv pe earthuqakes ki documentary dekhi, nature akmaal hai yaar!!! #Mood",Non-Disaster,hinglish,hard_negative,109,1,typo|lower|punct_burst|hashtag,provided_test_data
+"Breaking: daryiakantha na gam ma thi 1 lakh loko nu sthalantar, ahsray sthano taiyar #Cyclone",Cyclone,gu_roman,news,78,1,typo|lower|breaking|hashtag,provided_test_data
+"coastal villages se 1 lakh log shiift kiye, shelter ready h, please apne gharwalon ko bhi alert karo",Cyclone,hinglish,help,71,1,variant|elongate,provided_test_data
+"pehla lagyu truck gayo hashe, pachi khabar padi ke dharti dhruji 😭 #bhukamp",Earthquake,gu_roman,eyewitness,25,0,,provided_test_data
+"भूकंप कैसे आता है, कल टीवी पर डॉक्यूमेंट्री देखी, प्रकृति कमाल है #मूड 😰",Non-Disaster,hi,hard_negative,95,1,chandrabindu|no_end_punct|hashtag|emoji,provided_test_data
+"Breaking: vavazodu nabalu padi ne DEPRESSION ma pheravayu, pan ghaan jilla ma bhare varsad chalu https://t.co/NJMDmhQG 😮‍💨",Cyclone,gu_roman,news,83,1,typo|shout|breaking|url|emoji,provided_test_data
+"nadi nu level danger mark thi upar, gam khali karavi rahya che, ndrf aavi gai se!! https://t.co/vd95e5bz",Flood,gu_roman,official,50,1,variant|lower|punct_burst|url,provided_test_data
+"aaj ke macth me toofani batting, 18 over me hi taregt khatam 🔥",Non-Disaster,hinglish,plain,112,1,variant|typo,provided_test_data
+"pehla lagyu truck gayo hashe, pachhi khabar padi ke dhartiii dhruji 😭 #bhukamp",Earthquake,gu_roman,eyewitness,25,1,variant|elongate,provided_test_data
+"coastal villages se 1 lakh log shift kiye, shelter reeady hain, plz apne ghawralon ko bhi alert akro @newsdesk_live #CycloneAlert",Cyclone,hinglish,help,71,1,variant|typo|elongate|mention|hashtag,provided_test_data
+समंदर का रौद्र रूप ऊंची लहरें किनारे की सड़क बहा ले गईं #CycloneAlert,Cyclone,hi,eyewitness,61,1,chandrabindu|drop_comma|hashtag,provided_test_data
+"bhukamp ke baad purani building me cracks, society wale engineer bula rahe hain... @districtcollector 🤦",Earthquake,hinglish,civic,17,1,punct_burst|mention|emoji,provided_test_data
+"raat ko 2 baje ghar hiiil gaya, bachche RO rahe the, ab tak neeche khade hn #Earthquake",Earthquake,hinglish,eyewitness,16,1,variant|elongate|shout|hashtag,provided_test_data
+kal na exam e to bhukamp lavi didho kai samjayu j nahi 😭 #chai,Non-Disaster,gu_roman,metaphor,113,1,lower|drop_comma|hashtag,provided_test_data
+"baarish ho rahi hai, chai pakode ready, aaj ki chhutti safal ☔",Non-Disaster,hinglish,plain,107,0,,provided_test_data
+"દરિયાકાંઠાના ગામોમાંથી 1 લાખ લોકોનું સ્થળાંતર, આશ્રય સ્થાનો તૈયાર",Cyclone,gu,news,64,0,,provided_test_data
+"मेरा इनबॉक्स बाढ़ बन गया है, 300 अनरीड मेल, सोमवार से डर लग रहा है 🙏",Non-Disaster,hi,metaphor,94,1,chandrabindu|emoji,provided_test_data
+"રાત્રે બે વાગ્યે આંચકા આવ્યા, બધા રસ્તા પર આવી ગયા, ઊંઘ ઉડી ગઈ 😮‍💨",Earthquake,gu,eyewitness,10,1,no_end_punct|emoji,provided_test_data
+"राहत शिविर में खाने के पैकेट और सूखे कपड़ों की जरूरत है, जो मदद कर सकें संपर्क करें #Floods",Flood,hi,help,33,1,chandrabindu|hashtag,provided_test_data
+"maara inbox ma pur aavyu che, 300 unread mail, Monday no dar lage che",Non-Disaster,gu_roman,metaphor,115,0,,provided_test_data
+"cyclone aaj shaam tak coast se takrayega, fishermen ko wapas bulaya gaya, red alert jaari",Cyclone,hinglish,official,70,0,,provided_test_data
+"વરસાદ પડે છે, ચા અને ભજિયાં તૈયાર, આજની રજા સફળ ☔??",Non-Disaster,gu,plain,100,1,punct_burst,provided_test_data
+"भूकंप कैसे आता है, कल टीवी पर डॉक्यूमेंट्री देखी, प्रकृति कमाल है!! 😰",Non-Disaster,hi,hard_negative,95,1,punct_burst|emoji,provided_test_data
+"maara ibnox ma pur aavyu se, 300 unread mail, Monday no dar lageee se #Mood 😭",Non-Disaster,gu_roman,metaphor,115,1,variant|typo|elongate|hashtag|emoji,provided_test_data
+"बंदरगाह पर 9 नंबर का सिग्नल लगाया गया, उड़ानें और trains रद्द",Cyclone,hi,news,60,1,codemix|chandrabindu,provided_test_data
+"રાત્રે બે વાગ્યે આંચકા આવ્યા, બધા રસ્તા પર આવી ગયા, ઊંઘ ઉડી ગઈ 😰",Earthquake,gu,eyewitness,10,1,emoji,provided_test_data
+"nadi ka level danger mark se upar, gaon khali karwa rahe hain, NDRF aa gayi hai",Flood,hinglish,official,43,0,,provided_test_data
+"raat ko 2 baje ghar hil gaya, bachche ro rahe the, ab tak neeche khade hain 🥲",Earthquake,hinglish,eyewitness,16,1,no_end_punct|emoji,provided_test_data
+"pehle laga truck gaya hoga, phir samajh aaya ye zameen hil rahi hai 😭 #earthquake #Earthquake 🙏",Earthquake,hinglish,eyewitness,18,1,lower|hashtag|emoji,provided_test_data
+"mera inbox baadh ban gaya hai 300 unread mails, Monday se dar lag raha hai #chai 😡",Non-Disaster,hinglish,metaphor,108,1,no_end_punct|drop_comma|hashtag|emoji,provided_test_data
+"ઘરમાં કમર સુધી પાણી ભરાઈ ગયા છે, બાળકો અને વડીલો છત પર બેઠા છે, મદદ મોકલો 🙏",Flood,gu,help,37,0,,provided_test_data
+"pani osarya pachi badhe kadav-kichad, pak nishfal, kheduto pareshan?!",Flood,gu_roman,eyewitness,55,1,lower|punct_burst,provided_test_data
+"મારા ઇનબોક્સમાં પૂર આવ્યું છે, 300 અનરીડ મેઇલ, સોમવારનો ડર લાગે છે",Non-Disaster,gu,metaphor,101,0,,provided_test_data
+"ભૂકંપ પછી જૂના મકાનોમાં તિરાડો પડી, તંત્રે તપાસના આદેશ આપ્યા?? https://t.co/3lcBGYQ6 #Bhukamp 🥲",Earthquake,gu,news,11,1,punct_burst|url|hashtag|emoji,provided_test_data
+"દરિયાકાંઠાના ગામોમાંથી 1 લાખ લોકોનું સ્થળાંતર, આશ્રય સ્થાનો તૈયાર 🥲",Cyclone,gu,news,64,1,emoji,provided_test_data
+"IMD ne veeery severe cyclonic storm ka alert diya, 130 kmph ki speed se hawa chalegi https://t.co/6d5ASExA 🔥",Cyclone,hinglish,official,73,1,elongate|no_end_punct|url|emoji,provided_test_data
+"disaster management pe next weke workshop hai, registratiooon ka link bio me??",Non-Disaster,hinglish,hard_negative,110,1,typo|elongate|lower|punct_burst,provided_test_data
+आपदा प्रबंधन पर अगले हफ्ते कार्यशाला पंजीकरण के लिए लिंक देखें,Non-Disaster,hi,hard_negative,96,1,chandrabindu|no_end_punct|drop_comma,provided_test_data
+"तटीय इलाकों से 1 लाख लोगों को सुरक्षित जगहों पर पहुंचाया गया, राहत शिविर तैयार",Cyclone,hi,news,57,0,,provided_test_data
+"nadi nu level danger mark thi upar, gam khali karavi rahya che, NDRF aavi gai che https://t.co/Hk0BQSE3 #Floods",Flood,gu_roman,official,50,1,no_end_punct|url|hashtag,provided_test_data
+kl TV pe earthquakes ki documentary dekhi nature kamaal hai yaaar,Non-Disaster,hinglish,hard_negative,109,1,variant|shout|no_end_punct|drop_comma,provided_test_data
+"Florida me hurricane ki wajah se mandatory evacuation, flights cancel, NHC ne Cat 4 bataya",Cyclone,hinglish,news,86,0,,provided_test_data
+झटके महसूस हुए क्या आपको? हमारे यहां तो दीवार पर लगी फोटो गिर गई #भूकंप,Earthquake,hi,eyewitness,6,1,hashtag,provided_test_data
+"2nd aftershock abhi abhi lift mat use karo, seedhiyon se neeche aao @newsdesk_live",Earthquake,hinglish,help,19,1,drop_comma|mention,provided_test_data
+"सूरत में भारी बारिश से जलभराव, निचले इलाकों में घरों में घुसा पानी, NDRF की टीमें तैनात https://t.co/Ong0wVJY",Flood,hi,news,28,1,url,provided_test_data
+"બ્રેકિંગ: અમેરિકાના ફ્લોરિડામાં હરિકેનનો કહેર, લાખો લોકોનું સ્થળાંતર, લાઈટ ગુલ #Hurricane",Cyclone,gu,news,89,1,codemix|breaking|hashtag,provided_test_data
+દરિયાકાંઠાના ગામોમાંથી 1 લાખ લોકોનું સ્થળાંતર આશ્રય સ્થાનો તૈયાર #વાવાઝોડું 😰,Cyclone,gu,news,64,1,drop_comma|hashtag|emoji,provided_test_data
+"પાણી ઓસર્યા પછી બધે કાદવ-કીચડ, પાક નિષ્ફળ, ખેડૂતો પરેશાન 😡",Flood,gu,eyewitness,41,1,no_end_punct|emoji,provided_test_data
+"2nd aftershock abhi abhi, lift mat use karo, seedhiyon se neeche aao",Earthquake,hinglish,help,19,0,,provided_test_data
+"hawa itni teeez h ki ped ukhad gaye, raat se light nahi hai, phone 8% 😔 #cyclone #CycloneAlert",Cyclone,hinglish,eyewitness,72,1,variant|elongate|lower|hashtag,provided_test_data
+"વાવાઝોડું નબળું પડીને ડિપ્રેશનમાં ફેરવાયું, પણ અનેક જિલ્લામાં ભારે વરસાદ ચાલુ",Cyclone,gu,news,69,0,,provided_test_data
+"રાહત કેમ્પમાં ખાવાના પેકેટ અને કોરાં કપડાંની જરૂર છે, help કરી શકો તો સંપર્ક કરો #પૂર",Flood,gu,help,40,1,codemix|hashtag,provided_test_data
+"ब्रेकिंग: मलबे में दबे लोगों को निकालने का काम जारी, NDRF की टीम मौके पर पहुंची #Earthquake",Earthquake,hi,news,5,1,breaking|hashtag,provided_test_data
+"બંદર પર 9 નંબરનું સિગ્નલ લગાવાયું, ફ્લાઇટ અને ટ્રેનો રદ",Cyclone,gu,news,67,0,,provided_test_data
+"ત્રણ દિવસથી સતત વરસાદ, રસ્તા નદી બની ગયા, ટ્રેનો રદ, શાળાઓમાં રજા",Flood,gu,eyewitness,39,0,,provided_test_data
+झटके महसूस हुए क्या आपको? हमारे यहां तो दीवार पर लगी फोटो गिर गई #Earthquake,Earthquake,hi,eyewitness,6,1,hashtag,provided_test_data
+"kal TV pe earthquakes ki documentary dekhi, nature kamaal hai yaar",Non-Disaster,hinglish,hard_negative,109,0,,provided_test_data
+"havaman vibhag no alert: ati gambhir vavazodu, 130 kmph ni zadpe pavan fkuashe https://t.co/ZFNhbxKl 🙏",Cyclone,gu_roman,official,80,1,typo|lower|url|emoji,provided_test_data
+"કાલની પરીક્ષાએ તો ભૂકંપ લાવી દીધો, કંઈ સમજાયું જ નહીં 😭 🔥",Non-Disaster,gu,metaphor,99,1,emoji,provided_test_data
+"bandar par 9 number nu signal lagavyu, flight ane train raddh",Cyclone,gu_roman,news,81,0,,provided_test_data
+"अभी अभी ज़मीन हिली!! पंखा झूल रहा था, सब बाहर आ गए 😨 #भूकंप 🙏",Earthquake,hi,eyewitness,1,1,emoji,provided_test_data
+"vavazodu aaje sanje dariyakathe tratkshe, machhimaro ne dariyo na khedva ni chetavani, red alert jaher",Cyclone,gu_roman,official,77,0,,provided_test_data
+"Breaking: vavazodu nabalu padi ne depression maa pheravayu, pan ghana jilla ma bhare varsad chalu https://t.co/VkVEVfMN",Cyclone,gu_roman,news,83,1,variant|no_end_punct|breaking|url,provided_test_data
+"भूकंप कैसे आता है, कल टीवी पर डॉक्यूमेंट्री देखी, प्रकृति कमाल है?! #Weekend 🤦",Non-Disaster,hi,hard_negative,95,1,punct_burst|hashtag|emoji,provided_test_data
+"नदी का जलस्तर खतरे के निशान से ऊपर, गांवों को खाली कराने का काम शुरू",Flood,hi,official,29,0,,provided_test_data
+"mera inbox baadh ban gaya hai, 300 unread mails, Monday se dar lag raha hai",Non-Disaster,hinglish,metaphor,108,0,,provided_test_data
+"BREAKING: Earthquake ke jhatke feel hue Dehli NCR me, magnitude 4.4, koi nuksaan ki khabar nai... https://t.co/H9vOWOU6 #Earthquake 🔥",Earthquake,hinglish,news,15,1,variant|typo|punct_burst|breaking|url|hashtag|emoji,provided_test_data
+"Breaking: dam na darvaja kholya, nadi kinara na gam maa alert, loko upar ni jagya e jaao https://t.co/PL2lVSID #Floods 😮‍💨",Flood,gu_roman,official,53,1,variant|no_end_punct|breaking|url|hashtag|emoji,provided_test_data
+"pani osarya pchi badhe kadav-kichad, pak nishfal, kheduto pareshan 🔥",Flood,gu_roman,eyewitness,55,1,variant|emoji,provided_test_data
+ટ્રાફિકમાં તોફાન મચ્યું છે આજે ઓફિસ પહોંચતા બે કલાક લાગ્યા,Non-Disaster,gu,metaphor,104,1,no_end_punct|drop_comma,provided_test_data
+"3 din se barish ruki nahi, road nadi ban gaya, office se WFH diya 🥲",Flood,hinglish,eyewitness,44,1,shout|no_end_punct|emoji,provided_test_data
+"Surat me barish ne tabahi macha di, ghr me akmar taaak paani, koi boat bhejo plz 🙏 #SuratRains #Waterlogging",Flood,hinglish,help,42,1,variant|typo|elongate|hashtag,provided_test_data
+"आज के मैच में तूफानी बल्लेबाजी, 18 ओवर में ही टारगेट पूरा 🔥?! #Weekend",Non-Disaster,hi,plain,98,1,chandrabindu|punct_burst|hashtag,provided_test_data
+"કચ્છમાં વહેલી સવારે ભૂકંપના આંચકા, લોકો ઘરની બહાર દોડી આવ્યા, રિક્ટર સ્કેલ પર 4.1ની તીવ્રતા",Earthquake,gu,news,7,0,,provided_test_data
+"કાલની પરીક્ષાએ તો ભૂકંપ લાવી દીધો, કંઈ સમજાયું જ નહીં 😭 #મૂડ",Non-Disaster,gu,metaphor,99,1,no_end_punct|hashtag,provided_test_data
+"રાત્રે બે વાગ્યે આંચકા આવ્યા, બધા રસ્તા પર આવી ગયા, ઊંઘ ઉડી ગઈ",Earthquake,gu,eyewitness,10,0,,provided_test_data
+"paani utarne ke baad sb jagah keechad fsaal barbaad, kisna ro raha hai #Waterlogging",Flood,hinglish,eyewitness,48,1,variant|typo|no_end_punct|drop_comma|hashtag,provided_test_data
+"traffic me toofan mach gaya aaj, office pahunchne me 2 ghante lage 😟",Non-Disaster,hinglish,metaphor,111,1,lower|emoji,provided_test_data
+"આપત્તિ વ્યવસ્થાપન પર આવતા અઠવાડિયે વર્કશોપ, નોંધણી માટે લિંક જુઓ!!",Non-Disaster,gu,hard_negative,103,1,punct_burst,provided_test_data
+"बारिश हो रही है, चाय और पकौड़े तैयार, आज की holiday सफल ☔",Non-Disaster,hi,plain,93,1,codemix|chandrabindu,provided_test_data
+"aaj na match ma toofani batting, 18 over ma j target puro 🔥",Non-Disaster,gu_roman,plain,119,0,,provided_test_data
+"maara inbox maa puuur aaviyu se 300 unread mail, monday no dar lage che 😮‍💨",Non-Disaster,gu_roman,metaphor,115,1,variant|elongate|lower|drop_comma|emoji,provided_test_data
+"dariya nu raudra swaroop, uncha moja kinara no rasto tani gaya",Cyclone,gu_roman,eyewitness,82,0,,provided_test_data
+cyclone weak hokar depression ban gaya par heavy rain abhi bhi chal rahi hai,Cyclone,hinglish,news,76,0,,provided_test_data
+aaj na match ma toofani batting 18 over ma j target puro 🔥,Non-Disaster,gu_roman,plain,119,1,drop_comma,provided_test_data
+"ટ્રાફિકમાં તોફાન મચ્યું છે આજે, ઓફિસ પહોંચતા બે કલાક લાગ્યા 🔥",Non-Disaster,gu,metaphor,104,1,no_end_punct|emoji,provided_test_data
+"IMD ne very severe cyclonic storm ka alert diya, 130 kmph ki speed se hawa chalegii https://t.co/xzNXp9Hb",Cyclone,hinglish,official,73,1,elongate|url,provided_test_data
+"અમેરિકાના ફ્લોરિડામાં હરિકેનનો કહેર, લાખો લોકોનું સ્થળાંતર, લાઈટ ગુલ",Cyclone,gu,news,89,1,codemix|no_end_punct,provided_test_data
+"hurricane landfall ke baad lakho ghar bina bijli ke, storm surge ne coast tabah kar diya 🔥",Cyclone,hinglish,news,88,1,emoji,provided_test_data
+"આજની મેચમાં તોફાની બેટિંગ, 18 ઓવરમાં જ ટાર્ગેટ પૂરો 🔥 #Weekend 🔥",Non-Disaster,gu,plain,105,1,hashtag|emoji,provided_test_data
+तूफान कमजोर पड़कर डिप्रेशन में बदला पर कई जिलों में भारी बारिश जारी https://t.co/X5TFIuAC 😟,Cyclone,hi,news,62,1,chandrabindu|drop_comma|url|emoji,provided_test_data
+"kutch ma savare bhukamp na aanchka, richter scale par 4.3, nukshan na koi samachar nathi",Earthquake,gu_roman,news,22,0,,provided_test_data
+"समंदर का रौद्र रूप, ऊंची लहरें किनारे की सड़क बहा ले गईं!! 😡",Cyclone,hi,eyewitness,61,1,punct_burst|emoji,provided_test_data
+"મારા ઇનબોક્સમાં પૂર આવ્યું છે 300 અનરીડ મેઇલ, સોમવારનો ડર લાગે છે #Weekend 🙏",Non-Disaster,gu,metaphor,101,1,no_end_punct|drop_comma|hashtag|emoji,provided_test_data
+"પાણી ઓસર્યા પછી બધે કાદવ-કીચડ પાક નિષ્ફળ, ખેડૂતો પરેશાન",Flood,gu,eyewitness,41,1,no_end_punct|drop_comma,provided_test_data
+"कल की परीक्षा ने तो भूकंप ला दिया, कुछ समझ ही नहीं आया 😭 #Weekend",Non-Disaster,hi,metaphor,92,1,hashtag,provided_test_data
+"બ્રેકિંગ: ભૂકંપનું કેન્દ્ર ભચાઉ પાસે હતું, જાનમાલને નુકસાનના કોઈ સમાચાર નથી",Earthquake,gu,official,9,1,breaking,provided_test_data
+"बारिश हो रही है चाय और पकौड़े तैयार, आज की छुट्टी सफल ☔ 😭",Non-Disaster,hi,plain,93,1,drop_comma|emoji,provided_test_data
+"Breaking: katmal ma dabyaela loko ne kadhva NDRF ni teeam aavi gai se, afvaho na fellavsho",Earthquake,gu_roman,news,27,1,variant|typo|elongate|breaking,provided_test_data
+"hawa inti tez haiii ki ped ukhad gaye, raat se light nahi he, phone 8% 😔 #cyclone 🙏",Cyclone,hinglish,eyewitness,72,1,variant|typo|elongate|emoji,provided_test_data
+"3 divas thi varsad rokato nathi, rasta nadi bani gaya, office e WFH aapyu",Flood,gu_roman,eyewitness,51,0,,provided_test_data
+"aaj na match ma tofoani batting, 18 over ma j target upro 🔥",Non-Disaster,gu_roman,plain,119,1,typo,provided_test_data
+"બ્રેકિંગ: ભૂકંપ પછી જૂના મકાનોમાં તિરાડો પડી, તંત્રે તપાસના આદેશ આપ્યા 😡",Earthquake,gu,news,11,1,breaking|emoji,provided_test_data
+"ડેમના દરવાજા ખોલાયા, નદી કાંઠાના ગામોમાં એલર્ટ જાહેર 🔥",Flood,gu,official,38,1,no_end_punct|emoji,provided_test_data
+"આપત્તિ વ્યવસ્થાપન પર આવતા અઠવાડિયે વર્કશોપ, નોંધણી માટે લિંક જુઓ #Weekend",Non-Disaster,gu,hard_negative,103,1,hashtag,provided_test_data
+"तीन दिन से लगातार बारिश roads नदी बन गईं, ट्रेनें रद्द, स्कूलों की holiday",Flood,hi,eyewitness,32,1,codemix|drop_comma,provided_test_data
+"नदी का जलस्तर खतरे के निशान से ऊपर, गांवों को खाली कराने का काम शुरू #Floods 🥲",Flood,hi,official,29,1,no_end_punct|hashtag|emoji,provided_test_data
+"बांध के गेट खोले गए, नदी किनारे के गांवों में अलर्ट जारी 🥲",Flood,hi,official,31,1,emoji,provided_test_data
+"BREAKING: port pe signal no. 9 laag diya, flights aur trains cancel",Cyclone,hinglish,news,74,1,typo|no_end_punct|breaking,provided_test_data
+"kal na exam e to bhukamp lavi didho, kai samjaaayu j nahin 😭",Non-Disaster,gu_roman,metaphor,113,1,variant|elongate,provided_test_data
+"Dam ke gate khole gaye, downstream wale gaon me alert, log upar jagah chale jao #Waterlogging 😡",Flood,hinglish,official,46,1,hashtag|emoji,provided_test_data
+राहत शिविर में खाने के पैकेट और सूखे कपड़ों की जरूरत है जो मदद कर सकें संपर्क करें,Flood,hi,help,33,1,no_end_punct|drop_comma,provided_test_data
+"bhukamp ke baad purani building me cracks, society wale engineer bulaaa rahe hain @newsdesk_live #Earthquake 😰",Earthquake,hinglish,civic,17,1,elongate|mention|hashtag|emoji,provided_test_data
+"aaj na match ma toofani batting, 18 over ma j targeeet puro 🔥",Non-Disaster,gu_roman,plain,119,1,variant|elongate,provided_test_data
+"BMC ko kab sharam aayegi HAR saal wahi waterlogging, drian saaf kab hoga?? 😡 🙏",Flood,hinglish,civic,45,1,typo|shout|drop_comma|emoji,provided_test_data
+"तेज हवा से पेड़ उखड़ गए, लाइट के खंभे गिरे, रात भर से लाइट गायब है 😔 #चक्रवात #CycloneAlert 😟",Cyclone,hi,eyewitness,58,1,codemix|chandrabindu|hashtag|emoji,provided_test_data
+"ब्रेकिंग: भूकंप के बाद पुरानी इमारतों में दरारें, प्रशासन ने जांच के आदेश दिए https://t.co/IKaRdebu #Earthquake 🙏",Earthquake,hi,news,4,1,breaking|url|hashtag|emoji,provided_test_data
+"કાટમાળમાં દબાયેલા લોકોને બહાર કાઢવાની કામગીરી ચાલુ, NDRFની ટીમ પહોંચી",Earthquake,gu,news,12,0,,provided_test_data
+"2nd aftershock abhi abhi, lfit mat use karo, seedhiyon se neeche aao @municipalcorp",Earthquake,hinglish,help,19,1,typo|mention,provided_test_data
+"IMD ne very severe cyclonic storm ka alert diya, 130 kmph ki speed se hawa chalegi",Cyclone,hinglish,official,73,0,,provided_test_data
+"સુરતના એક કાપડના ગોડાઉનમાં રાત્રે આગ લાગી, ફાયર બ્રિગેડની ટીમે સમયસર પહોંચી આગ કાબૂમાં લીધી.",Fire,gu,synthetic_fire_test_supplement,FIRE-TEST-gu-001,0,,synthetic_supplement_not_original_holdout
+"અમદાવાદની દુકાનમાં શોર્ટ સર્કિટ થતાં ધુમાડો ફેલાયો, આસપાસના લોકોએ તરત ફાયર વિભાગને જાણ કરી.",Fire,gu,synthetic_fire_test_supplement,FIRE-TEST-gu-002,0,,synthetic_supplement_not_original_holdout
+"રાજકોટની એક ફેક્ટરીમાં મશીન પાસે આગ ભભૂકી, કામદારોને સુરક્ષિત રીતે બહાર કાઢવામાં આવ્યા.",Fire,gu,synthetic_fire_test_supplement,FIRE-TEST-gu-003,0,,synthetic_supplement_not_original_holdout
+"વડોદરાના રહેણાંક મકાનમાં રસોડામાંથી આગ શરૂ થઈ, પરિવારના સભ્યોને પડોશીઓએ બહાર આવવામાં મદદ કરી.",Fire,gu,synthetic_fire_test_supplement,FIRE-TEST-gu-004,0,,synthetic_supplement_not_original_holdout
+જામનગરના બજારમાં દુકાનમાં આગ લાગતાં થોડા સમય માટે રસ્તો બંધ રાખવામાં આવ્યો.,Fire,gu,synthetic_fire_test_supplement,FIRE-TEST-gu-005,0,,synthetic_supplement_not_original_holdout
+"ભરૂચના વર્કશોપમાં વેલ્ડિંગ દરમિયાન તણખો પડતાં આગ લાગી, કર્મચારીઓએ ફાયર એક્સ્ટિંગ્વિશર વાપર્યું.",Fire,gu,synthetic_fire_test_supplement,FIRE-TEST-gu-006,0,,synthetic_supplement_not_original_holdout
+ગાંધીનગરની ઓફિસ બિલ્ડિંગમાં ધુમાડો દેખાતાં એલાર્મ વાગ્યું અને આખી ઇમારત ખાલી કરાવવામાં આવી.,Fire,gu,synthetic_fire_test_supplement,FIRE-TEST-gu-007,0,,synthetic_supplement_not_original_holdout
+"જૂનાગઢની હોટલના રસોડામાં આગ લાગી હતી, ફાયર બ્રિગેડે અંદર તપાસ કરીને કૂલિંગ કામગીરી કરી.",Fire,gu,synthetic_fire_test_supplement,FIRE-TEST-gu-008,0,,synthetic_supplement_not_original_holdout
+"Surat na godown ma raatre aag lagi, fire brigade ni team aavi ne aag control kari.",Fire,gu_roman,synthetic_fire_test_supplement,FIRE-TEST-gu_roman-001,0,,synthetic_supplement_not_original_holdout
+"Ahmedabad ni shop ma short circuit thata dhumado phelayo, staff e badhane bahar kadhya.",Fire,gu_roman,synthetic_fire_test_supplement,FIRE-TEST-gu_roman-002,0,,synthetic_supplement_not_original_holdout
+"Rajkot ni factory ma machine pase aag bhabhuki, firefighters e time par pahochi ne situation sambhali.",Fire,gu_roman,synthetic_fire_test_supplement,FIRE-TEST-gu_roman-003,0,,synthetic_supplement_not_original_holdout
+"Vadodara na makan ma kitchen mathi aag lagi, family safe rite bahar nikli ane fire team ne call karyo.",Fire,gu_roman,synthetic_fire_test_supplement,FIRE-TEST-gu_roman-004,0,,synthetic_supplement_not_original_holdout
+"सूरत के एक कपड़ा गोदाम में रात को आग लग गई, दमकल की टीम ने मौके पर पहुंचकर आग बुझाई।",Fire,hi,synthetic_fire_test_supplement,FIRE-TEST-hi-001,0,,synthetic_supplement_not_original_holdout
+अहमदाबाद की एक दुकान में शॉर्ट सर्किट के बाद धुआं भर गया और कर्मचारियों ने तुरंत इमारत खाली कर दी।,Fire,hi,synthetic_fire_test_supplement,FIRE-TEST-hi-002,0,,synthetic_supplement_not_original_holdout
+"राजकोट की फैक्ट्री में मशीन के पास आग भड़क उठी, सभी मजदूरों को सुरक्षित बाहर निकाल लिया गया।",Fire,hi,synthetic_fire_test_supplement,FIRE-TEST-hi-003,0,,synthetic_supplement_not_original_holdout
+"वडोदरा के एक मकान की रसोई में आग लगी, पड़ोसियों ने परिवार को बाहर निकलने में मदद की।",Fire,hi,synthetic_fire_test_supplement,FIRE-TEST-hi-004,0,,synthetic_supplement_not_original_holdout
+जामनगर के बाजार में दुकान में आग लगने से कुछ देर के लिए सड़क पर यातायात रोकना पड़ा।,Fire,hi,synthetic_fire_test_supplement,FIRE-TEST-hi-005,0,,synthetic_supplement_not_original_holdout
+"भरूच की वर्कशॉप में वेल्डिंग के दौरान चिंगारी से आग लगी, कर्मचारियों ने अग्निशामक यंत्र का इस्तेमाल किया।",Fire,hi,synthetic_fire_test_supplement,FIRE-TEST-hi-006,0,,synthetic_supplement_not_original_holdout
+गांधीनगर की ऑफिस बिल्डिंग में धुआं दिखते ही अलार्म बजा और सभी लोगों को बाहर निकाला गया।,Fire,hi,synthetic_fire_test_supplement,FIRE-TEST-hi-007,0,,synthetic_supplement_not_original_holdout
+जूनागढ़ के होटल किचन में आग लगने की सूचना पर दमकल की गाड़ियां पहुंचीं और जांच शुरू की।,Fire,hi,synthetic_fire_test_supplement,FIRE-TEST-hi-008,0,,synthetic_supplement_not_original_holdout
+"Surat ke textile godown mein raat ko fire lag gayi, fire brigade ne time par pahunch kar aag control ki.",Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-001,0,,synthetic_supplement_not_original_holdout
+"Ahmedabad ki ek shop mein short circuit ke baad smoke bhar gaya, staff ne sabko safely bahar nikala.",Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-002,0,,synthetic_supplement_not_original_holdout
+"Rajkot factory mein machine ke paas flames dikhne lagi, workers ko building se evacuate karaya gaya.",Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-003,0,,synthetic_supplement_not_original_holdout
+"Vadodara ke apartment ke kitchen mein aag lagi, neighbours ne family ko bahar aane mein help ki.",Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-004,0,,synthetic_supplement_not_original_holdout
+"Jamnagar market ki ek dukaan mein fire incident hua, police ne road par crowd ko door rakha.",Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-005,0,,synthetic_supplement_not_original_holdout
+"Bharuch ke workshop mein welding ke time spark se aag lagi, staff ne extinguisher use kiya.",Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-006,0,,synthetic_supplement_not_original_holdout
+Gandhinagar office building mein smoke alarm bajte hi employees stairs se bahar aa gaye.,Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-007,0,,synthetic_supplement_not_original_holdout
+"Junagadh ke hotel kitchen mein fire lagi, fire team ne blaze control karke cooling shuru ki.",Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-008,0,,synthetic_supplement_not_original_holdout
+Surat ke warehouse se dhuaan nikalta dekh kar local logon ne emergency number par call kiya.,Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-009,0,,synthetic_supplement_not_original_holdout
+"Ahmedabad ke residential block mein meter box mein aag lagi, electricity supply temporarily cut kar di.",Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-010,0,,synthetic_supplement_not_original_holdout
+"Rajkot ke furniture unit mein stored wood ne aag pakad li, firefighters ne nearby area clear karaya.",Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-011,0,,synthetic_supplement_not_original_holdout
+Vadodara ke commercial complex mein fire alarm ke baad shops ko precaution ke liye khali karaya.,Fire,hinglish,synthetic_fire_test_supplement,FIRE-TEST-hinglish-012,0,,synthetic_supplement_not_original_holdout

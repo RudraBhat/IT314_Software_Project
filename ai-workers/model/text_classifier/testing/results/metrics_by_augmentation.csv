@@ -1,0 +1,3 @@
+augmented,rows,accuracy,macro_f1_present_classes,macro_f1_all_five_classes,weighted_f1,classes_present
+0,152,0.6842105263157895,0.6767478489603727,0.6767478489603727,0.6765807783215154,"['Fire', 'Earthquake', 'Cyclone', 'Flood', 'Non-Disaster']"
+1,360,0.6472222222222223,0.6517028818736788,0.521362305498943,0.6514159460108091,"['Earthquake', 'Cyclone', 'Flood', 'Non-Disaster']"

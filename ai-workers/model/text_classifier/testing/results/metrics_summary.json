@@ -1,0 +1,35 @@
+{
+  "api_url": "https://indicbert-disaster-api.onrender.com",
+  "rows_attempted": 512,
+  "successful_predictions": 512,
+  "failed_predictions": 0,
+  "overall": {
+    "rows": 512,
+    "accuracy": 0.658203125,
+    "macro_f1_present_classes": 0.658799596505738,
+    "macro_f1_all_five_classes": 0.658799596505738,
+    "weighted_f1": 0.6504123384733647,
+    "classes_present": [
+      "Fire",
+      "Earthquake",
+      "Cyclone",
+      "Flood",
+      "Non-Disaster"
+    ]
+  },
+  "health": {
+    "status": "ok",
+    "model_loaded": true,
+    "model_format": "ONNX dynamic INT8",
+    "model_repo": "Dhruvil-14/indicbert-disaster-api",
+    "classes": [
+      "Fire",
+      "Earthquake",
+      "Cyclone",
+      "Flood",
+      "Non-Disaster"
+    ],
+    "max_length": 160,
+    "peak_rss_mb": 386.6
+  }
+}
