@@ -5,20 +5,13 @@ import { useState } from "react";
 import { Badge, Button, Card, Dialog, EmptyState, ErrorState, Field, Input, LoadingRows, Notice, PageHeader, Select } from "@/components/ui";
 import { useAction } from "@/components/use-action";
 import { api, useQuery } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { AGENCY_TYPES, AGENCY_TYPE_ICON, AGENCY_TYPE_LABEL, formatDateTime } from "@/lib/format";
 import type { Agency } from "@/lib/types";
 
 import { useStaff } from "../shell";
 
-const TYPES = ["FIRE", "POLICE", "NDRF", "MEDICAL", "MUNICIPAL", "NGO"] as const;
-const TYPE_LABEL: Record<string, string> = {
-  FIRE: "Fire",
-  POLICE: "Police",
-  NDRF: "NDRF / SDRF",
-  MEDICAL: "Medical",
-  MUNICIPAL: "Municipal / state",
-  NGO: "NGO",
-};
+const TYPES = AGENCY_TYPES;
+const TYPE_LABEL = AGENCY_TYPE_LABEL;
 
 type Form = { name: string; agency_type: string; contact_email: string; contact_phone: string; is_active: boolean; reason: string };
 
@@ -101,29 +94,44 @@ export default function AgenciesPage() {
       {q.error && <ErrorState message={q.error} onRetry={q.reload} />}
       {q.loading && !q.data && <LoadingRows rows={5} />}
       {q.data && agencies.length === 0 && <Card><EmptyState title="No agencies yet." /></Card>}
+      {/* Grouped by agency type, so the right service is easy to find when dispatching. */}
       {agencies.length > 0 && (
-        <Card bodyClassName="p-0">
-          <ul className={`divide-y divide-border ${q.loading ? "opacity-60" : ""}`}>
-            {agencies.map((a) => (
-              <li key={a.agency_id} className="flex flex-col gap-1 px-5 py-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold">{a.name}</span>
-                  <Badge tone="neutral">{TYPE_LABEL[a.agency_type ?? ""] ?? a.agency_type ?? "Agency"}</Badge>
-                  <Badge tone={a.is_active ? "low" : "neutral"}>{a.is_active ? "Active" : "Inactive"}</Badge>
-                  {canEdit && (
-                    <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setEditing({ id: a.agency_id, form: toForm(a) })} aria-label={`Edit ${a.name}`}>
-                      Edit
-                    </Button>
-                  )}
-                </div>
-                <p className="text-xs text-muted">
-                  {a.contact_phone ?? "No phone"} · {a.contact_email ?? "No email"}
-                  {a.updated_at ? ` · Updated ${formatDateTime(a.updated_at)}` : ""}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <div className={`space-y-5 ${q.loading ? "opacity-60" : ""}`}>
+          {[...TYPES, "OTHER"].map((type) => {
+            const group = agencies.filter((a) =>
+              (TYPES as readonly string[]).includes(a.agency_type ?? "") ? a.agency_type === type : type === "OTHER",
+            );
+            if (!group.length) return null;
+            return (
+              <Card
+                key={type}
+                title={`${AGENCY_TYPE_ICON[type] ?? "🏢"} ${TYPE_LABEL[type] ?? "Other"}`}
+                subtitle={`${group.length} agenc${group.length === 1 ? "y" : "ies"} · ${group.filter((a) => a.is_active).length} active`}
+                bodyClassName="p-0"
+              >
+                <ul className="divide-y divide-border">
+                  {group.map((a) => (
+                    <li key={a.agency_id} className="flex flex-col gap-1 px-5 py-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold">{a.name}</span>
+                        <Badge tone={a.is_active ? "low" : "neutral"}>{a.is_active ? "Active" : "Inactive"}</Badge>
+                        {canEdit && (
+                          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setEditing({ id: a.agency_id, form: toForm(a) })} aria-label={`Edit ${a.name}`}>
+                            Edit
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted">
+                        {a.contact_phone ?? "No phone"} · {a.contact_email ?? "No email"}
+                        {a.updated_at ? ` · Updated ${formatDateTime(a.updated_at)}` : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
       <Dialog

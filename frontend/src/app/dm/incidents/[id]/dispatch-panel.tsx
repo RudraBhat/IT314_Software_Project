@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { PriorityBadge, StatusBadge } from "@/components/badges";
 import { useAction } from "@/components/use-action";
-import { Badge, Button, Card, Dialog, EmptyState, Field, Input, Notice, Select, Textarea } from "@/components/ui";
+import { Badge, Button, Card, Dialog, EmptyState, Field, Input, Notice, Select, Textarea, cx } from "@/components/ui";
 import { api, newIdempotencyKey, useQuery } from "@/lib/api";
-import { PRIORITIES, formatDateTime, label, timeAgo } from "@/lib/format";
+import { AGENCY_TYPES, AGENCY_TYPE_ICON, AGENCY_TYPE_LABEL, PRIORITIES, RESOURCE_ICON, formatDateTime, label, timeAgo } from "@/lib/format";
 import type { Agency, Paged, Resource } from "@/lib/types";
 
 import { useStaff } from "../../shell";
@@ -66,23 +66,38 @@ export function DispatchPanel({ incident, reload }: { incident: IncidentDetail; 
   );
 }
 
+type Recommendation = {
+  resource_id: string;
+  team_name: string;
+  agency: string | null;
+  distance_km: number | null;
+  capability_match: string[];
+  secondary_match?: string[];
+  rank: number;
+  reasons: string;
+  score?: number;
+  matched_count?: number;
+  is_fallback?: boolean;
+};
+
+/** Small numbered heading for each part of the dispatch form. */
+function StepTitle({ n, children, aside }: { n: number; children: ReactNode; aside?: ReactNode }) {
+  return (
+    <div className="mb-2 flex items-center justify-between gap-2">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        <span className="flex size-6 items-center justify-center rounded-full bg-[#0c4a75] text-xs font-bold text-white">{n}</span>
+        {children}
+      </h3>
+      {aside}
+    </div>
+  );
+}
+
 function CreateDispatch({ incident, onClose, onDone }: { incident: IncidentDetail; onClose: () => void; onDone: () => void }) {
   const agencies = useQuery<{ items: Agency[] }>("agency-contacts");
   const resources = useQuery<Paged<Resource>>("resources", { available_only: true, limit: 100 });
   const recommendations = useQuery<{
-    recommendations: Array<{
-      resource_id: string;
-      team_name: string;
-      agency: string | null;
-      distance_km: number | null;
-      capability_match: string[];
-      secondary_match?: string[];
-      rank: number;
-      reasons: string;
-      score?: number;
-      matched_count?: number;
-      is_fallback?: boolean;
-    }>;
+    recommendations: Recommendation[];
     unavailable?: boolean;
     unavailable_reason?: string | null;
   }>(`incidents/${incident.incident_id}/team-recommendations`);
@@ -90,18 +105,51 @@ function CreateDispatch({ incident, onClose, onDone }: { incident: IncidentDetai
   const recommendationsUnavailable = Boolean(recommendations.error || recommendations.data?.unavailable);
   const { run, busy } = useAction();
   const [agencyId, setAgencyId] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  const [allResources, setAllResources] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [priority, setPriority] = useState(incident.verified_priority ?? "");
   const [lines, setLines] = useState<Record<string, string>>({});
   // One key per dialog: a retry after a network failure cannot create a second order.
   const idempotencyKey = useMemo(() => newIdempotencyKey(), []);
 
+  const activeAgencies = useMemo(() => (agencies.data?.items ?? []).filter((a) => a.is_active), [agencies.data]);
+  const agencyById = useMemo(() => new Map(activeAgencies.map((a) => [a.agency_id, a])), [activeAgencies]);
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const a of activeAgencies) counts[a.agency_type ?? "OTHER"] = (counts[a.agency_type ?? "OTHER"] ?? 0) + 1;
+    return counts;
+  }, [activeAgencies]);
+  const shownAgencies = typeFilter === "ALL" ? activeAgencies : activeAgencies.filter((a) => (a.agency_type ?? "OTHER") === typeFilter);
+  const chosenAgency = agencyById.get(agencyId);
+
+  // Resources follow the chosen agency by default; "all agencies" lets a dispatcher send mutual aid.
+  const availableResources = resources.data?.items ?? [];
+  const shownResources = availableResources.filter((r) => {
+    if (agencyId && !allResources) return r.agency_id === agencyId;
+    if (typeFilter !== "ALL" && !allResources) return (agencyById.get(r.agency_id ?? "")?.agency_type ?? "OTHER") === typeFilter;
+    return true;
+  });
+
+  const quantity = (id: string) => Number(lines[id] ?? 0) || 0;
+  const setQuantity = (id: string, value: number, max: number) =>
+    setLines((l) => ({ ...l, [id]: String(Math.max(0, Math.min(max, value))) }));
   const chosen = Object.entries(lines).filter(([, q]) => Number(q) > 0);
   const overBooked = chosen.some(([id, q]) => {
-    const r = resources.data?.items.find((x) => x.resource_id === id);
+    const r = availableResources.find((x) => x.resource_id === id);
     return r ? Number(q) > Number(r.quantity_available) : false;
   });
-  const valid = agencyId && instructions.trim().length >= 5 && chosen.length > 0 && !overBooked;
+  const missing = [
+    !agencyId && "choose the receiving agency",
+    chosen.length === 0 && "add at least one resource",
+    instructions.trim().length < 5 && "write instructions (5+ characters)",
+  ].filter(Boolean) as string[];
+  const valid = missing.length === 0 && !overBooked;
+
+  function pickAgency(id: string) {
+    setAgencyId(id);
+    setAllResources(false);
+  }
 
   async function submit() {
     const ok = await run(
@@ -114,10 +162,10 @@ function CreateDispatch({ incident, onClose, onDone }: { incident: IncidentDetai
             receiving_agency_id: agencyId,
             instructions,
             priority: priority || undefined,
-            resources: chosen.map(([resource_id, quantity]) => ({ resource_id, quantity: Number(quantity) })),
+            resources: chosen.map(([resource_id, q]) => ({ resource_id, quantity: Number(q) })),
           },
         }),
-      "Dispatch order created and queued. Relay it to the agency and record their acknowledgement.",
+      "Dispatch order created. Contact the agency, then record their response on the dispatch page.",
     );
     if (ok !== undefined) onDone();
   }
@@ -129,131 +177,238 @@ function CreateDispatch({ incident, onClose, onDone }: { incident: IncidentDetai
       onClose={onClose}
       title={`Dispatch for ${incident.incident_ref}`}
       footer={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!valid} busy={busy === "create"} onClick={submit}>
-            Create dispatch order
-          </Button>
-        </>
+        <div className="flex w-full flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-muted">
+            {valid
+              ? `${chosen.length} resource${chosen.length === 1 ? "" : "s"} to ${chosenAgency?.name ?? "the agency"}`
+              : overBooked
+                ? "A quantity is more than what is available."
+                : `To continue: ${missing.join(", ")}.`}
+          </p>
+          <div className="flex gap-2">
+            <Button onClick={onClose}>Cancel</Button>
+            <Button variant="primary" disabled={!valid} busy={busy === "create"} onClick={submit}>
+              Create dispatch order
+            </Button>
+          </div>
+        </div>
       }
     >
-      <div className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Receiving agency">
-            {(id) => (
-              <Select id={id} value={agencyId} onChange={(e) => setAgencyId(e.target.value)}>
-                <option value="">{agencies.loading ? "Loading…" : "Select agency"}</option>
-                {agencies.data?.items.filter((a) => a.is_active).map((a) => (
-                  <option key={a.agency_id} value={a.agency_id}>{a.name}{a.contact_phone ? ` (${a.contact_phone})` : ""}</option>
-                ))}
-              </Select>
-            )}
-          </Field>
-          <Field label="Priority" hint="Defaults to the incident's priority.">
-            {(id) => (
-              <Select id={id} value={priority} onChange={(e) => setPriority(e.target.value)}>
-                {PRIORITIES.map((p) => <option key={p} value={p}>{label(p)}</option>)}
-              </Select>
-            )}
-          </Field>
-        </div>
-        <Field label="Operational instructions">
-          {(id) => <Textarea id={id} rows={4} value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={4000} />}
-        </Field>
+      <div className="space-y-6">
+        {/* Receiving agency, filtered by type */}
+        <section>
+          <StepTitle n={1}>Receiving agency</StepTitle>
+          <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Agency type">
+            {["ALL", ...AGENCY_TYPES, ...(typeCounts.OTHER ? ["OTHER"] : [])].map((t) => {
+              const count = t === "ALL" ? activeAgencies.length : typeCounts[t] ?? 0;
+              if (t !== "ALL" && count === 0) return null;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTypeFilter(t)}
+                  aria-pressed={typeFilter === t}
+                  className={cx(
+                    "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                    typeFilter === t ? "border-[#0c4a75] bg-[#0c4a75] text-white" : "border-border bg-surface text-foreground/80 hover:bg-surface-muted",
+                  )}
+                >
+                  {t === "ALL" ? "All" : `${AGENCY_TYPE_ICON[t] ?? "🏢"} ${AGENCY_TYPE_LABEL[t] ?? "Other"}`}
+                  <span className="ml-1 opacity-70">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          {agencies.loading && !agencies.data && <p className="text-xs text-muted">Loading agencies…</p>}
+          {agencies.error && <Notice tone="critical">{agencies.error}</Notice>}
+          <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
+            {shownAgencies.map((a) => {
+              const selected = agencyId === a.agency_id;
+              return (
+                <button
+                  key={a.agency_id}
+                  type="button"
+                  onClick={() => pickAgency(a.agency_id)}
+                  aria-pressed={selected}
+                  className={cx(
+                    "flex items-start gap-3 rounded-xl border p-3 text-left transition",
+                    selected ? "border-sky-500 bg-sky-50 ring-2 ring-sky-200" : "border-border bg-surface hover:border-sky-300 hover:bg-surface-muted",
+                  )}
+                >
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-lg" aria-hidden>
+                    {AGENCY_TYPE_ICON[a.agency_type ?? ""] ?? "🏢"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-foreground">{a.name}</span>
+                    <span className="block text-xs text-muted">
+                      {AGENCY_TYPE_LABEL[a.agency_type ?? ""] ?? "Agency"}
+                      {a.contact_phone ? ` · ${a.contact_phone}` : ""}
+                    </span>
+                  </span>
+                  {selected && <span className="text-sm font-bold text-sky-700" aria-hidden>✓</span>}
+                </button>
+              );
+            })}
+            {agencies.data && shownAgencies.length === 0 && <p className="text-xs text-muted">No active agencies of this type.</p>}
+          </div>
+        </section>
 
-        {/* Suggested Teams (AI / Rule Recommendation) */}
+        {/* Suggested teams (advisory) */}
         {recommendationsUnavailable && (
           <Notice tone="high">
             Recommendations unavailable — assign teams manually.
             {recommendations.data?.unavailable_reason ? ` ${recommendations.data.unavailable_reason}` : ""}
           </Notice>
         )}
-        {!recommendationsUnavailable && recommendations.data?.recommendations && (
-          recommendations.data.recommendations.length > 0 ? (
-            <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">Suggested teams</span>
-                <span className="text-[11px] text-muted italic">Advisory — you confirm the dispatch</span>
-              </div>
-              <ul className="divide-y divide-border/60 text-xs">
-                {recommendations.data.recommendations.map((rec) => {
-                  const resourceAvailable = resources.data?.items.find((r) => r.resource_id === rec.resource_id);
-                  const isSelected = Number(lines[rec.resource_id] ?? 0) > 0;
-                  return (
-                    <li key={rec.resource_id} className="flex items-center justify-between py-2 gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-foreground">{rec.team_name}</span>
-                          {rec.distance_km !== null && (
-                            <span className="text-[10px] font-mono text-muted">{rec.distance_km.toFixed(1)} km</span>
-                          )}
-                          {rec.agency && <span className="text-[10px] text-muted">({rec.agency})</span>}
-                          {rec.is_fallback && <Badge tone="medium">Offline roster — not live availability</Badge>}
-                        </div>
-                        <p className="text-[11px] text-muted truncate">{rec.reasons}</p>
-                        {rec.secondary_match && rec.secondary_match.length > 0 && (
-                          <p className="mt-0.5 text-[10px] text-sky-300">
-                            Secondary capabilities: {rec.secondary_match.join(", ")}
-                          </p>
-                        )}
+        {!recommendationsUnavailable && recommendations.data && recommendations.data.recommendations.length > 0 && (
+          <section className="rounded-xl border border-sky-200 bg-sky-50/60 p-3.5">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-sky-800">Suggested teams</span>
+              <span className="text-[11px] italic text-muted">Advisory — you confirm the dispatch</span>
+            </div>
+            <ul className="space-y-2">
+              {recommendations.data.recommendations.map((rec) => {
+                const available = availableResources.find((r) => r.resource_id === rec.resource_id);
+                const isSelected = quantity(rec.resource_id) > 0;
+                return (
+                  <li key={rec.resource_id} className="flex items-center gap-3 rounded-lg bg-surface p-2.5 text-xs ring-1 ring-border">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground">{rec.team_name}</span>
+                        {rec.distance_km !== null && <Badge tone="info">{rec.distance_km.toFixed(1)} km</Badge>}
+                        {rec.agency && <span className="text-muted">{rec.agency}</span>}
+                        {rec.is_fallback && <Badge tone="medium">Offline roster — not live availability</Badge>}
                       </div>
-                      <Button
-                        size="sm"
-                        variant={isSelected ? "secondary" : "primary"}
-                        onClick={() => {
-                          setLines((l) => ({ ...l, [rec.resource_id]: "1" }));
-                          if (!agencyId && resourceAvailable?.agency_id) {
-                            setAgencyId(resourceAvailable.agency_id);
-                          }
-                        }}
-                        disabled={!resourceAvailable || Number(resourceAvailable.quantity_available) <= 0}
-                      >
-                        {isSelected ? "Selected" : "Add to dispatch"}
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border/80 bg-surface-muted/50 p-3 text-xs text-muted">
-              No available team matches; allocate manually.
-            </div>
-          )
+                      <p className="mt-0.5 truncate text-muted">{rec.reasons}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isSelected ? "secondary" : "primary"}
+                      onClick={() => {
+                        setLines((l) => ({ ...l, [rec.resource_id]: l[rec.resource_id] && Number(l[rec.resource_id]) > 0 ? l[rec.resource_id] : "1" }));
+                        if (!agencyId && available?.agency_id) pickAgency(available.agency_id);
+                      }}
+                      disabled={!available || Number(available.quantity_available) <= 0}
+                    >
+                      {isSelected ? "✓ Added" : "Add"}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         )}
 
-        <div>
-          <p className="mb-2 text-xs font-medium text-muted">Resources to assign (available now)</p>
+        {/* Resources */}
+        <section>
+          <StepTitle
+            n={2}
+            aside={
+              (agencyId || typeFilter !== "ALL") && (
+                <label className="flex items-center gap-1.5 text-xs text-muted">
+                  <input type="checkbox" checked={allResources} onChange={(e) => setAllResources(e.target.checked)} className="size-4 accent-sky-600" />
+                  Show every agency&apos;s resources
+                </label>
+              )
+            }
+          >
+            Resources to send
+            <span className="text-xs font-normal text-muted">
+              {agencyId && !allResources ? `from ${chosenAgency?.name ?? "this agency"}` : "available now"}
+            </span>
+          </StepTitle>
           {resources.error && <Notice tone="critical">{resources.error}</Notice>}
-          {resources.data && resources.data.items.length === 0 && (
-            <EmptyState title="No resources are available.">Add or free up resources on the Resources page first.</EmptyState>
+          {resources.loading && !resources.data && <p className="text-xs text-muted">Loading resources…</p>}
+          {resources.data && shownResources.length === 0 && (
+            <EmptyState title="No available resources here.">
+              {agencyId && !allResources ? "Tick “Show every agency’s resources” to send mutual aid, or free some up on the Resources page." : "Add or free up resources on the Resources page first."}
+            </EmptyState>
           )}
-          <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-            {resources.data?.items.map((r) => (
-              <li key={r.resource_id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{r.name}</p>
-                  <p className="text-xs text-muted">{label(r.type)} · {r.agency_name ?? "No agency"} · {Number(r.quantity_available)} available</p>
-                </div>
-                <Input
-                  aria-label={`Quantity of ${r.name}`}
-                  type="number"
-                  min={0}
-                  max={Number(r.quantity_available)}
-                  step="any"
-                  className="w-24"
-                  value={lines[r.resource_id] ?? ""}
-                  onChange={(e) => setLines((l) => ({ ...l, [r.resource_id]: e.target.value }))}
-                  placeholder="0"
-                />
-              </li>
-            ))}
-          </ul>
+          {shownResources.length > 0 && (
+            <ul className="max-h-72 space-y-2 overflow-y-auto">
+              {shownResources.map((r) => {
+                const max = Number(r.quantity_available);
+                const q = quantity(r.resource_id);
+                return (
+                  <li
+                    key={r.resource_id}
+                    className={cx(
+                      "flex items-center gap-3 rounded-xl border p-3 transition",
+                      q > 0 ? "border-sky-400 bg-sky-50/70" : "border-border bg-surface",
+                    )}
+                  >
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-lg" aria-hidden>
+                      {RESOURCE_ICON[r.type] ?? "📦"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">{r.name}</p>
+                      <p className="truncate text-xs text-muted">
+                        {label(r.type)} · {r.agency_name ?? "No agency"}
+                      </p>
+                    </div>
+                    <Badge tone={max > 0 ? "low" : "neutral"}>{max} available</Badge>
+                    {/* Fixed-width stepper so the row never squeezes the name */}
+                    <div className="flex shrink-0 items-center overflow-hidden rounded-lg border border-border bg-surface">
+                      <button
+                        type="button"
+                        className="h-9 w-9 text-lg font-semibold text-muted hover:bg-surface-muted disabled:opacity-40"
+                        onClick={() => setQuantity(r.resource_id, q - 1, max)}
+                        disabled={q <= 0}
+                        aria-label={`One less ${r.name}`}
+                      >
+                        −
+                      </button>
+                      <input
+                        aria-label={`Quantity of ${r.name}`}
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={max}
+                        value={lines[r.resource_id] ?? ""}
+                        placeholder="0"
+                        onChange={(e) => setLines((l) => ({ ...l, [r.resource_id]: e.target.value }))}
+                        className="h-9 w-12 border-x border-border bg-transparent text-center text-sm [appearance:textfield] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        className="h-9 w-9 text-lg font-semibold text-muted hover:bg-surface-muted disabled:opacity-40"
+                        onClick={() => setQuantity(r.resource_id, q + 1, max)}
+                        disabled={q >= max}
+                        aria-label={`One more ${r.name}`}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           {overBooked && <p className="mt-2 text-xs text-critical">A quantity exceeds what is available.</p>}
-        </div>
+        </section>
+
+        {/* Priority and instructions */}
+        <section>
+          <StepTitle n={3}>Orders</StepTitle>
+          <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+            <Field label="Priority" hint="Defaults to the incident's.">
+              {(id) => (
+                <Select id={id} value={priority} onChange={(e) => setPriority(e.target.value)}>
+                  {PRIORITIES.map((p) => <option key={p} value={p}>{label(p)}</option>)}
+                </Select>
+              )}
+            </Field>
+            <Field label="Operational instructions" hint="What the team should do, where to report and any hazards.">
+              {(id) => <Textarea id={id} rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={4000} />}
+            </Field>
+          </div>
+        </section>
+
         <Notice tone="info">
-          No messaging integration is configured. The order is queued for the agency; it shows as <strong>Requested</strong> until
-          you record their acknowledgement.
+          <strong>How the agency&apos;s response is recorded:</strong> agencies have no ResQ accounts. After you create the order it
+          shows as <strong>Requested</strong>; contact the agency by phone or radio, then open the dispatch and use{" "}
+          <strong>Record an event</strong> to log their acknowledgement, en route, progress and completion (who confirmed, and over
+          which channel). Field teams with their own ResQ responder account update the order themselves from the Field app.
         </Notice>
       </div>
     </Dialog>
