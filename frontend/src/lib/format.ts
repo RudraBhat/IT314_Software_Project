@@ -79,7 +79,6 @@ export function hazardIcon(eventType: string | null | undefined): string {
   if (/fire|chemical|industrial|explosion|gas|hazmat/.test(t)) return "🔥";
   if (/thunder|lightning/.test(t)) return "⛈️";
   if (/heat|hot/.test(t)) return "🌡️";
-  if (/earthquake|quake|seismic/.test(t)) return "🌍";
   if (/landslide/.test(t)) return "⛰️";
   return "⚠️";
 }

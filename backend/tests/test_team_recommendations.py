@@ -97,19 +97,6 @@ def test_spatial_recommendation_ranks_closest_capable_first():
         for c in ("cyclone_response", "search_and_rescue", "debris_clearing", "high_wind_rescue")
     )
 
-    # Scenario: EARTHQUAKE in Bhuj / Kutch
-    quake_recs = recommend_candidate_teams(
-        latitude=23.2420,
-        longitude=69.6669,
-        scenario="EARTHQUAKE",
-        limit=3,
-    )
-    assert len(quake_recs) >= 1
-    assert quake_recs[0].rank == 1
-    assert any(
-        c in quake_recs[0].capability_match
-        for c in ("search_and_rescue", "collapse_rescue", "structural_shoring", "canine_unit")
-    )
 
 
 # ── 11. Strict Exclusion of Unavailable & Dispatched Teams ───────────────

@@ -57,11 +57,20 @@ def _parse_iso_datetime(value: str) -> datetime | None:
         return None
 
 
-def map_cap_event(event_text: str) -> str:
-    """Map CAP event text to DRCH scenario taxonomy."""
+# Earthquake is not a supported scenario: such alerts have no dispatch, triage or recommendation path,
+# so the adapter does not store them (the USGS earthquake feed was retired for the same reason).
+_OUT_OF_SCOPE_EVENT_WORDS = ("earthquake", "seismic", "tremor")
+
+
+def is_out_of_scope_event(event_text: str) -> bool:
+    """True for CAP events ResQ does not handle (earthquakes); they are skipped at ingestion."""
     ev = event_text.lower()
-    if any(k in ev for k in ("earthquake", "seismic", "tremor")):
-        return "EARTHQUAKE"
+    return any(k in ev for k in _OUT_OF_SCOPE_EVENT_WORDS)
+
+
+def map_cap_event(event_text: str) -> str:
+    """Map CAP event text to DRCH scenario taxonomy (cyclone, urban flooding, industrial fire or OTHER)."""
+    ev = event_text.lower()
     if any(k in ev for k in ("cyclone", "storm", "hurricane", "typhoon")):
         return "CYCLONE"
     if any(k in ev for k in ("flood", "inundation", "heavy rain", "waterlogging", "rain")):
@@ -223,6 +232,8 @@ def parse_cap_xml(xml_content: str, source_name: str = "SACHET") -> list[dict[st
         )
 
         event_text = _find_child_text(info, "event")
+        if is_out_of_scope_event(event_text):
+            continue
         severity_text = _find_child_text(info, "severity")
         urgency_text = _find_child_text(info, "urgency")
         certainty_text = _find_child_text(info, "certainty")

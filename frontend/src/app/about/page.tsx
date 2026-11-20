@@ -46,8 +46,8 @@ export default function AboutPage() {
       </Section>
       <Section title="Safety guidance">
         <p>
-          Read the <Link className="text-sky-700 underline" href="/safety">safety guidance</Link> for cyclone, flood,
-          earthquake and fire, with the source for each.
+          Read the <Link className="text-sky-700 underline" href="/safety">safety guidance</Link> for cyclone, flood
+          and fire, with the source for each.
         </p>
       </Section>
       <Section title="Map data">

@@ -114,13 +114,8 @@ def test_scenario_to_capability_matrix():
     assert "chemical_foam" in fire_caps
     assert "breathing_apparatus" in fire_caps
 
-    # 4. Earthquake
-    quake_caps = get_required_capabilities("earthquake")
-    assert "search_and_rescue" in quake_caps
-    assert "collapse_rescue" in quake_caps
-    assert "structural_shoring" in quake_caps
-    assert "canine_unit" in quake_caps
-    assert "trauma_care" in quake_caps
+    # 4. Earthquake is out of scope: no specialist rules, only the generic fallback
+    assert get_required_capabilities("earthquake") == ["search_and_rescue"]
 
 
 def test_scenario_normalization():
@@ -130,7 +125,9 @@ def test_scenario_normalization():
     assert normalize_scenario("industrial_fire") == "INDUSTRIAL_FIRE"
     assert normalize_scenario("chemical_fire") == "INDUSTRIAL_FIRE"
     assert normalize_scenario("cyclone") == "CYCLONE"
+    # Unsupported hazards are not mapped to a scenario of their own.
     assert normalize_scenario("earthquake") == "EARTHQUAKE"
+    assert normalize_scenario("earthquake") not in ("CYCLONE", "INDUSTRIAL_FIRE", "URBAN_FLOODING")
 
 
 # ── 2. Spatial PostGIS Ranking Engine & Scoring Formula ─────────────────

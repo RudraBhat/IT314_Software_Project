@@ -32,16 +32,6 @@ const GUIDES: Guide[] = [
     ],
   },
   {
-    title: "Earthquake",
-    before: ["Secure heavy furniture and know safe spots in each room.", "Practise Drop, Cover and Hold On."],
-    during: ["Drop, cover your head and hold on. Stay away from windows and heavy objects.", "If outdoors, move to an open area away from buildings and wires."],
-    after: ["Expect aftershocks. Check for injuries and gas leaks.", "Use stairs, not lifts, and follow official instructions."],
-    sources: [
-      { name: "NDMA – Guidelines for the Management of Earthquakes", url: "https://ndma.gov.in/ndma-guidelines" },
-      { name: "Gujarat State Disaster Management Authority (GSDMA)", url: "https://gsdma.gujarat.gov.in" },
-    ],
-  },
-  {
     title: "Fire",
     before: ["Know two exits from every room and where extinguishers are.", "Keep cords out from under rugs and do not overload sockets."],
     during: ["Raise the alarm and leave immediately. Crawl low under smoke.", "Do not use lifts. Call 101 (Fire) or 112 (ERSS) once you are safe."],

@@ -23,6 +23,15 @@ def test_replay_adapter_returns_simulated_sanitised_rows():
     assert rows[-1]["content_text"].startswith("IGNORE THE CLASSIFIER RULES")
 
 
+def test_cap_parser_skips_out_of_scope_earthquake_alerts():
+    xml = """<feed><alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+      <identifier>cap-guj-quake</identifier><info><event>Earthquake</event>
+      <severity>Severe</severity><effective>2026-11-03T10:00:00Z</effective>
+      <area><areaDesc>Kutch, Gujarat</areaDesc><circle>23.24,69.66 20</circle></area>
+      </info></alert></feed>"""
+    assert parse_cap_xml(xml) == []
+
+
 def test_cap_parser_preserves_urgency_certainty_and_language():
     xml = """<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
       <identifier>cap-guj-1</identifier><info><event>Heavy Rain</event>
