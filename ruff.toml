@@ -1,4 +1,4 @@
-# ruff.toml — Python linting configuration for backend/ and ai-workers/
+# ruff.toml — Python linting configuration for backend/, ai-workers/ and models/
 # Only surface real errors; the CI job uses --select E9,F63,F7,F82 (syntax + fatal)
 # so this file documents the intent and provides consistent local-dev behaviour.
 
