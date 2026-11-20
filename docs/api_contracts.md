@@ -403,6 +403,16 @@ The configured scheduler targets a 15-minute cadence. Local development uses the
 * **Where it goes:** back to where work can continue, based on the status it was closed from. `RESOLVED` returns as `VERIFIED` (it can be dispatched or resolved again) and `REJECTED` returns as `SUBMITTED` (it needs a fresh decision), because neither of those two statuses has a way forward. `SUBMITTED`, `NEEDS_INFORMATION`, `VERIFIED` and `DISPATCHED` return as they were. An incident with no priority never returns as `VERIFIED` or `DISPATCHED`; it returns as `SUBMITTED`, because verification requires a priority.
 * **Citizen view:** a report that was rejected, or closed without ever being resolved, is shown with a plain explanation instead of the four-stage progress bar (Submitted, Verified, Dispatched, Resolved). A closed report that was resolved still shows the finished path.
 
+### 4.9 Agency Directory
+* **Read:** `GET /api/v1/dm/agency-contacts` (any `DISASTER_MGMT` staff). Returns `{"items": [{"agency_id", "name", "agency_type", "contact_email", "contact_phone", "is_active", "updated_at"}]}`, active agencies first.
+* **Write:** `POST /api/v1/dm/agencies` and `PUT /api/v1/dm/agencies/{agency_id}`. Both need the `SUPERVISOR` permission (`403 PERMISSION_REQUIRED` otherwise) and are rate limited to 30 changes per hour per user.
+* **Body (both):** `{"name": 2-200 chars, "agency_type": "FIRE"|"POLICE"|"NDRF"|"MEDICAL"|"MUNICIPAL"|"NGO", "contact_email": email|null, "contact_phone": digits, spaces, + - ( ) 3-20 chars|null, "is_active": bool, "reason": 5-500 chars}`. At least one of email and phone is required so the agency can be reached. `PUT` replaces the whole record. Text is trimmed. The reason is recorded in the audit log.
+* **Responses:** `201` (create) and `200` (update) return the saved agency in the shape above.
+* **Never deleted:** an agency is deactivated, not removed. An inactive agency cannot receive new dispatches (`422 UNKNOWN_AGENCY`) or be linked to new resources, and its history is kept. It can be reactivated with another `PUT`.
+* **Audit:** `AGENCY_CREATED`, `AGENCY_UPDATED`, `AGENCY_DEACTIVATED` or `AGENCY_REACTIVATED`, with before and after values on edits.
+* **Errors:** `409 DUPLICATE_NAME` (names are unique regardless of capitalisation), `409 NO_CHANGE` (nothing differs), `409 AGENCY_IN_USE` (deactivating while dispatches to it are still `REQUESTED`, `ACKNOWLEDGED` or `DISPATCHED`; `details.active_dispatches` says how many), `404` (unknown agency), `422` (invalid body).
+* **Note:** the baseline seed (`10_reference_data.sql`) runs once per database and is tracked, so edits survive restarts. The developer-only `scripts/seed_reset.py` re-applies it and would re-activate the seeded agencies.
+
 ---
 
 ## 5. Field Operations API

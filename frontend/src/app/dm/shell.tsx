@@ -27,6 +27,7 @@ const NAV: { href: string; label: string; icon: string; permission?: string | st
   { href: "/dm/dispatches", label: "Dispatches", icon: "➜" },
   { href: "/dm/team-requests", label: "Team requests", icon: "✚" },
   { href: "/dm/resources", label: "Resources", icon: "▣" },
+  { href: "/dm/agencies", label: "Agencies", icon: "☎" },
   { href: "/dm/moderation", label: "Moderation", icon: "◐", permission: "MODERATOR" },
   { href: "/dm/updates", label: "Public updates", icon: "✎" },
   { href: "/dm/content", label: "Safety content", icon: "☰" },

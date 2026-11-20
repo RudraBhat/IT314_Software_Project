@@ -1,4 +1,6 @@
-"""Resource inventory, availability and reservations (DM-FR-08); agency directory (DM-FR-20, read-only)."""
+"""Resource inventory, availability and reservations (DM-FR-08); reading the agency directory (DM-FR-20).
+
+Changing the directory is a supervisor action and lives in agencies.py."""
 
 import uuid
 from decimal import Decimal
@@ -288,7 +290,7 @@ def agency_contacts(principal: DMUser):
     with db.read_only() as conn:
         items = conn.execute(
             """
-            SELECT agency_id, name, agency_type, contact_email, contact_phone, is_active
+            SELECT agency_id, name, agency_type, contact_email, contact_phone, is_active, updated_at
             FROM agencies ORDER BY is_active DESC, name
             """
         ).fetchall()
