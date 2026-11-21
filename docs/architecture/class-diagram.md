@@ -7,10 +7,16 @@ This document specifies the structural software architecture of the Disaster Res
 - [01_schema.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/01_schema.sql) - Core PostgreSQL relational tables, PostGIS geometries, and hash-chain audit triggers
 - [02_dm_module.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/02_dm_module.sql) - Staff permissions and incident status tracking tables
 - [03_core_extensions.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/03_core_extensions.sql) - Ingestion runs, source signals, and field team extensions
+- [09_account_invitations_and_passwords.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/09_account_invitations_and_passwords.sql) - Account invitations, token hashes, and password reset expirations
 - [10_signal_matching.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/10_signal_matching.sql) - Signal spatial synchronization trigger and pending indexes
-- [17_incident_notes.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/17_incident_notes.sql) - Internal incident notes schema
+- [11_evidence_blobs.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/11_evidence_blobs.sql) - Citizen photo binary content persistence
+- [12_payment_webhook_events.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/12_payment_webhook_events.sql) - Payment webhook idempotency event ledger
+- [15_refresh_tokens.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/15_refresh_tokens.sql) - Rotating refresh token session limits and revocation tracking
+- [16_shelters.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/16_shelters.sql) - Relief shelters and medical posts capacity management
+- [17_incident_notes.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/17_incident_notes.sql) - Internal incident notes schema for shift handovers
+- [19_drop_unused_schema.sql](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/db/migrations/19_drop_unused_schema.sql) - Clean schema removal of unused legacy views and configurations
 - [citizen.py](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/app/schemas/citizen.py) - Pydantic models for citizen incident reporting and timeline
-- [field.py](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/app/schemas/field.py) - Pydantic models for responder missions, progress, and backup requests
+- [field.py](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/app/schemas/field.py) - Pydantic models for responder missions, progress milestones, and backup requests
 - [recommendations.py](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/app/schemas/recommendations.py) - Schemas for team capability ranking
 - [incidents.py](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/app/services/incidents.py) - Incident lifecycle validation, version locking, and history logging
 - [dispatch.py](file:///c:/Users/Dhruv/.gemini/antigravity-ide/scratch/IT314_Software_Project/backend/app/services/dispatch.py) - Dispatch state transitions, progress tracking, and automated escalation
@@ -48,7 +54,6 @@ classDiagram
     }
 
     class UserAuth {
-        +UUID auth_id
         +UUID user_id
         +str password_hash
         +bool mfa_enabled
@@ -57,6 +62,24 @@ classDiagram
         +datetime locked_until
         +int token_version
         +datetime last_login_at
+        +str invitation_token_hash
+        +datetime invitation_expires_at
+        +str password_reset_token_hash
+        +datetime password_reset_expires_at
+    }
+
+    class RefreshToken {
+        +UUID refresh_token_id
+        +UUID user_id
+        +UUID family_id
+        +str token_hash
+        +int token_version
+        +bool mfa_verified
+        +datetime created_at
+        +datetime idle_expires_at
+        +datetime absolute_expires_at
+        +datetime revoked_at
+        +str revoked_reason
     }
 
     class Role {
@@ -67,9 +90,9 @@ classDiagram
     }
 
     class StaffPermission {
-        +UUID permission_id
         +UUID user_id
         +str permission
+        +UUID granted_by
         +datetime granted_at
     }
 
@@ -77,9 +100,31 @@ classDiagram
         +UUID agency_id
         +str code
         +str name
+        +str agency_type
         +str contact_phone
         +bool is_active
         +datetime created_at
+        +datetime updated_at
+    }
+
+    class Shelter {
+        +UUID shelter_id
+        +str name
+        +str type
+        +str address_text
+        +str district
+        +float latitude
+        +float longitude
+        +int total_capacity
+        +int current_occupancy
+        +str contact_number
+        +str status
+        +str notes
+        +bool is_simulated
+        +UUID created_by
+        +UUID updated_by
+        +datetime created_at
+        +datetime updated_at
     }
 
     class Incident {
@@ -91,12 +136,16 @@ classDiagram
         +str reported_urgency
         +str verified_priority
         +str priority_rationale
+        +UUID verified_by
+        +datetime verified_at
         +int people_affected
+        +str location_source
         +float latitude
         +float longitude
         +str district
         +str address_text
         +str landmark
+        +dict details
         +UUID canonical_incident_id
         +int version
         +datetime submitted_at
@@ -117,12 +166,19 @@ classDiagram
     class EvidenceFile {
         +UUID evidence_id
         +UUID incident_id
+        +UUID uploader_id
         +str file_name
+        +str file_path
         +str mime_type
         +int size_bytes
         +str sha256_hash
         +str scan_state
         +datetime uploaded_at
+    }
+
+    class EvidenceBlob {
+        +UUID evidence_id
+        +bytes content
     }
 
     class IncidentNote {
@@ -261,6 +317,15 @@ classDiagram
         +dict raw_payload
     }
 
+    class PaymentWebhookEvent {
+        +str gateway_name
+        +str event_id
+        +str event_type
+        +UUID donation_id
+        +str outcome
+        +datetime received_at
+    }
+
     class AuditLog {
         +UUID audit_id
         +int sequence_num
@@ -280,11 +345,13 @@ classDiagram
 
     Role "1" <-- "0..*" User : assigned_to
     User "1" *-- "1" UserAuth : manages_credentials
+    User "1" *-- "0..*" RefreshToken : active_sessions
     User "1" *-- "0..*" StaffPermission : holds_permissions
     User "1" <-- "0..*" Incident : reports
     Agency "1" <-- "0..*" Resource : owns
     Incident "1" *-- "0..*" IncidentStatusHistory : tracks_history
     Incident "1" *-- "0..*" EvidenceFile : attaches
+    EvidenceFile "1" *-- "1" EvidenceBlob : binary_content
     Incident "1" *-- "0..*" IncidentNote : internal_notes
     Incident "1" *-- "0..*" AiRecommendation : advisory_output
     Incident "1" o-- "0..*" DispatchOrder : initiates
@@ -297,10 +364,11 @@ classDiagram
     DispatchOrder "0..1" <-- "0..*" AgencyMessage : relays_orders
     Agency "1" <-- "0..*" AgencyMessage : receives_messages
     Incident "0..1" <-- "0..1" Incident : canonical_duplicate_of
+    User "0..1" <-- "0..*" Shelter : managed_by
     User "0..1" <-- "0..*" AuditLog : audit_actor
 ```
 
-This diagram illustrates the core domain model of DRCH. `Incident` serves as the central entity linking citizen reports to advisory `AiRecommendation` outputs, `IncidentStatusHistory` audit trails, and `EvidenceFile` media. When emergency assistance is mobilised, an incident spawns `DispatchOrder` records. Each dispatch order locks specific `Resource` items via `ResourceAssignment` using database row-level locking. Field responders belonging to `FieldTeamMember` update operational milestones in `DispatchProgress` and request backup units via `TeamRequest`. All authentication records (`UserAuth`), permissions (`StaffPermission`), and administrative actions are cryptographically chained in `AuditLog`.
+This diagram illustrates the core domain model of DRCH. `Incident` serves as the central entity linking citizen reports to advisory `AiRecommendation` outputs, `IncidentStatusHistory` audit trails, `EvidenceFile` media (with byte contents in `EvidenceBlob`), and shift collaboration logs in `IncidentNote`. When emergency assistance is mobilised, an incident spawns `DispatchOrder` records. Each dispatch order locks specific `Resource` items via `ResourceAssignment` using database row-level locking. Field responders belonging to `FieldTeamMember` update operational milestones in `DispatchProgress` (including `EN_ROUTE`, `ON_SCENE`, and `DELAYED`) and request backup units via `TeamRequest`. All authentication records (`UserAuth`), rotating sessions (`RefreshToken`), permissions (`StaffPermission`), public relief facilities (`Shelter`), and administrative actions are cryptographically chained in `AuditLog`.
 
 ---
 
