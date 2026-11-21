@@ -47,42 +47,42 @@ sequenceDiagram
     API->>Geo: is_in_gujarat(latitude, longitude)
     alt Point outside Gujarat boundary
         Geo-->>API: False
-        API-->>Citizen: 422 OUT_OF_BOUNDS ("Location must be within Gujarat")
+        API-->>Citizen: 422 OUT_OF_BOUNDS (Location must be within Gujarat)
     else Point within Gujarat boundary
         Geo-->>API: True
-        API->>DB: INSERT INTO incidents (status='SUBMITTED', geom, ...)
+        API->>DB: INSERT INTO incidents (status=SUBMITTED, geom)
         DB-->>API: Return incident_id, incident_ref
 
         API->>AI: get_provider().triage(payload)
-        Note over AI: scrub_pii(text): remove emails, phone numbers, 12-digit IDs
+        Note over AI: scrub_pii removes emails, phone numbers, 12-digit IDs
         AI->>Triage: POST /triage (scrubbed text, scenario, urgency)
         
-        alt AI Worker Unavailable / Timeout
+        alt AI Worker Unavailable or Timeout
             Triage-->>AI: HTTP Error or Timeout (10s)
-            AI-->>API: TriageOutcome(status='UNAVAILABLE')
+            AI-->>API: TriageOutcome (status: UNAVAILABLE)
         else AI Worker Responds
             Triage-->>AI: 200 OK (model, scenario, priority, confidence, factors)
-            Note over AI: apply_guardrails(raw): validate confidence >= 0.6 & schema
+            Note over AI: apply_guardrails validates confidence >= 0.6 and schema
             alt Low confidence (<0.6) or unsupported scenario (OTHER)
-                AI-->>API: TriageOutcome(status='LOW_CONFIDENCE', suggested_scenario=None)
-            else Valid confidence & supported scenario
-                AI-->>API: TriageOutcome(status='GENERATED', suggested_priority, ...)
+                AI-->>API: TriageOutcome (status: LOW_CONFIDENCE, suggested_scenario: None)
+            else Valid confidence and supported scenario
+                AI-->>API: TriageOutcome (status: GENERATED, suggested_priority)
             end
         end
 
-        API->>DB: INSERT INTO ai_recommendations (status, suggested_priority, ...)
-        API-->>Citizen: 201 Created (incident_id, incident_ref, status='SUBMITTED')
+        API->>DB: INSERT INTO ai_recommendations (status, suggested_priority)
+        API-->>Citizen: 201 Created (incident_id, incident_ref, status: SUBMITTED)
 
         Note over Matcher, DB: Background Clustering / Duplicate Analysis
-        Dispatcher->>API: GET /api/v1/dm/incidents/{id}/duplicates
+        Dispatcher->>API: GET /api/v1/dm/incidents/:id/duplicates
         API->>Matcher: score_candidates(incident, candidate_rows)
         Matcher-->>API: Ranked candidate pairs (trigram cosine + distance + time)
         API-->>Dispatcher: Candidate duplicates with similarity explanation
 
-        Dispatcher->>API: PATCH /api/v1/dm/incidents/{id} (status='VERIFIED', priority='HIGH', rationale)
-        API->>DB: UPDATE incidents SET status='VERIFIED', verified_priority='HIGH', version=version+1
-        API->>DB: INSERT INTO incident_status_history (from='SUBMITTED', to='VERIFIED')
-        API->>DB: INSERT INTO audit_logs (action='INCIDENT_VERIFIED', hash_chain)
+        Dispatcher->>API: PATCH /api/v1/dm/incidents/:id (status: VERIFIED, priority: HIGH, rationale)
+        API->>DB: UPDATE incidents SET status=VERIFIED, verified_priority=HIGH, version=version+1
+        API->>DB: INSERT INTO incident_status_history (SUBMITTED -> VERIFIED)
+        API->>DB: INSERT INTO audit_logs (action: INCIDENT_VERIFIED, hash_chain)
         API-->>Dispatcher: 200 OK (verified incident)
     end
 ```
@@ -108,67 +108,67 @@ sequenceDiagram
     participant FieldRouter as FieldRouter (routers/field.py)
     actor Responder as Field Responder (Mobile PWA)
 
-    Dispatcher->>DispRouter: POST /api/v1/dm/incidents/{id}/dispatches (resources, agency, instructions)
+    Dispatcher->>DispRouter: POST /api/v1/dm/incidents/:id/dispatches (resources, agency, instructions)
     DispRouter->>DispService: create_dispatch(conn, incident_id, resources)
     
-    DispService->>DB: SELECT * FROM incidents WHERE incident_id = %s FOR UPDATE
+    DispService->>DB: Lock incident row (SELECT FOR UPDATE)
     Note over ResService, DB: Concurrency Protection (Row-Level Locking)
     loop For each requested resource (sorted by ID to prevent deadlocks)
-        ResService->>DB: SELECT * FROM resources WHERE resource_id = %s FOR UPDATE
+        ResService->>DB: Lock resource row (SELECT FOR UPDATE)
         alt Available quantity < Requested quantity
             DB-->>ResService: Insufficient quantity
             ResService-->>DispRouter: Raise 409 RESOURCE_CONFLICT
             DispRouter-->>Dispatcher: 409 Conflict (no partial allocation)
         else Sufficient quantity available
-            ResService->>DB: UPDATE resources SET quantity_available = available - qty, version = version + 1
+            ResService->>DB: Decrement available stock and bump version
             ResService->>DB: INSERT INTO resource_assignments (dispatch_id, resource_id, quantity)
         end
     end
 
-    DispService->>DB: INSERT INTO dispatch_orders (status='REQUESTED', dispatch_ref, ...)
-    DispService->>DB: INSERT INTO agency_messages (status='QUEUED', recipient_agency_id, ...)
-    DispService->>Audit: record(action='DISPATCH_CREATED', actor=Dispatcher)
-    DispRouter-->>Dispatcher: 201 Created (dispatch_ref, status='REQUESTED')
+    DispService->>DB: INSERT INTO dispatch_orders (status: REQUESTED, dispatch_ref)
+    DispService->>DB: INSERT INTO agency_messages (status: QUEUED, recipient_agency_id)
+    DispService->>Audit: record(action: DISPATCH_CREATED, actor: Dispatcher)
+    DispRouter-->>Dispatcher: 201 Created (dispatch_ref, status: REQUESTED)
 
     Note over Responder, FieldRouter: Field Client Polling (SRS Requirement S2-04: 15s interval)
     loop Every 15 seconds
         Responder->>FieldRouter: GET /api/v1/field/assignments?active=true
-        FieldRouter->>DB: SELECT dispatches assigned to responder's team
-        DB-->>FieldRouter: Active dispatches (status='REQUESTED')
+        FieldRouter->>DB: SELECT dispatches assigned to responder team
+        DB-->>FieldRouter: Active dispatches (status: REQUESTED)
         FieldRouter-->>Responder: 200 OK (Assignment list)
     end
 
     alt Case 1: Timeout Exceeded (No Acknowledgement within timeout)
-        Consumer->>DispService: escalate_overdue() (runs every 60s in background)
-        DispService->>DB: SELECT dispatch_orders WHERE status='REQUESTED' AND created_at < now() - timeout FOR UPDATE SKIP LOCKED
-        DispService->>Audit: record(action='DISPATCH_ESCALATED', rationale='No acknowledgement')
-        DispService->>DB: INSERT INTO notifications (event_code='DISPATCH_ESCALATED', role='SUPERVISOR')
+        Consumer->>DispService: escalate_overdue (runs every 60s in background)
+        DispService->>DB: Find overdue orders (FOR UPDATE SKIP LOCKED)
+        DispService->>Audit: record(action: DISPATCH_ESCALATED, rationale: No acknowledgement)
+        DispService->>DB: INSERT INTO notifications (event_code: DISPATCH_ESCALATED, role: SUPERVISOR)
     else Case 2: Responder Acknowledges in Time
-        Responder->>FieldRouter: POST /api/v1/field/dispatches/{id}/acknowledgement
+        Responder->>FieldRouter: POST /api/v1/field/dispatches/:id/acknowledgement
         FieldRouter->>DispService: apply_acknowledgement(conn, dispatch_id)
-        DispService->>DB: UPDATE dispatch_orders SET status='ACKNOWLEDGED', acknowledged_at=now()
-        DispService->>DB: UPDATE agency_messages SET status='ACKNOWLEDGED' WHERE dispatch_id=%s
-        DispService->>Audit: record(action='DISPATCH_ACKNOWLEDGED')
-        FieldRouter-->>Responder: 200 OK (status='ACKNOWLEDGED')
+        DispService->>DB: UPDATE dispatch_orders SET status=ACKNOWLEDGED, acknowledged_at=now()
+        DispService->>DB: UPDATE agency_messages SET status=ACKNOWLEDGED WHERE dispatch_id=id
+        DispService->>Audit: record(action: DISPATCH_ACKNOWLEDGED)
+        FieldRouter-->>Responder: 200 OK (status: ACKNOWLEDGED)
 
-        Responder->>FieldRouter: POST /api/v1/field/dispatches/{id}/progress (status='EN_ROUTE')
-        FieldRouter->>DispService: apply_progress(conn, event='EN_ROUTE')
-        DispService->>DB: UPDATE dispatch_orders SET status='DISPATCHED'
-        DispService->>DB: UPDATE incidents SET status='DISPATCHED' WHERE status='VERIFIED'
-        DispService->>Audit: record(action='DISPATCH_EN_ROUTE')
-        FieldRouter-->>Responder: 200 OK (status='DISPATCHED')
+        Responder->>FieldRouter: POST /api/v1/field/dispatches/:id/progress (status: EN_ROUTE)
+        FieldRouter->>DispService: apply_progress(conn, event: EN_ROUTE)
+        DispService->>DB: UPDATE dispatch_orders SET status=DISPATCHED
+        DispService->>DB: UPDATE incidents SET status=DISPATCHED WHERE status=VERIFIED
+        DispService->>Audit: record(action: DISPATCH_EN_ROUTE)
+        FieldRouter-->>Responder: 200 OK (status: DISPATCHED)
 
-        Responder->>FieldRouter: POST /api/v1/field/dispatches/{id}/progress (status='ON_SCENE')
-        FieldRouter->>DB: INSERT INTO dispatch_progress (status='ON_SCENE')
+        Responder->>FieldRouter: POST /api/v1/field/dispatches/:id/progress (status: ON_SCENE)
+        FieldRouter->>DB: INSERT INTO dispatch_progress (status: ON_SCENE)
         FieldRouter-->>Responder: 200 OK
 
-        Responder->>FieldRouter: POST /api/v1/field/dispatches/{id}/completion (summary, evacuated, treated)
+        Responder->>FieldRouter: POST /api/v1/field/dispatches/:id/completion (summary, evacuated, treated)
         FieldRouter->>DispService: apply_completion(conn, dispatch_id)
-        DispService->>DB: UPDATE dispatch_orders SET status='COMPLETED'
+        DispService->>DB: UPDATE dispatch_orders SET status=COMPLETED
         DispService->>ResService: release_all_for_dispatch(dispatch_id)
         ResService->>DB: UPDATE resources SET quantity_available = available + qty
-        DispService->>Audit: record(action='DISPATCH_COMPLETED')
-        FieldRouter-->>Responder: 200 OK (status='COMPLETED', resources released)
+        DispService->>Audit: record(action: DISPATCH_COMPLETED)
+        FieldRouter-->>Responder: 200 OK (status: COMPLETED, resources released)
     end
 ```
 
@@ -191,12 +191,12 @@ sequenceDiagram
     participant Audit as AuditService (app.audit)
 
     User->>BFF: Submit email and password
-    BFF->>AuthAPI: POST /api/v1/auth/login {email, password}
-    AuthAPI->>DB: SELECT * FROM users JOIN user_auth WHERE email = %s FOR UPDATE OF a
+    BFF->>AuthAPI: POST /api/v1/auth/login (email, password)
+    AuthAPI->>DB: Load account and user_auth (FOR UPDATE)
 
     alt Account locked (locked_until > now()) or disabled
-        DB-->>AuthAPI: Account is locked / disabled
-        AuthAPI-->>BFF: 401 INVALID_CREDENTIALS ("Invalid credentials or unavailable")
+        DB-->>AuthAPI: Account is locked or disabled
+        AuthAPI-->>BFF: 401 INVALID_CREDENTIALS (Invalid credentials or unavailable)
         BFF-->>User: Show generic error message
     else Account active and unlocked
         AuthAPI->>Security: verify_password(stored_hash, password) using Argon2id
@@ -204,48 +204,48 @@ sequenceDiagram
             Security-->>AuthAPI: False
             AuthAPI->>DB: UPDATE user_auth SET failed_login_count = failed_login_count + 1
             alt failed_login_count >= 5
-                AuthAPI->>DB: UPDATE user_auth SET locked_until = now() + 15 mins, token_version = token_version + 1
-                AuthAPI->>Audit: record(action='LOGIN_FAILED', rationale='Account locked after 5 failures')
+                AuthAPI->>DB: Lock account for 15m and increment token_version
+                AuthAPI->>Audit: record(action: LOGIN_FAILED, rationale: Account locked after 5 failures)
             else failed_login_count < 5
-                AuthAPI->>Audit: record(action='LOGIN_FAILED', rationale='wrong password')
+                AuthAPI->>Audit: record(action: LOGIN_FAILED, rationale: wrong password)
             end
             AuthAPI-->>BFF: 401 INVALID_CREDENTIALS
             BFF-->>User: Show invalid credentials error
         else Password matches
             Security-->>AuthAPI: True
             alt Role is Citizen (NORMAL_USER)
-                AuthAPI->>DB: UPDATE user_auth SET failed_login_count=0, locked_until=NULL, last_login_at=now()
-                AuthAPI->>Security: issue_token(user_id, token_version, typ='access', mfa=False)
-                AuthAPI->>Audit: record(action='LOGIN_SUCCEEDED', rationale='password')
-                AuthAPI-->>BFF: 200 OK {access_token, role='NORMAL_USER', mfa_required=False}
-                BFF->>User: Set httpOnly session cookies -> Redirect to /citizen/dashboard
+                AuthAPI->>DB: Reset failure counter and update last_login_at
+                AuthAPI->>Security: issue_token(user_id, token_version, typ: access, mfa: false)
+                AuthAPI->>Audit: record(action: LOGIN_SUCCEEDED, rationale: password)
+                AuthAPI-->>BFF: 200 OK (access_token, role: NORMAL_USER, mfa_required: false)
+                BFF->>User: Set httpOnly session cookies and redirect to /citizen/dashboard
             else Role is Staff (DISASTER_MGMT, FIELD_TEAM, APP_MGMT)
                 Note over AuthAPI: Mandatory Staff MFA Challenge (RFC 6238)
-                AuthAPI->>Security: issue_token(user_id, token_version, typ='mfa', 5 mins)
-                AuthAPI-->>BFF: 200 OK {mfa_required=True, mfa_token}
-                BFF-->>User: Set short-lived mfa cookie -> Prompt for 6-digit TOTP code
+                AuthAPI->>Security: issue_token(user_id, token_version, typ: mfa, 5 mins)
+                AuthAPI-->>BFF: 200 OK (mfa_required: true, mfa_token)
+                BFF-->>User: Set short-lived mfa cookie and prompt for 6-digit TOTP code
 
                 User->>BFF: Submit 6-digit TOTP code
-                BFF->>AuthAPI: POST /api/v1/auth/mfa/verify {mfa_token, code}
-                AuthAPI->>Security: decode_token(mfa_token, typ='mfa')
-                AuthAPI->>DB: SELECT * FROM user_auth WHERE user_id = claims.sub FOR UPDATE
+                BFF->>AuthAPI: POST /api/v1/auth/mfa/verify (mfa_token, code)
+                AuthAPI->>Security: decode_token(mfa_token, typ: mfa)
+                AuthAPI->>DB: Load user_auth by user_id (FOR UPDATE)
                 AuthAPI->>Security: decrypt_mfa_secret(stored_secret) via AES-GCM
                 AuthAPI->>Security: verify_totp(secret, code)
 
                 alt Code invalid or expired
                     Security-->>AuthAPI: False
                     AuthAPI->>DB: UPDATE user_auth SET failed_login_count = failed_login_count + 1
-                    AuthAPI->>Audit: record(action='LOGIN_FAILED', rationale='wrong MFA code')
-                    AuthAPI-->>BFF: 401 MFA_INVALID ("Verification code invalid")
+                    AuthAPI->>Audit: record(action: LOGIN_FAILED, rationale: wrong MFA code)
+                    AuthAPI-->>BFF: 401 MFA_INVALID (Verification code invalid)
                     BFF-->>User: Show invalid verification code error
                 else Code valid
                     Security-->>AuthAPI: True
-                    AuthAPI->>DB: UPDATE user_auth SET failed_login_count=0, locked_until=NULL, last_login_at=now()
-                    AuthAPI->>Security: issue_token(user_id, token_version, typ='access', mfa=True)
-                    AuthAPI->>DB: INSERT INTO refresh_tokens (token_hash, family_id, ...)
-                    AuthAPI->>Audit: record(action='LOGIN_SUCCEEDED', rationale='password + TOTP')
-                    AuthAPI-->>BFF: 200 OK {access_token, refresh_token, role, user}
-                    BFF->>User: Set httpOnly session and refresh cookies -> Redirect to authorized workspace
+                    AuthAPI->>DB: Reset failure counter and update last_login_at
+                    AuthAPI->>Security: issue_token(user_id, token_version, typ: access, mfa: true)
+                    AuthAPI->>DB: INSERT INTO refresh_tokens (token_hash, family_id)
+                    AuthAPI->>Audit: record(action: LOGIN_SUCCEEDED, rationale: password + TOTP)
+                    AuthAPI-->>BFF: 200 OK (access_token, refresh_token, role, user)
+                    BFF->>User: Set httpOnly session and refresh cookies and redirect to workspace
                 end
             end
         end
@@ -272,41 +272,41 @@ sequenceDiagram
     participant Audit as AuditService (app.audit)
 
     Note over Dispatcher, NotesAPI: Flow 1: Dispatch Team Internal Notes (Append-Only Shift Log)
-    Dispatcher->>NotesAPI: POST /api/v1/dm/incidents/{id}/notes {"body": "Road flooded; advised team to use bypass"}
-    Note over NotesAPI: Rate Limit: 60 notes / hour
-    NotesAPI->>DB: SELECT 1 FROM incidents WHERE incident_id = %s
-    NotesAPI->>DB: INSERT INTO incident_notes (incident_id, author_id, body) VALUES (%s, %s, %s) RETURNING note_id
-    NotesAPI->>Audit: record(action='INCIDENT_NOTE_ADDED', entity_id=incident_id)
-    NotesAPI-->>Dispatcher: 201 Created (note_id, author_name, created_at, mine=True)
+    Dispatcher->>NotesAPI: POST /api/v1/dm/incidents/:id/notes (body: Road flooded, advised team to use bypass)
+    Note over NotesAPI: Rate Limit: 60 notes per hour
+    NotesAPI->>DB: SELECT 1 FROM incidents WHERE incident_id = id
+    NotesAPI->>DB: INSERT INTO incident_notes (incident_id, author_id, body)
+    NotesAPI->>Audit: record(action: INCIDENT_NOTE_ADDED, entity_id: incident_id)
+    NotesAPI-->>Dispatcher: 201 Created (note_id, author_name, created_at, mine: true)
 
-    Dispatcher->>NotesAPI: GET /api/v1/dm/incidents/{id}/notes
-    NotesAPI->>DB: SELECT * FROM incident_notes WHERE incident_id = %s ORDER BY created_at DESC
+    Dispatcher->>NotesAPI: GET /api/v1/dm/incidents/:id/notes
+    NotesAPI->>DB: SELECT notes FROM incident_notes WHERE incident_id = id ORDER BY created_at DESC
     DB-->>NotesAPI: List of shift notes
     NotesAPI-->>Dispatcher: 200 OK (Shared chronological shift log)
 
     Note over Dispatcher, Citizen: Flow 2: Dispatcher-Citizen Information Clarification Protocol
-    Dispatcher->>DMAPI: PATCH /api/v1/dm/incidents/{id} {status: 'NEEDS_INFORMATION', rationale: 'Specify water depth'}
-    DMAPI->>DB: SELECT * FROM incidents WHERE incident_id = %s FOR UPDATE
-    DMAPI->>DB: UPDATE incidents SET status='NEEDS_INFORMATION', version=version+1
-    DMAPI->>DB: INSERT INTO incident_status_history (from_status='SUBMITTED', to_status='NEEDS_INFORMATION', reason=rationale)
-    DMAPI->>Audit: record(action='INCIDENT_NEEDS_INFO', rationale='Specify water depth')
-    DMAPI-->>Dispatcher: 200 OK (status='NEEDS_INFORMATION')
+    Dispatcher->>DMAPI: PATCH /api/v1/dm/incidents/:id (status: NEEDS_INFORMATION, rationale: Specify water depth)
+    DMAPI->>DB: Lock incident row (SELECT FOR UPDATE)
+    DMAPI->>DB: UPDATE incidents SET status=NEEDS_INFORMATION, version=version+1
+    DMAPI->>DB: INSERT INTO incident_status_history (SUBMITTED -> NEEDS_INFORMATION)
+    DMAPI->>Audit: record(action: INCIDENT_NEEDS_INFO, rationale: Specify water depth)
+    DMAPI-->>Dispatcher: 200 OK (status: NEEDS_INFORMATION)
 
-    Citizen->>CitizenAPI: GET /api/v1/me/incidents/{id}
-    CitizenAPI->>DB: SELECT * FROM incidents WHERE incident_id = %s AND reporter_id = %s
+    Citizen->>CitizenAPI: GET /api/v1/me/incidents/:id
+    CitizenAPI->>DB: Query incident scoped to reporter_id
     DB-->>CitizenAPI: Incident record with timeline
-    CitizenAPI-->>Citizen: 200 OK (status_label: "More information requested", rationale: "Specify water depth")
+    CitizenAPI-->>Citizen: 200 OK (status: More information requested, rationale: Specify water depth)
 
-    Citizen->>CitizenAPI: POST /api/v1/me/incidents/{id}/information-response {"message": "Water depth is roughly 4 feet near market"}
-    Note over CitizenAPI: Rate Limit: 20 responses / hour
-    CitizenAPI->>DB: SELECT status FROM incidents WHERE incident_id = %s FOR UPDATE
+    Citizen->>CitizenAPI: POST /api/v1/me/incidents/:id/information-response (message: Water depth is roughly 4 feet near market)
+    Note over CitizenAPI: Rate Limit: 20 responses per hour
+    CitizenAPI->>DB: Check incident status (SELECT FOR UPDATE)
     alt Incident status is not NEEDS_INFORMATION
-        CitizenAPI-->>Citizen: 409 NOT_AWAITING_INFORMATION ("No information requested")
+        CitizenAPI-->>Citizen: 409 NOT_AWAITING_INFORMATION (No information requested)
     else Incident status is NEEDS_INFORMATION
-        CitizenAPI->>DB: UPDATE incidents SET status='SUBMITTED', version=version+1
-        CitizenAPI->>DB: INSERT INTO incident_status_history (from_status='NEEDS_INFORMATION', to_status='SUBMITTED', reason=message)
-        CitizenAPI->>Audit: record(action='INFORMATION_PROVIDED', rationale='Reporter replied')
-        CitizenAPI-->>Citizen: 200 OK (status='SUBMITTED', updated timeline)
+        CitizenAPI->>DB: UPDATE incidents SET status=SUBMITTED, version=version+1
+        CitizenAPI->>DB: INSERT INTO incident_status_history (NEEDS_INFORMATION -> SUBMITTED)
+        CitizenAPI->>Audit: record(action: INFORMATION_PROVIDED, rationale: Reporter replied)
+        CitizenAPI-->>Citizen: 200 OK (status: SUBMITTED, updated timeline)
     end
 ```
 
