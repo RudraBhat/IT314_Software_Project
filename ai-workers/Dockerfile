@@ -41,6 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends --only-upgrade \
     libkrb5-3=1.21.3-5+deb13u2 libgssapi-krb5-2=1.21.3-5+deb13u2 \
     libk5crypto3=1.21.3-5+deb13u2 libkrb5support0=1.21.3-5+deb13u2 \
+    zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
