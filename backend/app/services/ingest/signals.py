@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import re
+import unicodedata
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,10 @@ MAX_SIGNAL_CHARS = 2_000
 URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
 CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 SPACE_RE = re.compile(r"\s+")
+# A tag-like run such as "</report>" or "<system ...>"; bounded and without nested quantifiers.
+# A lone "<" or ">" (for example "water level > 2 m") is left as it is.
+RESIDUAL_TAG_RE = re.compile(r"</?[A-Za-z!?][^<>]{0,500}>")
+_KEEP_FORMAT_CHARS = frozenset({"\u200c", "\u200d"})  # ZWNJ, ZWJ
 
 
 class _TextExtractor(HTMLParser):
@@ -39,14 +44,26 @@ class _TextExtractor(HTMLParser):
             self.parts.append(data)
 
 
+def _drop_invisible(text: str) -> str:
+    """Remove zero-width, bidi-override and other invisible format characters (Unicode Cf).
+
+    ZWNJ/ZWJ are kept because Hindi and Gujarati spelling uses them. Removing the rest stops
+    a post from hiding words from the dispatcher or splitting a word to dodge a filter.
+    """
+    return "".join(ch for ch in text if ch in _KEEP_FORMAT_CHARS or unicodedata.category(ch) != "Cf")
+
+
 def sanitise_signal_text(value: str) -> str:
     """Strip markup, links and controls, then bound text before triage or storage."""
     parser = _TextExtractor()
     parser.feed(value or "")
     parser.close()
     text = " ".join(parser.parts)
+    # The parser decodes entities, so "&lt;/report&gt;" comes out as a literal tag; remove those too.
+    text = RESIDUAL_TAG_RE.sub(" ", text)
     text = URL_RE.sub(" ", text)
     text = CONTROL_RE.sub(" ", text)
+    text = _drop_invisible(text)
     return SPACE_RE.sub(" ", text).strip()[:MAX_SIGNAL_CHARS]
 
 
