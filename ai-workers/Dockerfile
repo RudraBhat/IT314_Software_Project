@@ -39,7 +39,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && apt-get install -y --no-install-recommends --only-upgrade \
-    libkrb5-3 libgssapi-krb5-2 libk5crypto3 libkrb5support0 \
+    libkrb5-3=1.21.3-5+deb13u2 libgssapi-krb5-2=1.21.3-5+deb13u2 \
+    libk5crypto3=1.21.3-5+deb13u2 libkrb5support0=1.21.3-5+deb13u2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
