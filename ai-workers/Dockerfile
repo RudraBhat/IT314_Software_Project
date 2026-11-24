@@ -34,10 +34,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 # Install curl for container healthchecking if needed
-# "apt-get upgrade" pulls the fixed Debian security versions of the base image's packages.
+# Explicitly upgrade the Kerberos runtime libraries flagged by Trivy. Changing this install
+# instruction also invalidates the cached apt layer so the Debian security repository is refreshed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends --only-upgrade \
+    libkrb5-3 libgssapi-krb5-2 libk5crypto3 libkrb5support0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
