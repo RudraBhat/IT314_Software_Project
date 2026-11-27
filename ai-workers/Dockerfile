@@ -34,14 +34,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 # Install curl for container healthchecking if needed
-# Explicitly upgrade the Kerberos runtime libraries flagged by Trivy. Changing this install
-# instruction also invalidates the cached apt layer so the Debian security repository is refreshed.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# "apt-get upgrade" pulls the fixed Debian security versions of the base image's packages; versions are not
+# pinned, because Debian's security mirror keeps only the newest fix. CI caches image layers, so a cached
+# upgrade can go stale: change APT_REFRESH (for example to today's date) to force a fresh apt layer when Trivy
+# reports a Debian package that Debian has already fixed.
+ARG APT_REFRESH=2026-11-27
+RUN echo "apt refresh ${APT_REFRESH}" && apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    && apt-get install -y --no-install-recommends --only-upgrade \
-    libkrb5-3=1.21.3-5+deb13u2 libgssapi-krb5-2=1.21.3-5+deb13u2 \
-    libk5crypto3=1.21.3-5+deb13u2 libkrb5support0=1.21.3-5+deb13u2 \
-    zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 \
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
