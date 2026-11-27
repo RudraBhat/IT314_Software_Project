@@ -19,9 +19,16 @@ MAX_SIGNAL_CHARS = 2_000
 URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
 CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 SPACE_RE = re.compile(r"\s+")
-# A tag-like run such as "</report>" or "<system ...>"; bounded and without nested quantifiers.
-# A lone "<" or ">" (for example "water level > 2 m") is left as it is.
-RESIDUAL_TAG_RE = re.compile(r"</?[A-Za-z!?][^<>]{0,500}>")
+# A well-formed tag: a tag name with no spaces, then only name=value attributes; or a comment, CDATA,
+# doctype or processing instruction. Text such as "level <Low at gate A, high at gate B> rising" or
+# "a<b and c>d" is not a tag and is kept. Every part is bounded and the attribute group has one fixed
+# shape, so matching stays linear on long input.
+_TAG_ATTR = r"""\s+[A-Za-z_:@][\w:.\-]{0,40}\s*=\s*(?:"[^"<>]{0,300}"|'[^'<>]{0,300}'|[^\s<>]{1,300})"""
+TAG_RE = re.compile(
+    r"<(?:/?[A-Za-z][A-Za-z0-9:\-]{0,30}(?:" + _TAG_ATTR + r"){0,20}\s*/?"
+    r"|!--[\s\S]{0,2000}?--|!\[CDATA\[[\s\S]{0,2000}?\]\]|![A-Za-z][^<>]{0,200}|\?[^<>]{0,200}\?)>",
+    re.IGNORECASE,
+)
 _KEEP_FORMAT_CHARS = frozenset({"\u200c", "\u200d"})  # ZWNJ, ZWJ
 
 
@@ -53,17 +60,38 @@ def _drop_invisible(text: str) -> str:
     return "".join(ch for ch in text if ch in _KEEP_FORMAT_CHARS or unicodedata.category(ch) != "Cf")
 
 
+def _escape_non_tags(text: str) -> str:
+    """Escape every "<" that does not start a well-formed tag, so the HTML parser keeps it as text."""
+    out: list[str] = []
+    position = 0
+    for match in TAG_RE.finditer(text):
+        out.append(text[position:match.start()].replace("<", "&lt;"))
+        out.append(match.group())
+        position = match.end()
+    out.append(text[position:].replace("<", "&lt;"))
+    return "".join(out)
+
+
 def sanitise_signal_text(value: str) -> str:
-    """Strip markup, links and controls, then bound text before triage or storage."""
+    """Strip markup, links, controls and invisible characters, then bound text before triage or storage.
+
+    Invisible characters are removed first (and again after entities are decoded), so a zero-width space
+    cannot split "</report>", "https://" or "www." past the filters and reassemble them afterwards.
+    """
+    text = _drop_invisible(value or "")
     parser = _TextExtractor()
-    parser.feed(value or "")
+    parser.feed(_escape_non_tags(text))
     parser.close()
-    text = " ".join(parser.parts)
+    text = _drop_invisible(" ".join(parser.parts))  # entities such as &#8203; decode only here
     # The parser decodes entities, so "&lt;/report&gt;" comes out as a literal tag; remove those too.
-    text = RESIDUAL_TAG_RE.sub(" ", text)
+    # Repeat until nothing changes, so a tag rebuilt by removing an inner one is also removed.
+    for _ in range(5):
+        stripped = TAG_RE.sub(" ", text)
+        if stripped == text:
+            break
+        text = stripped
     text = URL_RE.sub(" ", text)
     text = CONTROL_RE.sub(" ", text)
-    text = _drop_invisible(text)
     return SPACE_RE.sub(" ", text).strip()[:MAX_SIGNAL_CHARS]
 
 
